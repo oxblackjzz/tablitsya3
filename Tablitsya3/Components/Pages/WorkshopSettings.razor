@@ -8,280 +8,237 @@
 
 <PageTitle>Налаштування цехів</PageTitle>
 
-<h1 class="mb-4">?? Налаштування цехів</h1>
+<h1 class="mb-4">⚙️ Налаштування цехів</h1>
 
 @if (!string.IsNullOrEmpty(statusMessage))
 {
     <div class="alert alert-info alert-dismissible fade show" role="alert">
-        @statusMessage
- <button type="button" class="btn-close" @onclick="() => statusMessage = string.Empty"></button>
+   @statusMessage
+        <button type="button" class="btn-close" @onclick="() => statusMessage = string.Empty"></button>
     </div>
 }
 
 <div class="row mb-4">
     <div class="col-12">
         <div class="card border-primary">
-     <div class="card-header bg-primary text-white">
-  <h5 class="mb-0">
-         <i class="bi bi-speedometer2"></i> Потужність� Потужність� �����
-           </h5>
+<div class="card-header bg-primary text-white">
+    <h5 class="mb-0">
+ <i class="bi bi-speedometer2"></i> Потужність цехів
+       </h5>
             </div>
-         <div class="card-body">
-             <p class="text-muted mb-4">
+            <div class="card-body">
+      <p class="text-muted mb-4">
              <i class="bi bi-info-circle"></i> 
-          Потужність� Налаштування цехів�Цех №�� ����Цех №���. 
-        Цех №�� Потужність� �� Інструкція ������ Інструкція� Інструкція� Інструкція�.
-   </p>
+        Налаштуйте потужність кожного цеху (квадратні метри на день) та терміни виробництва.
+     </p>
 
-       <!-- Потужність Інструкція�� -->
-        <div class="row mb-4">
-                    <div class="col-md-6">
-         <div class="card border-info">
+      <!-- Терміни виробництва -->
+ <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card border-info">
      <div class="card-body">
-           <h6 class="card-title">
-                   <i class="bi bi-clock-history text-info"></i> Потужність Налаштування цехів������
-        </h6>
-  <div class="mb-3">
-        <label class="form-label fw-bold">���Цех №��� Інструкція (�� Інструкція �� Інструкція)</label>
-         <div class="input-group">
-    <input type="number" 
-               class="form-control" 
-          @bind="productionLeadTime" 
-       min="1" 
-           max="60" 
-             step="1" />
-              <span class="input-group-text">����Цех №��</span>
-       </div>
+            <h6 class="card-title">
+            <i class="bi bi-clock-history text-info"></i> Терміни виробництва
+              </h6>
+          <div class="mb-3">
+  <label class="form-label fw-bold">Час виробництва (від замовлення до відвантаження)</label>
+                    <div class="input-group">
+             <input type="number" 
+           class="form-control" 
+     @bind="productionLeadTime" 
+        min="1" 
+       max="60" 
+                  step="1" />
+ <span class="input-group-text">днів</span>
+      </div>
        <small class="text-muted">
-             <i class="bi bi-info-circle"></i> 
-            ʳ���Цех №���Цех №�� �� ���� Інструкція �� Інструкція Інструкція� (1-60 ���)
+   <i class="bi bi-info-circle"></i> 
+          Кількість днів від замовлення до готовності продукції (1-60 днів)
                </small>
       </div>
-            <div class="mb-3">
-         <label class="form-label fw-bold">Потужність ������ Інструкція�</label>
-             <div class="input-group">
-   <input type="number" 
-      class="form-control" 
-     @bind="daysBeforeProduction" 
- min="0" 
-     max="30" 
+           <div class="mb-3">
+       <label class="form-label fw-bold">Затримка початку виробництва</label>
+        <div class="input-group">
+           <input type="number" 
+    class="form-control" 
+           @bind="daysBeforeProduction" 
+      min="0" 
+   max="30" 
      step="1" />
-           <span class="input-group-text">����Цех №��</span>
-     </div>
+              <span class="input-group-text">днів</span>
+      </div>
       <small class="text-muted">
     <i class="bi bi-info-circle"></i> 
-       Потужність �� ���� Інструкція �� ������� Інструкція� (0-30 ���)
-     </small>
-    </div>
-    </div>
-  </div>
-  </div>
-  </div>
-
-        <div class="row g-4">
-    <!-- Цех №1 -->
-         <div class="col-md-4">
-        <div class="card h-100 @(workshopCapacities[1] != defaultCapacity ? "border-success" : "")">
-         <div class="card-body">
-         <h5 class="card-title">
-       <i class="bi bi-building text-primary"></i> Цех №1
-           </h5>
-      <div class="mb-3">
-              <label class="form-label fw-bold">Потужність� (м²/����)</label>
-  <div class="input-group input-group-lg">
-    <input type="number" 
-      class="form-control" 
-     @bind="workshopCapacities[1]" 
-min="100" 
-         max="10000" 
-      step="100" />
-   <span class="input-group-text">м²/����</span>
-         </div>
-              <small class="text-muted">
-               ĳ������: 100 - 10,000 м²/����
-     </small>
-            </div>
-  @if (workshopCapacities[1] != defaultCapacity)
-             {
-  <div class="alert alert-success mb-0">
-     <i class="bi bi-check-circle"></i> 
-       ���Цех № @defaultCapacity м²/����
-      </div>
-          }
-           </div>
-             </div>
-          </div>
-
-   <!-- Цех №3 -->
-   <div class="col-md-4">
-   <div class="card h-100 @(workshopCapacities[3] != defaultCapacity ? "border-success" : "")">
-<div class="card-body">
-            <h5 class="card-title">
-   <i class="bi bi-building text-primary"></i> Цех №3
-   </h5>
-     <div class="mb-3">
-   <label class="form-label fw-bold">Потужність� (м²/����)</label>
- <div class="input-group input-group-lg">
-     <input type="number" 
-         class="form-control" 
-     @bind="workshopCapacities[3]" 
-                 min="100" 
-  max="10000" 
-              step="100" />
-           <span class="input-group-text">м²/����</span>
-   </div>
-              <small class="text-muted">
-        ĳ������: 100 - 10,000 м²/����
-    </small>
-    </div>
-            @if (workshopCapacities[3] != defaultCapacity)
-                 {
-  <div class="alert alert-success mb-0">
-             <i class="bi bi-check-circle"></i> 
-         ���Цех № @defaultCapacity м²/����
-             </div>
-             }
-        </div>
-    </div>
-                    </div>
-
-                    <!-- Цех №6 -->
-           <div class="col-md-4">
-     <div class="card h-100 @(workshopCapacities[6] != defaultCapacity ? "border-success" : "")">
-           <div class="card-body">
-  <h5 class="card-title">
-           <i class="bi bi-building text-primary"></i> Цех №6
-          </h5>
-          <div class="mb-3">
-              <label class="form-label fw-bold">Потужність� (м²/����)</label>
-             <div class="input-group input-group-lg">
-       <input type="number" 
-     class="form-control" 
-        @bind="workshopCapacities[6]" 
-            min="100" 
-           max="10000" 
-               step="100" />
-    <span class="input-group-text">м²/����</span>
-         </div>
-    <small class="text-muted">
-ĳ������: 100 - 10,000 м²/����
-         </small>
- </div>
-  @if (workshopCapacities[6] != defaultCapacity)
-      {
-                  <div class="alert alert-success mb-0">
-           <i class="bi bi-check-circle"></i> 
-         ���Цех № @defaultCapacity м²/����
-                 </div>
-   }
-           </div>
-           </div>
-       </div>
-          </div>
-
-       <hr class="my-4" />
-
-   <div class="d-flex gap-2 justify-content-between align-items-center">
-  <div>
-     <button class="btn btn-success btn-lg" @onclick="SaveSettings" disabled="@isSaving">
-        <i class="bi bi-save"></i> 
-      @(isSaving ? "Інструкція..." : "Потужність Інструкція��")
-       </button>
-       <button class="btn btn-warning btn-lg ms-2" @onclick="ResetToDefaults">
-                <i class="bi bi-arrow-counterclockwise"></i> 
-   ����Цех №� ����Цех №� Інструкція���
-      </button>
-      </div>
-               <a href="/production-planning" class="btn btn-outline-secondary">
-     <i class="bi bi-arrow-left"></i> Інструкція� �� Інструкція
-        </a>
-                </div>
-
-       @if (lastSaved != null)
-{
-    <div class="mt-3">
-    <small class="text-muted">
-      <i class="bi bi-clock"></i> 
-            ������ Інструкція: @lastSaved.Value.ToString("dd.MM.yyyy HH:mm:ss")
+   Затримка від дати замовлення до початку виробництва (0-30 днів)
       </small>
-   </div>
-      }
      </div>
+                  </div>
+       </div>
+ </div>
+             </div>
+
+                <div class="row g-4">
+         <!-- Цех №1 -->
+              <div class="col-md-4">
+        <div class="card h-100 @(workshopCapacities[1] != defaultCapacity ? "border-success" : "")">
+    <div class="card-body">
+          <h5 class="card-title">
+      <i class="bi bi-building text-primary"></i> Цех №1
+              </h5>
+   <div class="mb-3">
+        <label class="form-label fw-bold">Потужність (м²/день)</label>
+  <div class="input-group input-group-lg">
+ <input type="number" 
+    class="form-control" 
+      @bind="workshopCapacities[1]" 
+        min="100" 
+   max="10000" 
+         step="100" />
+  <span class="input-group-text">м²/день</span>
+     </div>
+    <small class="text-muted">
+   Діапазон: 100 - 10,000 м²/день
+          </small>
+       </div>
+          @if (workshopCapacities[1] != defaultCapacity)
+      {
+       <div class="alert alert-success mb-0">
+       <i class="bi bi-check-circle"></i> 
+          Змінено з @defaultCapacity м²/день
+          </div>
+         }
+              </div>
+    </div>
+                  </div>
+
+          <!-- Цех №3 -->
+          <div class="col-md-4">
+   <div class="card h-100 @(workshopCapacities[3] != defaultCapacity ? "border-success" : "")">
+             <div class="card-body">
+           <h5 class="card-title">
+          <i class="bi bi-building text-primary"></i> Цех №3
+   </h5>
+                <div class="mb-3">
+       <label class="form-label fw-bold">Потужність (м²/день)</label>
+       <div class="input-group input-group-lg">
+      <input type="number" 
+        class="form-control" 
+  @bind="workshopCapacities[3]" 
+     min="100" 
+           max="10000" 
+             step="100" />
+               <span class="input-group-text">м²/день</span>
+ </div>
+         <small class="text-muted">
+   Діапазон: 100 - 10,000 м²/день
+         </small>
+          </div>
+     @if (workshopCapacities[3] != defaultCapacity)
+        {
+        <div class="alert alert-success mb-0">
+      <i class="bi bi-check-circle"></i> 
+   Змінено з @defaultCapacity м²/день
+               </div>
+          }
+       </div>
+               </div>
+        </div>
+
+               <!-- Цех №6 -->
+                <div class="col-md-4">
+<div class="card h-100 @(workshopCapacities[6] != defaultCapacity ? "border-success" : "")">
+          <div class="card-body">
+      <h5 class="card-title">
+                  <i class="bi bi-building text-primary"></i> Цех №6
+         </h5>
+  <div class="mb-3">
+       <label class="form-label fw-bold">Потужність (м²/день)</label>
+       <div class="input-group input-group-lg">
+     <input type="number" 
+       class="form-control" 
+    @bind="workshopCapacities[6]" 
+  min="100" 
+          max="10000" 
+          step="100" />
+         <span class="input-group-text">м²/день</span>
+    </div>
+  <small class="text-muted">
+          Діапазон: 100 - 10,000 м²/день
+       </small>
+          </div>
+         @if (workshopCapacities[6] != defaultCapacity)
+     {
+         <div class="alert alert-success mb-0">
+  <i class="bi bi-check-circle"></i> 
+      Змінено з @defaultCapacity м²/день
+           </div>
+     }
+          </div>
+   </div>
+           </div>
+    </div>
+
+     <hr class="my-4" />
+
+            <div class="d-flex gap-2 justify-content-between align-items-center">
+        <div>
+            <button class="btn btn-success btn-lg" @onclick="SaveSettings" disabled="@isSaving">
+           <i class="bi bi-save"></i> 
+   @(isSaving ? "Зберігаємо..." : "Зберегти налаштування")
+         </button>
+        <button class="btn btn-warning btn-lg ms-2" @onclick="ResetToDefaults">
+ <i class="bi bi-arrow-counterclockwise"></i> 
+           Скинути до типових
+        </button>
+         </div>
+    <a href="/production-planning" class="btn btn-outline-secondary">
+           <i class="bi bi-arrow-left"></i> Назад до планування
+ </a>
+   </div>
+
+     @if (lastSaved != null)
+   {
+     <div class="mt-3">
+   <small class="text-muted">
+    <i class="bi bi-clock"></i> 
+         Останнє збереження: @lastSaved.Value.ToString("dd.MM.yyyy HH:mm:ss")
+       </small>
+    </div>
+           }
+       </div>
      </div>
     </div>
 </div>
 
-<!-- Налаштування цехів� -->
+<!-- Довідка -->
 <div class="row">
     <div class="col-12">
         <div class="card border-info">
- <div class="card-header bg-info text-white">
-              <h5 class="mb-0">
-    <i class="bi bi-info-circle"></i> �� �� �����м²
+            <div class="card-header bg-info text-white">
+<h5 class="mb-0">
+      <i class="bi bi-info-circle"></i> Як це працює?
       </h5>
-            </div>
-  <div class="card-body">
- <h6 class="fw-bold">? �� Потужність� �Цех №��� Потужністьм²</h6>
-              <ul class="mb-3">
-         <li>�� ������� Інструкція ������ <strong>Інструкція� Інструкція�</strong></li>
-     <li>Потужність� Інструкція� Потужність� <strong>Інструкція�</strong> �� ���� Потужність�</li>
- <li>���� Налаштування цехів� <strong>������� Інструкція�</strong></li>
-      <li>ĳ���Цех №���� <strong>Інструкція��</strong> � ���Цех №�����</li>
-     </ul>
+       </div>
+            <div class="card-body">
+   <h6 class="fw-bold">📊 Як розраховується тривалість виробництва:</h6>
+             <ul class="mb-3">
+           <li>Система автоматично розподіляє <strong>замовлення по днях</strong></li>
+            <li>Враховується денна <strong>потужність</strong> кожного цеху</li>
+         <li>При перевантаженні <strong>додаються дні</strong></li>
+        <li>Рахуються <strong>тільки робочі дні</strong> (без вихідних та свят)</li>
+             </ul>
 
-       <h6 class="fw-bold">?? �������:</h6>
-            <div class="alert alert-light mb-0">
-            <p class="mb-2">
-            <strong>����:</strong> Потужність� = 1000 м²/����, Інструкція 2000 м² = 2 �� Інструкція�
-        </p>
+  <h6 class="fw-bold">💡 Приклади:</h6>
+       <div class="alert alert-light mb-0">
+        <p class="mb-2">
+       <strong>Цех 1:</strong> Потужність = 1000 м²/день, Замовлення 2000 м² = 2 дні виробництва
+          </p>
   <p class="mb-0">
-              <strong>�����:</strong> Потужність� = 500 м²/����, �� ���� Інструкція 2000 м² = 4 �� Інструкція�
-  </p>
+            <strong>Цех 3:</strong> Потужність = 500 м²/день, те саме замовлення 2000 м² = 4 дні виробництва
+     </p>
      </div>
+ </div>
         </div>
-  </div>
-    </div>
-</div>
-
-<!-- Інструкція �����: ̳���Цех №���� -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card border-warning">
-            <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0">
-     <i class="bi bi-wrench-adjustable"></i> ̳���Цех №� Інструкція� �����
-      </h5>
-    </div>
- <div class="card-body">
-     <p class="text-muted mb-3">
-     <i class="bi bi-exclamation-triangle"></i> 
-      �Цех №� ���Цех №���� Потужність� (???) � ������ Потужність�, Інструкція�� �� ����Цех №�� Інструкція� Потужність�.
-        </p>
-
-                <div class="alert alert-info">
-     <strong>�� ���Цех №������:</strong>
-        <ul class="mb-0">
-    <li>Інструкція� ������� Потужність� ����Цех № ���� Потужність�</li>
-    <li>Інструкція �� Цех № Інструкція UTF-8 Інструкція</li>
-       <li>������� Потужність �Цех №�Цех №�����</li>
-        <li>�� ����Цех №��� Інструкція �� Інструкція��</li>
-    </ul>
-  </div>
-
-   <div class="d-flex gap-2 align-items-center">
-      <button class="btn btn-warning btn-lg" @onclick="MigrateData" disabled="@isMigrating">
-            <i class="bi bi-arrow-repeat"></i> 
-        @(isMigrating ? "̳������..." : "Потужність� Потужність� �����")
-        </button>
- @if (migrationCompleted)
-                 {
-     <div class="alert alert-success mb-0">
-    <i class="bi bi-check-circle-fill"></i> ̳������ Потужність� ������!
-        </div>
-           }
-                </div>
-         </div>
-   </div>
     </div>
 </div>
 
@@ -291,189 +248,131 @@ min="100"
         { 1, 1000 },
         { 3, 1000 },
         { 6, 1000 }
-    };
+  };
 
     private int defaultCapacity = 1000;
     private int productionLeadTime = 5;
     private int daysBeforeProduction = 5;
     private bool isSaving = false;
-    private bool isMigrating = false;
-    private bool migrationCompleted = false;
     private string statusMessage = string.Empty;
     private DateTime? lastSaved = null;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadSettings();
-        
-    // Інструкція� ����Цех №�� ������� Інструкція�
-        try
-        {
-     var hasData = StorageService.HasSavedData();
-            if (hasData)
-            {
- // Інструкція� Потужність� ����Цех №�� Потужність ����� Потужність�
-      await Task.Delay(500);
-    await MigrateData();
-        }
-        }
-        catch (Exception ex)
-        {
-       statusMessage = $"������� Інструкція� �������: {ex.Message}";
-    }
     }
 
     private async Task LoadSettings()
     {
         try
-      {
-            var data = await StorageService.LoadWorkshopDataAsync();
-    
-            if (data?.WorkshopCapacities != null)
-            {
-              workshopCapacities = data.WorkshopCapacities;
-         lastSaved = data.LastUpdated;
-        productionLeadTime = data.ProductionLeadTime;
-            daysBeforeProduction = data.DaysBeforeProduction;
-            }
-        }
-        catch (Exception ex)
-        {
-   statusMessage = $"������� Налаштування цехів������: {ex.Message}";
-   }
-}
-
-    private async Task MigrateData()
     {
-        isMigrating = true;
-        migrationCompleted = false;
-        statusMessage = string.Empty;
-
-        try
-        {
-            var success = await StorageService.MigrateDataEncodingAsync();
-            
-            if (success)
-            {
-      migrationCompleted = true;
-     statusMessage = @"? ̳������ Потужність� ������!
-
-?? �� ���� Потужність:
-1. Потужність Потужність� ����Цех № ���� Потужність�
-2. ��� ІнструкціяЦех № Інструкція UTF-8 Інструкція
-3. Потужність Потужність ���� (workshop-data.json.backup)
-
-?? Інструкція��: Потужність �� ������� ""Інструкція Інструкція�"" �� Потужність Потужність�.";
-    
-     // ���Налаштування цехів�������
-       await LoadSettings();
+            var data = await StorageService.LoadWorkshopDataAsync();
+     
+            if (data?.WorkshopCapacities != null)
+      {
+        workshopCapacities = data.WorkshopCapacities;
+                lastSaved = data.LastUpdated;
+         productionLeadTime = data.ProductionLeadTime;
+daysBeforeProduction = data.DaysBeforeProduction;
             }
-  else
-            {
-     statusMessage = "?? ̳���Цех №� Потужність: Цех №��Цех №�� Цех № Інструкція� ������.";
-          }
         }
         catch (Exception ex)
         {
-     statusMessage = $"? ����Цех №������: {ex.Message}";
+      statusMessage = $"Помилка завантаження налаштувань: {ex.Message}";
         }
-        finally
-        {
- isMigrating = false;
-  }
-    }
+}
 
     private async Task SaveSettings()
     {
-      isSaving = true;
+    isSaving = true;
         statusMessage = string.Empty;
 
-        try
- {
-  // Потужність
-      foreach (var kvp in workshopCapacities)
-       {
-          if (kvp.Value < 100 || kvp.Value > 10000)
-    {
-   statusMessage = $"?? Потужність� �Цех №{kvp.Key} �� �Цех № ����� 100-10,000 м²/����";
-           return;
+    try
+        {
+            // Валідація потужностей
+            foreach (var kvp in workshopCapacities)
+          {
+      if (kvp.Value < 100 || kvp.Value > 10000)
+      {
+          statusMessage = $"⚠️ Потужність цеху №{kvp.Key} має бути в межах 100-10,000 м²/день";
+        return;
+       }
    }
-        }
-    
-          // Потужність productionLeadTime
-          if (productionLeadTime < 1 || productionLeadTime > 60)
-         {
-           statusMessage = "?? ���Цех №��� Інструкція �� �Цех № ����� 1-60 ���";
-                return;
-         }
             
-     // Потужність daysBeforeProduction
-            if (daysBeforeProduction < 0 || daysBeforeProduction > 30)
-       {
-    statusMessage = "?? Потужність ���Цех №� �Цех № ����� 0-30 ���";
-           return;
+            // Валідація productionLeadTime
+         if (productionLeadTime < 1 || productionLeadTime > 60)
+   {
+       statusMessage = "⚠️ Термін виробництва має бути в межах 1-60 днів";
+       return;
+            }
+            
+            // Валідація daysBeforeProduction
+       if (daysBeforeProduction < 0 || daysBeforeProduction > 30)
+        {
+             statusMessage = "⚠️ Затримка старту має бути в межах 0-30 днів";
+    return;
  }
 
             var data = await StorageService.LoadWorkshopDataAsync() ?? new WorkshopData
-   {
-      WorkshopOrders = new()
-                {
-        { 1, new List<double>() },
-    { 3, new List<double>() },
-         { 6, new List<double>() }
-         },
-WorkshopOrderDates = new()
+        {
+   WorkshopOrders = new()
     {
-          { 1, new List<DateTime>() },
-            { 3, new List<DateTime>() },
-          { 6, new List<DateTime>() }
-  }
-       };
+   { 1, new List<double>() },
+               { 3, new List<double>() },
+   { 6, new List<double>() }
+},
+    WorkshopOrderDates = new()
+  {
+      { 1, new List<DateTime>() },
+   { 3, new List<DateTime>() },
+         { 6, new List<DateTime>() }
+      }
+  };
 
-          data.WorkshopCapacities = workshopCapacities;
-       data.ProductionLeadTime = productionLeadTime;
-    data.DaysBeforeProduction = daysBeforeProduction;
-      data.LastUpdated = DateTime.Now;
+         data.WorkshopCapacities = workshopCapacities;
+          data.ProductionLeadTime = productionLeadTime;
+ data.DaysBeforeProduction = daysBeforeProduction;
+            data.LastUpdated = DateTime.Now;
 
-       await StorageService.SaveWorkshopDataAsync(data);
+      await StorageService.SaveWorkshopDataAsync(data);
 
             lastSaved = DateTime.Now;
-       statusMessage = @"? Налаштування цехів� Потужність! 
-            
-�� ���Цех №��:
-1?? Інструкція �� ������� ""Інструкція Інструкція�""
-2?? Потужність ������ ""Потужність� �����"" ��� ""Інструкція��""
-3?? Потужність, �� ���� Налаштування цехів����
+            statusMessage = @"✅ Налаштування збережено! 
+   
+Що далі:
+1️⃣ Перейдіть до розділу ""Планування виробництва""
+2️⃣ Натисніть кнопку ""Розрахувати графіки"" або ""Перерахувати""
+3️⃣ Перевірте, що нові налаштування застосовані
 
-?? ϳ������: Інструкція ���Цех №�Цех №� ������� Інструкція!";
+💡 Підказка: Зміни вплинуть на всі майбутні розрахунки!";
         }
         catch (Exception ex)
         {
-  statusMessage = $"? ������� Інструкція: {ex.Message}";
+   statusMessage = $"❌ Помилка збереження: {ex.Message}";
         }
         finally
       {
-     isSaving = false;
+      isSaving = false;
         }
     }
 
     private async Task ResetToDefaults()
- {
+    {
         var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            "�� �������, �� ���Цех №���Цех №� Інструкція�� �� ����Цех №� Інструкція��� (1000 м²/����, 5 Цех №����, 5 ��� Потужність)?");
-        
-   if (confirmed)
+        "Ви впевнені, що хочете скинути налаштування до типових значень (1000 м²/день, 5 днів виробництва, 5 днів затримки)?");
+ 
+        if (confirmed)
+    {
+  workshopCapacities = new()
         {
-    workshopCapacities = new()
-   {
-    { 1, defaultCapacity },
-     { 3, defaultCapacity },
-     { 6, defaultCapacity }
+        { 1, defaultCapacity },
+                { 3, defaultCapacity },
+{ 6, defaultCapacity }
             };
-      productionLeadTime = 5;
-        daysBeforeProduction = 5;
+            productionLeadTime = 5;
+            daysBeforeProduction = 5;
 
-            statusMessage = "? Налаштування цехів� �� ����Цех №� Інструкція���. �� Потужність Потужність!";
-        }
+       statusMessage = "✅ Налаштування скинуто до типових значень. Не забудьте зберегти!";
+   }
     }
 }
