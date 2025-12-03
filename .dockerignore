@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+DEPLOYMENT*.md
+BETA*.md
+LAUNCH*.md
+QUICK_START*.md
+*README*.md
+_START_HERE.md
+TOOLTIP*.md
+CODE_BEHIND*.md
+GANTT*.md
+
+# Build artifacts
+**/bin
+**/obj
+**/publish
+**/out
+*.zip
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+**/Logs
+**/*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+npm-debug.log
+
+# Deployment
+deploy-to-azure.ps1
+*.publishsettings

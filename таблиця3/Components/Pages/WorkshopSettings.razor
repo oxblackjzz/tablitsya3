@@ -1,0 +1,479 @@
+@page "/workshop-settings"
+@using таблиця3.Models
+@using таблиця3.Services
+@inject DataStorageService StorageService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<PageTitle>Налаштування цехів</PageTitle>
+
+<h1 class="mb-4">?? Налаштування цехів</h1>
+
+@if (!string.IsNullOrEmpty(statusMessage))
+{
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        @statusMessage
+ <button type="button" class="btn-close" @onclick="() => statusMessage = string.Empty"></button>
+    </div>
+}
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-primary">
+     <div class="card-header bg-primary text-white">
+  <h5 class="mb-0">
+         <i class="bi bi-speedometer2"></i> Виробнича потужність цехів
+           </h5>
+            </div>
+         <div class="card-body">
+             <p class="text-muted mb-4">
+             <i class="bi bi-info-circle"></i> 
+          Встановіть індивідуальну потужність для кожного цеху. 
+        При зміні потужності всі замовлення будуть автоматично перераховані пропорційно.
+   </p>
+
+       <!-- Глобальні налаштування -->
+        <div class="row mb-4">
+                    <div class="col-md-6">
+         <div class="card border-info">
+     <div class="card-body">
+           <h6 class="card-title">
+                   <i class="bi bi-clock-history text-info"></i> Глобальні налаштування виробництва
+        </h6>
+  <div class="mb-3">
+        <label class="form-label fw-bold">Повний цикл замовлення (від замовлення до завершення)</label>
+         <div class="input-group">
+    <input type="number" 
+               class="form-control" 
+          @bind="productionLeadTime" 
+       min="1" 
+           max="60" 
+             step="1" />
+              <span class="input-group-text">робочих днів</span>
+       </div>
+       <small class="text-muted">
+             <i class="bi bi-info-circle"></i> 
+            Кількість робочих днів від дати замовлення до завершення виробництва (1-60 днів)
+               </small>
+      </div>
+            <div class="mb-3">
+         <label class="form-label fw-bold">Затримка старту виробництва</label>
+             <div class="input-group">
+   <input type="number" 
+      class="form-control" 
+     @bind="daysBeforeProduction" 
+ min="0" 
+     max="30" 
+     step="1" />
+           <span class="input-group-text">робочих днів</span>
+     </div>
+      <small class="text-muted">
+    <i class="bi bi-info-circle"></i> 
+       Затримка від дати замовлення до початку виробництва (0-30 днів)
+     </small>
+    </div>
+    </div>
+  </div>
+  </div>
+  </div>
+
+        <div class="row g-4">
+    <!-- Цех №1 -->
+         <div class="col-md-4">
+        <div class="card h-100 @(workshopCapacities[1] != defaultCapacity ? "border-success" : "")">
+         <div class="card-body">
+         <h5 class="card-title">
+       <i class="bi bi-building text-primary"></i> Цех №1
+           </h5>
+      <div class="mb-3">
+              <label class="form-label fw-bold">Потужність (м?/день)</label>
+  <div class="input-group input-group-lg">
+    <input type="number" 
+      class="form-control" 
+     @bind="workshopCapacities[1]" 
+min="100" 
+         max="10000" 
+      step="100" />
+   <span class="input-group-text">м?/день</span>
+         </div>
+              <small class="text-muted">
+               Діапазон: 100 - 10,000 м?/день
+     </small>
+            </div>
+  @if (workshopCapacities[1] != defaultCapacity)
+             {
+  <div class="alert alert-success mb-0">
+     <i class="bi bi-check-circle"></i> 
+       Змінено з @defaultCapacity м?/день
+      </div>
+          }
+           </div>
+             </div>
+          </div>
+
+   <!-- Цех №3 -->
+   <div class="col-md-4">
+   <div class="card h-100 @(workshopCapacities[3] != defaultCapacity ? "border-success" : "")">
+<div class="card-body">
+            <h5 class="card-title">
+   <i class="bi bi-building text-primary"></i> Цех №3
+   </h5>
+     <div class="mb-3">
+   <label class="form-label fw-bold">Потужність (м?/день)</label>
+ <div class="input-group input-group-lg">
+     <input type="number" 
+         class="form-control" 
+     @bind="workshopCapacities[3]" 
+                 min="100" 
+  max="10000" 
+              step="100" />
+           <span class="input-group-text">м?/день</span>
+   </div>
+              <small class="text-muted">
+        Діапазон: 100 - 10,000 м?/день
+    </small>
+    </div>
+            @if (workshopCapacities[3] != defaultCapacity)
+                 {
+  <div class="alert alert-success mb-0">
+             <i class="bi bi-check-circle"></i> 
+         Змінено з @defaultCapacity м?/день
+             </div>
+             }
+        </div>
+    </div>
+                    </div>
+
+                    <!-- Цех №6 -->
+           <div class="col-md-4">
+     <div class="card h-100 @(workshopCapacities[6] != defaultCapacity ? "border-success" : "")">
+           <div class="card-body">
+  <h5 class="card-title">
+           <i class="bi bi-building text-primary"></i> Цех №6
+          </h5>
+          <div class="mb-3">
+              <label class="form-label fw-bold">Потужність (м?/день)</label>
+             <div class="input-group input-group-lg">
+       <input type="number" 
+     class="form-control" 
+        @bind="workshopCapacities[6]" 
+            min="100" 
+           max="10000" 
+               step="100" />
+    <span class="input-group-text">м?/день</span>
+         </div>
+    <small class="text-muted">
+Діапазон: 100 - 10,000 м?/день
+         </small>
+ </div>
+  @if (workshopCapacities[6] != defaultCapacity)
+      {
+                  <div class="alert alert-success mb-0">
+           <i class="bi bi-check-circle"></i> 
+         Змінено з @defaultCapacity м?/день
+                 </div>
+   }
+           </div>
+           </div>
+       </div>
+          </div>
+
+       <hr class="my-4" />
+
+   <div class="d-flex gap-2 justify-content-between align-items-center">
+  <div>
+     <button class="btn btn-success btn-lg" @onclick="SaveSettings" disabled="@isSaving">
+        <i class="bi bi-save"></i> 
+      @(isSaving ? "Збереження..." : "Зберегти налаштування")
+       </button>
+       <button class="btn btn-warning btn-lg ms-2" @onclick="ResetToDefaults">
+                <i class="bi bi-arrow-counterclockwise"></i> 
+   Скинути до значень за замовчуванням
+      </button>
+      </div>
+               <a href="/production-planning" class="btn btn-outline-secondary">
+     <i class="bi bi-arrow-left"></i> Повернутися до планування
+        </a>
+                </div>
+
+       @if (lastSaved != null)
+{
+    <div class="mt-3">
+    <small class="text-muted">
+      <i class="bi bi-clock"></i> 
+            Останнє збереження: @lastSaved.Value.ToString("dd.MM.yyyy HH:mm:ss")
+      </small>
+   </div>
+      }
+     </div>
+     </div>
+    </div>
+</div>
+
+<!-- Інформаційна панель -->
+<div class="row">
+    <div class="col-12">
+        <div class="card border-info">
+ <div class="card-header bg-info text-white">
+              <h5 class="mb-0">
+    <i class="bi bi-info-circle"></i> Як це працює?
+      </h5>
+            </div>
+  <div class="card-body">
+ <h6 class="fw-bold">? Що станеться після зміни потужності?</h6>
+              <ul class="mb-3">
+         <li>Всі існуючі замовлення будуть <strong>автоматично перераховані</strong></li>
+     <li>Тривалість виробництва змінюється <strong>пропорційно</strong> до нової потужності</li>
+ <li>Дати відвантаження будуть <strong>оновлені автоматично</strong></li>
+      <li>Діаграма Ганта <strong>перебудується</strong> з новими даними</li>
+     </ul>
+
+       <h6 class="fw-bold">?? Приклад:</h6>
+            <div class="alert alert-light mb-0">
+            <p class="mb-2">
+            <strong>Було:</strong> Потужність = 1000 м?/день, замовлення 2000 м? = 2 дні виробництва
+        </p>
+  <p class="mb-0">
+              <strong>Стало:</strong> Потужність = 500 м?/день, те саме замовлення 2000 м? = 4 дні виробництва
+  </p>
+     </div>
+        </div>
+  </div>
+    </div>
+</div>
+
+<!-- Додатковий розділ: Міграція даних -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+     <i class="bi bi-wrench-adjustable"></i> Міграція та виправлення даних
+      </h5>
+    </div>
+ <div class="card-body">
+     <p class="text-muted mb-3">
+     <i class="bi bi-exclamation-triangle"></i> 
+      Якщо ви бачите знаки запитання (???) в назвах замовлень, використайте цю функцію для виправлення кодування.
+        </p>
+
+                <div class="alert alert-info">
+     <strong>Що робить міграція:</strong>
+        <ul class="mb-0">
+    <li>Автоматично видаляє пошкоджені символи з назв замовлень</li>
+    <li>Перезберігає всі дані з правильним UTF-8 кодуванням</li>
+       <li>Створює резервну копію перед змінами</li>
+        <li>Не видаляє ваші замовлення та налаштування</li>
+    </ul>
+  </div>
+
+   <div class="d-flex gap-2 align-items-center">
+      <button class="btn btn-warning btn-lg" @onclick="MigrateData" disabled="@isMigrating">
+            <i class="bi bi-arrow-repeat"></i> 
+        @(isMigrating ? "Міграція..." : "Виправити кодування даних")
+        </button>
+ @if (migrationCompleted)
+                 {
+     <div class="alert alert-success mb-0">
+    <i class="bi bi-check-circle-fill"></i> Міграція завершена успішно!
+        </div>
+           }
+                </div>
+         </div>
+   </div>
+    </div>
+</div>
+
+@code {
+    private Dictionary<int, int> workshopCapacities = new()
+    {
+        { 1, 1000 },
+        { 3, 1000 },
+        { 6, 1000 }
+    };
+
+    private int defaultCapacity = 1000;
+    private int productionLeadTime = 5;
+    private int daysBeforeProduction = 5;
+    private bool isSaving = false;
+    private bool isMigrating = false;
+    private bool migrationCompleted = false;
+    private string statusMessage = string.Empty;
+    private DateTime? lastSaved = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+        
+    // Автоматична міграція при першому завантаженні
+        try
+        {
+     var hasData = StorageService.HasSavedData();
+            if (hasData)
+            {
+ // Автоматично запускаємо міграцію для очищення знаків запитання
+      await Task.Delay(500);
+    await MigrateData();
+        }
+        }
+        catch (Exception ex)
+        {
+       statusMessage = $"Помилка автоматичної міграції: {ex.Message}";
+    }
+    }
+
+    private async Task LoadSettings()
+    {
+        try
+      {
+            var data = await StorageService.LoadWorkshopDataAsync();
+    
+            if (data?.WorkshopCapacities != null)
+            {
+              workshopCapacities = data.WorkshopCapacities;
+         lastSaved = data.LastUpdated;
+        productionLeadTime = data.ProductionLeadTime;
+            daysBeforeProduction = data.DaysBeforeProduction;
+            }
+        }
+        catch (Exception ex)
+        {
+   statusMessage = $"Помилка завантаження налаштувань: {ex.Message}";
+   }
+}
+
+    private async Task MigrateData()
+    {
+        isMigrating = true;
+        migrationCompleted = false;
+        statusMessage = string.Empty;
+
+        try
+        {
+            var success = await StorageService.MigrateDataEncodingAsync();
+            
+            if (success)
+            {
+      migrationCompleted = true;
+     statusMessage = @"? Міграція завершена успішно!
+
+?? Що було зроблено:
+1. Видалено пошкоджені символи з назв замовлень
+2. Дані перезбережено з правильним UTF-8 кодуванням
+3. Створено резервну копію (workshop-data.json.backup)
+
+?? Рекомендація: Перейдіть на сторінку ""Планування виробництва"" та перевірте результат.";
+    
+     // Перезавантажуємо налаштування
+       await LoadSettings();
+            }
+  else
+            {
+     statusMessage = "?? Міграція не виконана: дані відсутні або вже в правильному форматі.";
+          }
+        }
+        catch (Exception ex)
+        {
+     statusMessage = $"? Помилка міграції: {ex.Message}";
+        }
+        finally
+        {
+ isMigrating = false;
+  }
+    }
+
+    private async Task SaveSettings()
+    {
+      isSaving = true;
+        statusMessage = string.Empty;
+
+        try
+ {
+  // Валідація
+      foreach (var kvp in workshopCapacities)
+       {
+          if (kvp.Value < 100 || kvp.Value > 10000)
+    {
+   statusMessage = $"?? Потужність цеху №{kvp.Key} має бути в межах 100-10,000 м?/день";
+           return;
+   }
+        }
+    
+          // Валідація productionLeadTime
+          if (productionLeadTime < 1 || productionLeadTime > 60)
+         {
+           statusMessage = "?? Повний цикл замовлення має бути в межах 1-60 днів";
+                return;
+         }
+            
+     // Валідація daysBeforeProduction
+            if (daysBeforeProduction < 0 || daysBeforeProduction > 30)
+       {
+    statusMessage = "?? Затримка старту має бути в межах 0-30 днів";
+           return;
+ }
+
+            var data = await StorageService.LoadWorkshopDataAsync() ?? new WorkshopData
+   {
+      WorkshopOrders = new()
+                {
+        { 1, new List<double>() },
+    { 3, new List<double>() },
+         { 6, new List<double>() }
+         },
+WorkshopOrderDates = new()
+    {
+          { 1, new List<DateTime>() },
+            { 3, new List<DateTime>() },
+          { 6, new List<DateTime>() }
+  }
+       };
+
+          data.WorkshopCapacities = workshopCapacities;
+       data.ProductionLeadTime = productionLeadTime;
+    data.DaysBeforeProduction = daysBeforeProduction;
+      data.LastUpdated = DateTime.Now;
+
+       await StorageService.SaveWorkshopDataAsync(data);
+
+            lastSaved = DateTime.Now;
+       statusMessage = @"? Налаштування успішно збережені! 
+            
+Що робити далі:
+1?? Поверніться на сторінку ""Планування виробництва""
+2?? Натисніть кнопку ""Обчислити графік"" або ""Перерахувати""
+3?? Перевірте, що зміни відобразились правильно
+
+?? Підказка: Збереження впливає тільки на майбутні розрахунки!";
+        }
+        catch (Exception ex)
+        {
+  statusMessage = $"? Помилка збереження: {ex.Message}";
+        }
+        finally
+      {
+     isSaving = false;
+        }
+    }
+
+    private async Task ResetToDefaults()
+ {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            "Ви впевнені, що хочете скинути всі налаштування до значень за замовчуванням (1000 м?/день, 5 днів циклу, 5 днів затримки)?");
+        
+   if (confirmed)
+        {
+    workshopCapacities = new()
+   {
+    { 1, defaultCapacity },
+     { 3, defaultCapacity },
+     { 6, defaultCapacity }
+            };
+      productionLeadTime = 5;
+        daysBeforeProduction = 5;
+
+            statusMessage = "? Налаштування скинуті до значень за замовчуванням. Не забудьте зберегти!";
+        }
+    }
+}

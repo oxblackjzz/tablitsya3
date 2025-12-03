@@ -1,0 +1,664 @@
+.gantt-chart {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  overflow: visible;
+  padding: 20px;
+}
+
+/* Контейнер для горизонтального скролу */
+.gantt-wrapper {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  position: relative;
+  margin-bottom: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #4a90e2 #f8f9fa;
+  -webkit-overflow-scrolling: touch;
+  z-index: 1;
+}
+
+/* Timeline - збільшена висота без вертикального скролу */
+.gantt-timeline {
+  position: relative;
+  height: 400px;
+  background: white;
+  border: 1px solid #dee2e6;
+  margin-bottom: 10px;
+  overflow-x: auto;
+  overflow-y: visible;
+  z-index: 1;
+}
+
+/* Сітка днів (вертикальні лінії) з календарними датами */
+.gantt-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Паттерни для легенди неробочих днів */
+.legend-status-box.weekend-pattern {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(220, 53, 69, 0.15),
+    rgba(220, 53, 69, 0.15) 5px,
+    rgba(220, 53, 69, 0.3) 5px,
+    rgba(220, 53, 69, 0.3) 10px
+  );
+  border: 2px solid rgba(220, 53, 69, 0.5);
+}
+
+.legend-status-box.holiday-pattern {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 193, 7, 0.2),
+    rgba(255, 193, 7, 0.2) 5px,
+    rgba(255, 193, 7, 0.4) 5px,
+    rgba(255, 193, 7, 0.4) 10px
+  );
+  border: 2px solid rgba(255, 193, 7, 0.6);
+}
+
+.legend-status-box.completed {
+  background-color: #6c757d;
+  opacity: 0.6;
+  filter: grayscale(50%);
+  border-style: dashed;
+}
+
+.day-separator {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 2px;
+  background-color: transparent;
+  border-left: 2px solid #0d6efd;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Стиль для неробочих днів (вихідні та свята) */
+.day-separator.non-working {
+  border-left: 3px solid #dc3545;
+  width: 3px;
+  opacity: 0.7;
+}
+
+.day-separator.weekend {
+  border-left: 3px solid #dc3545;
+  width: 3px;
+}
+
+.day-separator:first-child {
+  border-left: 4px solid #198754;
+  width: 4px;
+}
+
+.day-number {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #212529;
+  background: #e3f2fd;
+  padding: 4px 7px;
+  border-radius: 4px;
+  border: 1px solid #90caf9;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  pointer-events: none;
+  line-height: 1.2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 11;
+}
+
+.day-separator:first-child .day-number {
+  background: #c8e6c9;
+  border-color: #66bb6a;
+  color: #1b5e20;
+}
+
+/* Колір для неробочих днів */
+.day-separator.non-working .day-number {
+  background: #ffcdd2;
+  border-color: #e57373;
+  color: #c62828;
+  opacity: 0.95;
+}
+
+.day-separator.weekend .day-number {
+  background: #ffcdd2;
+  border-color: #e57373;
+  color: #c62828;
+}
+
+/* Значок номера замовлення в комірці календаря */
+.order-badge {
+  display: inline-block;
+  font-size: 8px; /* ? ЗМЕНШЕНО з 10px до 8px */
+  font-weight: 700;
+  color: #fff;
+  padding: 2px 4px; /* ? ЗМЕНШЕНО з 2px 5px до 2px 4px */
+  border-radius: 3px;
+  margin: 1px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+
+/* Календарні дати під номером дня */
+.calendar-date {
+  position: absolute;
+  top: 35px;
+  left: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #212529;
+  background: #f5f5f5;
+  padding: 4px 7px;
+  border-radius: 4px;
+  border: 1px solid #bdbdbd;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  pointer-events: none;
+  line-height: 1.3;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Колір для неробочих днів */
+.day-separator.non-working .calendar-date {
+  background: #ffebee;
+  border-color: #ef5350;
+  color: #c62828;
+}
+
+.day-separator.weekend .calendar-date {
+  background: #ffebee;
+  border-color: #ef5350;
+  color: #c62828;
+}
+
+/* Бейдж для свят */
+.holiday-badge {
+  display: inline-block;
+  background: rgba(255, 193, 7, 0.9);
+  color: #000;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 8px;
+  margin-top: 2px;
+}
+
+/* Контейнер з блоками - без вертикального скролу */
+.gantt-bars-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: 80px 0 40px 0; /* ? ЗМІНЕНО: було 60px 0 20px 0, тепер 80px 0 40px 0 для більшого відступу */
+  z-index: 100;
+  pointer-events: auto;
+  overflow: visible;
+}
+
+/* СМУГИ ЗАМОВЛЕНЬ - РОЗМІЩЕНІ В МЕЖАХ ЛІНІЇ КАЛЕНДАРЯ БЕЗ ЇХ ПЕРЕКРИТТЯ */
+.gantt-bar {
+  position: absolute;
+  top: 80px; /* ? ПОВЕРНУТО: було 60px, тепер 80px щоб не перекривати календарні позначки */
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+  border-right: 2px solid rgba(0, 0, 0, 0.2);
+  border-left: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 1;
+  z-index: 100;
+  overflow: visible;
+}
+
+.gantt-bar:first-child {
+  border-left: 2px solid rgba(0, 0, 0, 0.2);
+}
+
+/* Статуси замовлень */
+.gantt-bar.completed {
+  opacity: 0.7;
+  filter: grayscale(50%);
+  border-style: dashed;
+  z-index: 90;
+}
+
+.gantt-bar.in-progress {
+  opacity: 1;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+  animation: barPulse 2s infinite;
+  z-index: 110;
+}
+
+.gantt-bar.pending {
+  opacity: 1;
+  z-index: 100;
+}
+
+@keyframes barPulse {
+  0%,
+  100% {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  }
+  50% {
+    box-shadow: 0 3px 15px rgba(0, 123, 255, 0.5);
+  }
+}
+
+/* ? ВИМКНЕНО TRANSFORM щоб замовлення НЕ РУХАЛОСЬ */
+.gantt-bar:hover {
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  filter: brightness(1.2);
+  opacity: 1;
+  z-index: 110; /* ? МЕНШИЙ z-index ніж tooltip */
+}
+
+/* Курсор для draggable елементів */
+.gantt-bar[draggable="true"] {
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+/* ? ВИМКНЕН0 TRANSFORM для draggable при hover */
+.gantt-bar[draggable="true"]:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Показувати tooltip при наведенні на смугу замовлення - ВНИЗ ПІД БЛОКОМ */
+.order-details-tooltip {
+  opacity: 0;
+  visibility: hidden;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  transform: translateY(10px);
+  background: white;
+  border: 2px solid #0d6efd;
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 250px;
+  max-width: 300px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  transition: all 0.3s ease;
+  pointer-events: none;
+  white-space: normal;
+  margin-top: 10px;
+}
+
+.gantt-bar:hover .order-details-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Для замовлень в правій частині екрану - вирівнювання справа */
+.gantt-bar[data-start-index]:hover .order-details-tooltip {
+  left: auto;
+  right: 0;
+}
+
+/* Стилі для вмісту tooltip */
+.tooltip-header {
+  border-bottom: 1px solid #dee2e6;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.tooltip-header strong {
+  color: #0d6efd;
+  font-size: 14px;
+  flex: 1;
+}
+
+.order-number {
+  background: #0d6efd;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.tooltip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.tooltip-label {
+  color: #6c757d;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tooltip-value {
+  color: #212529;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* НОВЕ: Стрілка з датою відвантаження */
+.completion-date-arrow {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 200;
+  pointer-events: all;
+  margin-top: 15px; /* ? ЗБІЛЬШЕНО: було 5px, тепер 15px для кращого відступу */
+}
+
+/* Лінія стрілки */
+.arrow-line {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 3px;
+  background: linear-gradient(
+    to bottom,
+    rgba(52, 152, 219, 0.8) 0%,
+    rgba(52, 152, 219, 1) 100%
+  );
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border-radius: 2px 2px 0 0;
+  height: 80px;
+}
+
+/* Вістря стрілки */
+.arrow-head {
+  position: absolute;
+  right: -4px;
+  top: 78px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid rgba(52, 152, 219, 1);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.2));
+}
+
+/* Бейдж з датою завершення */
+.completion-date-badge {
+  position: absolute;
+  right: -60px;
+  top: 85px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 2px solid #3498db;
+  border-radius: 8px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  min-width: 110px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  z-index: 200;
+}
+
+.completion-date-badge:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  border-color: #2980b9;
+}
+
+/* Текст дати */
+.date-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.date-text strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #212529;
+}
+
+.date-text small {
+  font-size: 10px;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.date-text .status-text {
+  font-size: 9px;
+  color: #495057;
+  font-style: italic;
+}
+
+/* Колір бейджів в залежності від статусу */
+.completion-date-badge.completed {
+  border-color: #6c757d;
+  background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+}
+
+.completion-date-badge.in-progress {
+  border-color: #ffa500;
+  background: linear-gradient(135deg, #fff8e1 0%, #ffe5b4 100%);
+  animation: badgePulse 2s infinite;
+}
+
+.completion-date-badge.pending {
+  border-color: #3498db;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+}
+
+@keyframes badgePulse {
+  0%,
+  100% {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  }
+  50% {
+    box-shadow: 0 6px 20px rgba(255, 165, 0, 0.4);
+  }
+}
+
+/* Іконка дати */
+.date-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.date-icon span {
+  display: inline-block;
+}
+
+/* Маркер кінця виробництва */
+.production-end-marker {
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 150;
+  pointer-events: none;
+}
+
+.end-flag {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  font-size: 24px;
+  color: #e74c3c;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  z-index: 150;
+}
+
+.end-line {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    rgba(231, 76, 60, 0.8) 0%,
+    rgba(231, 76, 60, 0.3) 100%
+  );
+  border-radius: 2px;
+}
+
+/* Підпис на блоці замовлення */
+.bar-label {
+  position: relative;
+  z-index: 101;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Значки статусу */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+height: 18px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.status-badge.completed-badge {
+  background: #6c757d;
+  color: white;
+}
+
+.status-badge.progress-badge {
+  background: #ffa500;
+  color: white;
+  animation: badgePulse 2s infinite;
+}
+
+/* Маркер сьогодні */
+.day-separator.today {
+  border-left: 4px solid #ff6b6b;
+  width: 4px;
+  box-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+}
+
+.today-marker {
+  background: #fff3cd !important;
+  border-color: #ffc107 !important;
+  color: #856404 !important;
+  animation: todayPulse 2s infinite;
+}
+
+@keyframes todayPulse {
+  0%,
+  100% {
+    box-shadow: 0 2px 6px rgba(255, 193, 7, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.6);
+  }
+}
+
+.today-badge {
+  background: #ffc107;
+  color: #000;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 700;
+  font-size: 8px;
+  margin-top: 2px;
+}
+
+/* Легенда */
+.gantt-legend {
+  margin-top: 20px;
+}
+
+.legend-status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-status-box {
+  width: 40px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.legend-status-box.pending {
+  background: #4a90e2;
+}
+
+.legend-status-box.in-progress {
+  background: #ffa500;
+}
+
+/* Панель фільтрів */
+.gantt-filter-panel {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 15px;
+margin-bottom: 15px;
+}
+
+.gantt-title {
+  margin-bottom: 20px;
+}
+
+.gantt-title h4 {
+  margin: 0;
+  color: #212529;
+  font-weight: 600;
+}
+
+.gantt-title small {
+  color: #6c757d;
+  font-size: 13px;
+}

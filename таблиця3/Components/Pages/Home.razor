@@ -1,0 +1,55 @@
+﻿@page "/"
+
+<PageTitle>Головна</PageTitle>
+
+<h1>Система планування виробництва меблів ЛДСП</h1>
+
+<div class="alert alert-info mt-4" role="alert">
+    <h4 class="alert-heading">Ласкаво просимо!</h4>
+    <p>Це система для планування виробництва меблів з ЛДСП.</p>
+    <hr>
+    <p class="mb-0">
+        Перейдіть до розділу <a href="/production-planning" class="alert-link">Планування виробництва</a> 
+        для перегляду таблиці замовлень та графіків завантаженості.
+    </p>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">📊 Планування</h5>
+                <p class="card-text">Розрахунок термінів виробництва на основі потужності цеху.</p>
+                <a href="/production-planning" class="btn btn-primary">Відкрити</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">📈 Графіки</h5>
+                <p class="card-text">Візуалізація завантаженості виробництва по днях.</p>
+                <a href="/production-planning" class="btn btn-primary">Переглянути</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">📋 Звіти</h5>
+                <p class="card-text">Детальна інформація про завантаженість та терміни.</p>
+                <a href="/production-planning" class="btn btn-primary">Деталі</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-5">
+    <h3>Як це працює?</h3>
+    <ul>
+        <li><strong>Потужність цеху:</strong> 1000 м² на день</li>
+        <li><strong>Термін виготовлення:</strong> 5 днів від початку виробництва до відвантаження</li>
+        <li><strong>Розрахунок:</strong> Система автоматично розподіляє замовлення по днях, враховуючи доступну потужність</li>
+        <li><strong>Візуалізація:</strong> Графік показує завантаженість виробництва та порівняння з максимальною потужністю</li>
+    </ul>
+</div>
