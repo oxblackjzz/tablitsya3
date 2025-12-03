@@ -1,6 +1,6 @@
-using System.Collections.Generic;
+п»їusing System.Collections.Generic;
 
-namespace таблиця3.Models
+namespace пїЅпїЅпїЅпїЅпїЅпїЅпїЅ3.Models
 {
     public class ProductionSchedule
     {

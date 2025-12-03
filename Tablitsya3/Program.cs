@@ -1,5 +1,5 @@
-using таблиця3.Components;
-using таблиця3.Services;
+﻿using Tablitsya3.Components;
+using Tablitsya3.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 

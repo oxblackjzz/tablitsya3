@@ -1,18 +1,18 @@
-@page "/logs"
-@using таблиця3.Models
-@using таблиця3.Services
+п»ї@page "/logs"
+@using пїЅпїЅпїЅпїЅпїЅпїЅпїЅ3.Models
+@using пїЅпїЅпїЅпїЅпїЅпїЅпїЅ3.Services
 @inject LoggingService Logger
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
-<PageTitle>Журнал подій</PageTitle>
+<PageTitle>пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ</PageTitle>
 
 <div class="log-viewer-container">
     <h1 class="page-title mb-3">
-        <i class="bi bi-journal-text"></i> Журнал подій системи
+        <i class="bi bi-journal-text"></i> пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     </h1>
 
-    <!-- Статистика -->
+    <!-- пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ -->
     <div class="row g-2 mb-3">
         @{
        var counts = Logger.GetLogCounts();
@@ -28,7 +28,7 @@
            <div class="card-body p-2">
      <div class="d-flex justify-content-between align-items-center">
      <div>
-            <h6 class="card-title mb-0"><i class="bi bi-info-circle-fill"></i> Інформація</h6>
+            <h6 class="card-title mb-0"><i class="bi bi-info-circle-fill"></i> пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ</h6>
          <p class="stat-number mb-0">@infoCount</p>
  </div>
         </div>
@@ -41,7 +41,7 @@
             <div class="card-body p-2">
          <div class="d-flex justify-content-between align-items-center">
         <div>
-      <h6 class="card-title mb-0"><i class="bi bi-exclamation-triangle-fill"></i> Попередження</h6>
+      <h6 class="card-title mb-0"><i class="bi bi-exclamation-triangle-fill"></i> пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ</h6>
           <p class="stat-number mb-0">@warningCount</p>
        </div>
            </div>
@@ -54,7 +54,7 @@
       <div class="card-body p-2">
      <div class="d-flex justify-content-between align-items-center">
             <div>
-<h6 class="card-title mb-0"><i class="bi bi-x-circle-fill"></i> Помилки</h6>
+<h6 class="card-title mb-0"><i class="bi bi-x-circle-fill"></i> пїЅпїЅпїЅпїЅпїЅпїЅпїЅ</h6>
  <p class="stat-number mb-0">@errorCount</p>
          </div>
  </div>
@@ -67,7 +67,7 @@
          <div class="card-body p-2">
       <div class="d-flex justify-content-between align-items-center">
     <div>
-           <h6 class="card-title mb-0"><i class="bi bi-bug-fill"></i> Відлагодження</h6>
+           <h6 class="card-title mb-0"><i class="bi bi-bug-fill"></i> ВіпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ</h6>
                 <p class="stat-number mb-0">@debugCount</p>
           </div>
           </div>
@@ -76,46 +76,46 @@
         </div>
     </div>
 
-    <!-- Панель управління -->
+    <!-- пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ -->
     <div class="card mb-3 control-panel">
         <div class="card-body p-2">
             <div class="row g-2">
-       <!-- Фільтр за рівнем -->
+       <!-- ФіпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ -->
           <div class="col-xl-3 col-lg-4 col-md-6 col-12">
-        <label class="form-label fw-bold mb-1 small">Рівень:</label>
+        <label class="form-label fw-bold mb-1 small">РіпїЅпїЅпїЅпїЅ:</label>
          <select class="form-select form-select-sm" @bind="selectedLevel">
-          <option value="">Всі</option>
-          <option value="Info">?? Інформація</option>
-          <option value="Warning">?? Попередження</option>
-    <option value="Error">? Помилки</option>
-<option value="Debug">?? Відлагодження</option>
+          <option value="">пїЅпїЅ</option>
+          <option value="Info">?? пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ</option>
+          <option value="Warning">?? пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ</option>
+    <option value="Error">? пїЅпїЅпїЅпїЅпїЅпїЅпїЅ</option>
+<option value="Debug">?? ВіпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ</option>
         </select>
      </div>
 
-         <!-- Фільтр за джерелом -->
+         <!-- ФіпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ -->
  <div class="col-xl-3 col-lg-4 col-md-6 col-12">
-        <label class="form-label fw-bold mb-1 small">Джерело:</label>
-  <input type="text" class="form-control form-control-sm" @bind="sourceFilter" placeholder="Компонент..." />
+        <label class="form-label fw-bold mb-1 small">пїЅпїЅпїЅпїЅпїЅпїЅпїЅ:</label>
+  <input type="text" class="form-control form-control-sm" @bind="sourceFilter" placeholder="пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ..." />
         </div>
 
-        <!-- Кнопки дій -->
+        <!-- пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ -->
           <div class="col-xl-6 col-lg-4 col-md-12 col-12">
  <label class="form-label mb-1 d-none d-lg-block">&nbsp;</label>
            <div class="btn-toolbar" role="toolbar">
    <div class="btn-group btn-group-sm me-1 mb-1" role="group">
-               <button class="btn btn-primary" @onclick="ApplyFilters" title="Застосувати фільтр">
-           <i class="bi bi-funnel-fill"></i><span class="d-none d-xl-inline ms-1">Фільтр</span>
+               <button class="btn btn-primary" @onclick="ApplyFilters" title="пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ">
+           <i class="bi bi-funnel-fill"></i><span class="d-none d-xl-inline ms-1">ФіпїЅпїЅпїЅпїЅ</span>
            </button>
-     <button class="btn btn-secondary" @onclick="RefreshLogs" title="Оновити">
-            <i class="bi bi-arrow-clockwise"></i><span class="d-none d-xl-inline ms-1">Оновити</span>
+     <button class="btn btn-secondary" @onclick="RefreshLogs" title="пїЅпїЅпїЅпїЅпїЅпїЅпїЅ">
+            <i class="bi bi-arrow-clockwise"></i><span class="d-none d-xl-inline ms-1">пїЅпїЅпїЅпїЅпїЅпїЅпїЅ</span>
       </button>
             </div>
                 <div class="btn-group btn-group-sm mb-1" role="group">
-          <button class="btn btn-success" @onclick="ExportLogs" title="Експорт">
-         <i class="bi bi-download"></i><span class="d-none d-xl-inline ms-1">Експорт</span>
+          <button class="btn btn-success" @onclick="ExportLogs" title="пїЅпїЅпїЅпїЅпїЅпїЅпїЅ">
+         <i class="bi bi-download"></i><span class="d-none d-xl-inline ms-1">пїЅпїЅпїЅпїЅпїЅпїЅпїЅ</span>
        </button>
-   <button class="btn btn-danger" @onclick="ClearLogs" title="Очистити">
-         <i class="bi bi-trash-fill"></i><span class="d-none d-xl-inline ms-1">Очистити</span>
+   <button class="btn btn-danger" @onclick="ClearLogs" title="пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ">
+         <i class="bi bi-trash-fill"></i><span class="d-none d-xl-inline ms-1">пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ</span>
 </button>
        </div>
       </div>
@@ -124,12 +124,12 @@
         </div>
     </div>
 
-    <!-- Таблиця логів -->
+    <!-- пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ -->
     @if (!logs.Any())
     {
         <div class="alert alert-info">
    <i class="bi bi-info-circle-fill"></i>
-    <strong>Журнал порожній.</strong> Записи з'являться після виконання операцій в системі.
+    <strong>пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ.</strong> пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ.
     </div>
  }
     else
@@ -137,7 +137,7 @@
         <div class="card">
    <div class="card-header bg-dark text-white py-2">
      <h6 class="mb-0">
-     <i class="bi bi-list-ul"></i> Записи журналу (@filteredLogs.Count з @logs.Count)
+     <i class="bi bi-list-ul"></i> пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ (@filteredLogs.Count пїЅ @logs.Count)
   </h6>
    </div>
      <div class="card-body p-0">
@@ -145,11 +145,11 @@
      <table class="table table-sm table-hover mb-0 log-table">
       <thead class="table-dark">
           <tr>
-               <th class="col-time">Час</th>
-        <th class="col-level">Рівень</th>
-             <th class="col-source">Джерело</th>
-        <th class="col-message">Повідомлення</th>
-       <th class="col-details">Деталі</th>
+               <th class="col-time">пїЅпїЅпїЅ</th>
+        <th class="col-level">РіпїЅпїЅпїЅпїЅ</th>
+             <th class="col-source">пїЅпїЅпїЅпїЅпїЅпїЅпїЅ</th>
+        <th class="col-message">пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ</th>
+       <th class="col-details">пїЅпїЅпїЅпїЅпїЅ</th>
             </tr>
            </thead>
        <tbody>
@@ -175,7 +175,7 @@
          @if (!string.IsNullOrEmpty(log.Details))
          {
             <div class="mb-2">
-          <strong>Деталі:</strong>
+          <strong>пїЅпїЅпїЅпїЅпїЅ:</strong>
        <pre class="mb-0" style="font-size: 11px; max-height: 200px; overflow-y: auto;">@log.Details</pre>
         </div>
    }
@@ -207,7 +207,7 @@
                 {
          <div class="text-center p-2">
       <button class="btn btn-outline-primary btn-sm" @onclick="LoadMore">
-         <i class="bi bi-arrow-down-circle"></i> Завантажити ще (@(filteredLogs.Count - displayCount) записів)
+         <i class="bi bi-arrow-down-circle"></i> пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ (@(filteredLogs.Count - displayCount) пїЅпїЅпїЅпїЅпїЅпїЅ)
         </button>
       </div>
             }
@@ -228,7 +228,7 @@
     {
         Logger.OnLogAdded += RefreshLogs;
     RefreshLogs();
-      Logger.LogInfo("Відкрито сторінку журналу подій", "LogViewer");
+      Logger.LogInfo("ВіпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ", "LogViewer");
     }
 
     private void RefreshLogs()
@@ -261,7 +261,7 @@
 
     private async Task ClearLogs()
     {
-        if (await JSRuntime.InvokeAsync<bool>("confirm", "Ви впевнені, що хочете очистити журнал подій?"))
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ?"))
  {
      Logger.ClearLogs();
        RefreshLogs();
@@ -276,7 +276,7 @@
     
      await JSRuntime.InvokeVoidAsync("downloadFile", $"logs_{DateTime.Now:yyyyMMdd_HHmmss}.txt", base64);
         
-        Logger.LogInfo($"Експортовано {logs.Count} записів журналу", "LogViewer");
+        Logger.LogInfo($"пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ {logs.Count} пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ", "LogViewer");
     }
 
     private void ToggleDetails(long logId)

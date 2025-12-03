@@ -1,11 +1,11 @@
-using System;
+п»їusing System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using таблиця3.Models;
-using AppLogLevel = таблиця3.Models.LogLevel;
+using пїЅпїЅпїЅпїЅпїЅпїЅпїЅ3.Models;
+using AppLogLevel = пїЅпїЅпїЅпїЅпїЅпїЅпїЅ3.Models.LogLevel;
 
-namespace таблиця3.Services
+namespace пїЅпїЅпїЅпїЅпїЅпїЅпїЅ3.Services
 {
     public class LoggingService
     {
@@ -85,7 +85,7 @@ namespace таблиця3.Services
         public void ClearLogs()
         {
             _logs.Clear();
-            LogInfo("Логи були очищені", "LoggingService");
+            LogInfo("пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ", "LoggingService");
             OnLogAdded?.Invoke();
         }
 
@@ -98,9 +98,9 @@ namespace таблиця3.Services
         public string ExportLogsAsText()
         {
             var sb = new StringBuilder();
-            sb.AppendLine("=== Експорт логів ===");
-            sb.AppendLine($"Згенеровано: {DateTime.Now:dd.MM.yyyy HH:mm:ss}");
-            sb.AppendLine($"Всього записів: {_logs.Count}");
+            sb.AppendLine("=== пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ ===");
+            sb.AppendLine($"пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: {DateTime.Now:dd.MM.yyyy HH:mm:ss}");
+            sb.AppendLine($"пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ: {_logs.Count}");
             sb.AppendLine();
 
             foreach (var log in _logs.OrderByDescending(l => l.Timestamp))
@@ -110,7 +110,7 @@ namespace таблиця3.Services
 
                 if (!string.IsNullOrEmpty(log.Details))
                 {
-                    sb.AppendLine($"  Деталі: {log.Details}");
+                    sb.AppendLine($"  пїЅпїЅпїЅпїЅпїЅ: {log.Details}");
                 }
 
                 if (!string.IsNullOrEmpty(log.StackTrace))
