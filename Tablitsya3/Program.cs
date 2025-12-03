@@ -10,9 +10,17 @@ builder.Services.AddRazorComponents()
 builder.Services.AddScoped<ProductionPlanningService>();
 builder.Services.AddSingleton<DataStorageService>();
 builder.Services.AddSingleton<WorkingDaysService>();
-builder.Services.AddSingleton<LoggingService>(); // ✅ ДОДАНО: Сервіс логування
+builder.Services.AddSingleton<LoggingService>();
+builder.Services.AddSingleton<DataSeedService>();
 
 var app = builder.Build();
+
+// Seed initial data on first run
+using (var scope = app.Services.CreateScope())
+{
+    var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
+    await seedService.SeedInitialDataIfEmpty();
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
