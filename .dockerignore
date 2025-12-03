@@ -47,6 +47,10 @@ Thumbs.db
 node_modules/
 npm-debug.log
 
-# Deployment
+# Deployment files
 deploy-to-azure.ps1
+quick-deploy.ps1
 *.publishsettings
+render.yaml
+railway.json
+Dockerfile.old
