@@ -1,9 +1,9 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using �������3.Models;
-using �������3.Services;
+using Tablitsya3.Models;
+using Tablitsya3.Services;
 
-namespace �������3.Components.Pages;
+namespace Tablitsya3.Components.Pages;
 
 public partial class ProductionPlanning : ComponentBase
 {

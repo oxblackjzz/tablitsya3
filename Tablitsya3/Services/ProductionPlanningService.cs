@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using �������3.Models;
+using Tablitsya3.Models;
 
-namespace �������3.Services
+namespace Tablitsya3.Services
 {
     public class ProductionPlanningService
     {

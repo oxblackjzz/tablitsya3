@@ -1,4 +1,4 @@
-﻿namespace �������3.Models
+﻿namespace Tablitsya3.Models
 {
     /// <summary>
     /// ����� � ������ ����

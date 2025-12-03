@@ -6,9 +6,9 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
-using �������3.Models;
+using Tablitsya3.Models;
 
-namespace �������3.Services
+namespace Tablitsya3.Services
 {
     public class DataStorageService
     {

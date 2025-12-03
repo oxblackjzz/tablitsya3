@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace �������3.Models
+namespace Tablitsya3.Models
 {
     public class ProductionSchedule
     {

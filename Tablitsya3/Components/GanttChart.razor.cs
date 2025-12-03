@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Components;
-using �������3.Models;
-using �������3.Services;
+using Tablitsya3.Models;
+using Tablitsya3.Services;
 
-namespace �������3.Components;
+namespace Tablitsya3.Components;
 
 public partial class GanttChart
 {
