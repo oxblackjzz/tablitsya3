@@ -1,50 +1,51 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace �������3.Services
+namespace Tablitsya3.Services
 {
     public class WorkingDaysService
     {
-        private readonly HashSet<DateTime> _holidays;
+      private readonly HashSet<DateTime> _holidays;
 
-        public WorkingDaysService()
-        {
-            _holidays = new HashSet<DateTime>();
+   public WorkingDaysService()
+      {
+_holidays = new HashSet<DateTime>();
             InitializeHolidays2025();
         }
 
         private void InitializeHolidays2025()
         {
-            _holidays.Add(new DateTime(2025, 1, 1));
-            _holidays.Add(new DateTime(2025, 1, 7));
-            _holidays.Add(new DateTime(2025, 3, 8));
-            _holidays.Add(new DateTime(2025, 4, 20));
-            _holidays.Add(new DateTime(2025, 4, 21));
-            _holidays.Add(new DateTime(2025, 6, 8));
-            _holidays.Add(new DateTime(2025, 6, 28));
-            _holidays.Add(new DateTime(2025, 8, 24));
-            _holidays.Add(new DateTime(2025, 10, 14));
-            _holidays.Add(new DateTime(2025, 12, 25));
-        }
+     // Ukrainian holidays 2025
+      _holidays.Add(new DateTime(2025, 1, 1)); // New Year
+         _holidays.Add(new DateTime(2025, 1, 7));   // Christmas
+            _holidays.Add(new DateTime(2025, 3, 8));   // Women's Day
+            _holidays.Add(new DateTime(2025, 4, 20));  // Easter
+            _holidays.Add(new DateTime(2025, 4, 21));  // Easter Monday
+   _holidays.Add(new DateTime(2025, 6, 8));   // Trinity
+     _holidays.Add(new DateTime(2025, 6, 28));  // Constitution Day
+ _holidays.Add(new DateTime(2025, 8, 24));  // Independence Day
+            _holidays.Add(new DateTime(2025, 10, 14)); // Defenders Day
+     _holidays.Add(new DateTime(2025, 12, 25)); // Christmas (Catholic)
+    }
 
         public bool IsWorkingDay(DateTime date)
         {
-            if (date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday)
-                return false;
+      if (date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday)
+      return false;
 
-            if (_holidays.Contains(date.Date))
-                return false;
+if (_holidays.Contains(date.Date))
+          return false;
 
             return true;
         }
 
-        public DateTime GetNextWorkingDay(DateTime date)
-        {
-            var nextDay = date.AddDays(1);
+ public DateTime GetNextWorkingDay(DateTime date)
+     {
+     var nextDay = date.AddDays(1);
             while (!IsWorkingDay(nextDay))
-            {
-                nextDay = nextDay.AddDays(1);
-            }
+{
+        nextDay = nextDay.AddDays(1);
+ }
             return nextDay;
         }
 
@@ -53,119 +54,119 @@ namespace �������3.Services
             if (workingDays == 0)
                 return startDate;
 
-            var currentDate = startDate;
+      var currentDate = startDate;
 
-            // ϳ������� ��'����� ������� (�������� ������� ���)
-            if (workingDays < 0)
-            {
-                var daysToSubtract = Math.Abs(workingDays);
-                var daysSubtracted = 0;
+            // Handle negative working days (subtract working days)
+     if (workingDays < 0)
+         {
+   var daysToSubtract = Math.Abs(workingDays);
+      var daysSubtracted = 0;
 
                 while (daysSubtracted < daysToSubtract)
-                {
-                    currentDate = GetPreviousWorkingDay(currentDate);
-                    daysSubtracted++;
+           {
+    currentDate = GetPreviousWorkingDay(currentDate);
+       daysSubtracted++;
                 }
 
-                return currentDate;
-            }
+           return currentDate;
+     }
 
-            // ��������� ������� ��� (��������� ��������)
+            // Add working days (positive direction)
             var daysAdded = 0;
-            while (daysAdded < workingDays)
+    while (daysAdded < workingDays)
             {
-                currentDate = GetNextWorkingDay(currentDate);
-                daysAdded++;
-            }
+     currentDate = GetNextWorkingDay(currentDate);
+  daysAdded++;
+ }
 
-            return currentDate;
+  return currentDate;
         }
 
-        // ����� ��� ��������� ������������ �������� ���
-        public DateTime GetPreviousWorkingDay(DateTime date)
+        // Method to get previous working day
+    public DateTime GetPreviousWorkingDay(DateTime date)
         {
-            var previousDay = date.AddDays(-1);
-            while (!IsWorkingDay(previousDay))
-            {
-                previousDay = previousDay.AddDays(-1);
+   var previousDay = date.AddDays(-1);
+ while (!IsWorkingDay(previousDay))
+    {
+     previousDay = previousDay.AddDays(-1);
             }
-            return previousDay;
-        }
+  return previousDay;
+    }
 
         public int GetWorkingDaysBetween(DateTime startDate, DateTime endDate)
         {
             var workingDays = 0;
-            var currentDate = startDate;
+       var currentDate = startDate;
 
-            while (currentDate <= endDate)
+         while (currentDate <= endDate)
             {
-                if (IsWorkingDay(currentDate))
-                    workingDays++;
-                currentDate = currentDate.AddDays(1);
+       if (IsWorkingDay(currentDate))
+     workingDays++;
+      currentDate = currentDate.AddDays(1);
             }
 
             return workingDays;
         }
 
-        /// <summary>
-        /// ϳ������� ������� ������� ��� �� ����� ������ (�� ��������� ���������)
+     /// <summary>
+      /// Count working days between two dates (excluding start date)
         /// </summary>
         public int CountWorkingDaysBetween(DateTime startDate, DateTime endDate)
         {
-            if (endDate <= startDate)
-                return 0;
+       if (endDate <= startDate)
+             return 0;
 
             var workingDays = 0;
-            var currentDate = startDate.AddDays(1); // �� �������� ��������� ����
+      var currentDate = startDate.AddDays(1); // Exclude start date
 
-            while (currentDate <= endDate)
-            {
-                if (IsWorkingDay(currentDate))
-                    workingDays++;
-                currentDate = currentDate.AddDays(1);
-            }
+         while (currentDate <= endDate)
+  {
+      if (IsWorkingDay(currentDate))
+        workingDays++;
+              currentDate = currentDate.AddDays(1);
+   }
 
-            return workingDays;
+       return workingDays;
         }
 
         public string GetNonWorkingDayReason(DateTime date)
-        {
-            if (date.DayOfWeek == DayOfWeek.Saturday)
-                return "������";
-            if (date.DayOfWeek == DayOfWeek.Sunday)
-                return "�����";
-            if (_holidays.Contains(date.Date))
-                return GetHolidayName(date.Date);
+    {
+        if (date.DayOfWeek == DayOfWeek.Saturday)
+        return "Saturday";
+         if (date.DayOfWeek == DayOfWeek.Sunday)
+     return "Sunday";
+    if (_holidays.Contains(date.Date))
+    return GetHolidayName(date.Date);
 
-            return "������� ����";
-        }
+          return "Working day";
+}
 
-        private string GetHolidayName(DateTime date)
+ private string GetHolidayName(DateTime date)
         {
-            return date switch
+  return date switch
             {
-                { Month: 1, Day: 1 } => "����� ��",
-                { Month: 1, Day: 7 } => "г����",
-                { Month: 3, Day: 8 } => "̳��������� ������ ����",
-                { Month: 4, Day: 20 } => "���������",
-                { Month: 4, Day: 21 } => "�������� ���� ���������",
-                { Month: 6, Day: 8 } => "�����",
-                { Month: 6, Day: 28 } => "���� �����������",
-                { Month: 8, Day: 24 } => "���� �����������",
-                { Month: 10, Day: 14 } => "���� ��������� � ���������",
-                { Month: 12, Day: 25 } => "г���� (����������)",
-                _ => "��������� ����"
+    { Month: 1, Day: 1 } => "New Year",
+    { Month: 1, Day: 7 } => "Christmas",
+                { Month: 3, Day: 8 } => "International Women's Day",
+    { Month: 4, Day: 20 } => "Easter",
+{ Month: 4, Day: 21 } => "Easter Monday",
+  { Month: 6, Day: 8 } => "Trinity",
+    { Month: 6, Day: 28 } => "Constitution Day",
+         { Month: 8, Day: 24 } => "Independence Day",
+  { Month: 10, Day: 14 } => "Defenders Day",
+            { Month: 12, Day: 25 } => "Christmas (Catholic)",
+                _ => "Holiday"
             };
         }
 
         public void AddHoliday(DateTime date)
         {
-            _holidays.Add(date.Date);
+   _holidays.Add(date.Date);
         }
 
         public void RemoveHoliday(DateTime date)
         {
-            _holidays.Remove(date.Date);
+    _holidays.Remove(date.Date);
         }
     }
 }

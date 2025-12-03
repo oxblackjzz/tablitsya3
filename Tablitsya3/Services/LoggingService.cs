@@ -2,10 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using �������3.Models;
-using AppLogLevel = �������3.Models.LogLevel;
+using Tablitsya3.Models;
+using AppLogLevel = Tablitsya3.Models.LogLevel;
 
-namespace �������3.Services
+namespace Tablitsya3.Services
 {
     public class LoggingService
     {
@@ -85,7 +85,7 @@ namespace �������3.Services
         public void ClearLogs()
         {
             _logs.Clear();
-            LogInfo("���� ���� ������", "LoggingService");
+            LogInfo("Logs cleared", "LoggingService");
             OnLogAdded?.Invoke();
         }
 
@@ -98,9 +98,9 @@ namespace �������3.Services
         public string ExportLogsAsText()
         {
             var sb = new StringBuilder();
-            sb.AppendLine("=== ������� ���� ===");
-            sb.AppendLine($"�����������: {DateTime.Now:dd.MM.yyyy HH:mm:ss}");
-            sb.AppendLine($"������ ������: {_logs.Count}");
+            sb.AppendLine("=== Log Export ===");
+            sb.AppendLine($"Generated: {DateTime.Now:dd.MM.yyyy HH:mm:ss}");
+            sb.AppendLine($"Total entries: {_logs.Count}");
             sb.AppendLine();
 
             foreach (var log in _logs.OrderByDescending(l => l.Timestamp))
@@ -110,7 +110,7 @@ namespace �������3.Services
 
                 if (!string.IsNullOrEmpty(log.Details))
                 {
-                    sb.AppendLine($"  �����: {log.Details}");
+                    sb.AppendLine($"  Details: {log.Details}");
                 }
 
                 if (!string.IsNullOrEmpty(log.StackTrace))
