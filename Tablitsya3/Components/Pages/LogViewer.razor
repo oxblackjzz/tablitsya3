@@ -5,213 +5,210 @@
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
-<PageTitle>������ ����</PageTitle>
+<PageTitle>Журнал подій</PageTitle>
 
 <div class="log-viewer-container">
     <h1 class="page-title mb-3">
-        <i class="bi bi-journal-text"></i> ������ ���� �������
+        <i class="bi bi-journal-text"></i> Журнал подій системи
     </h1>
 
-    <!-- ���������� -->
+    <!-- Статистика -->
     <div class="row g-2 mb-3">
         @{
-       var counts = Logger.GetLogCounts();
-    var totalCount = logs.Count;
- var infoCount = counts.ContainsKey(LogLevel.Info) ? counts[LogLevel.Info] : 0;
-     var warningCount = counts.ContainsKey(LogLevel.Warning) ? counts[LogLevel.Warning] : 0;
+        var counts = Logger.GetLogCounts();
+       var totalCount = logs.Count;
+            var infoCount = counts.ContainsKey(LogLevel.Info) ? counts[LogLevel.Info] : 0;
+            var warningCount = counts.ContainsKey(LogLevel.Warning) ? counts[LogLevel.Warning] : 0;
             var errorCount = counts.ContainsKey(LogLevel.Error) ? counts[LogLevel.Error] : 0;
-    var debugCount = counts.ContainsKey(LogLevel.Debug) ? counts[LogLevel.Debug] : 0;
+       var debugCount = counts.ContainsKey(LogLevel.Debug) ? counts[LogLevel.Debug] : 0;
         }
 
-     <div class="col-xl-3 col-lg-6 col-md-6 col-sm-6">
-   <div class="card bg-primary text-white stat-card">
-           <div class="card-body p-2">
-     <div class="d-flex justify-content-between align-items-center">
-     <div>
-            <h6 class="card-title mb-0"><i class="bi bi-info-circle-fill"></i> ����������</h6>
-         <p class="stat-number mb-0">@infoCount</p>
- </div>
-        </div>
-          </div>
-      </div>
+        <div class="col-xl-3 col-lg-6 col-md-6 col-sm-6">
+    <div class="card bg-primary text-white stat-card">
+      <div class="card-body p-2">
+       <div class="d-flex justify-content-between align-items-center">
+      <div>
+  <h6 class="card-title mb-0"><i class="bi bi-info-circle-fill"></i> Інформація</h6>
+              <p class="stat-number mb-0">@infoCount</p>
+   </div>
+       </div>
+                </div>
+   </div>
         </div>
 
-     <div class="col-xl-3 col-lg-6 col-md-6 col-sm-6">
-          <div class="card bg-warning text-dark stat-card">
-            <div class="card-body p-2">
-         <div class="d-flex justify-content-between align-items-center">
+  <div class="col-xl-3 col-lg-6 col-md-6 col-sm-6">
+            <div class="card bg-warning text-dark stat-card">
+       <div class="card-body p-2">
+ <div class="d-flex justify-content-between align-items-center">
         <div>
-      <h6 class="card-title mb-0"><i class="bi bi-exclamation-triangle-fill"></i> ������������</h6>
-          <p class="stat-number mb-0">@warningCount</p>
-       </div>
-           </div>
-              </div>
-         </div>
+                <h6 class="card-title mb-0"><i class="bi bi-exclamation-triangle-fill"></i> Попередження</h6>
+         <p class="stat-number mb-0">@warningCount</p>
+     </div>
+     </div>
+        </div>
+     </div>
+  </div>
+
+  <div class="col-xl-3 col-lg-6 col-md-6 col-sm-6">
+     <div class="card bg-danger text-white stat-card">
+  <div class="card-body p-2">
+          <div class="d-flex justify-content-between align-items-center">
+  <div>
+    <h6 class="card-title mb-0"><i class="bi bi-x-circle-fill"></i> Помилки</h6>
+   <p class="stat-number mb-0">@errorCount</p>
+        </div>
+      </div>
+             </div>
+          </div>
         </div>
 
         <div class="col-xl-3 col-lg-6 col-md-6 col-sm-6">
-            <div class="card bg-danger text-white stat-card">
-      <div class="card-body p-2">
-     <div class="d-flex justify-content-between align-items-center">
-            <div>
-<h6 class="card-title mb-0"><i class="bi bi-x-circle-fill"></i> �������</h6>
- <p class="stat-number mb-0">@errorCount</p>
-         </div>
- </div>
-       </div>
-        </div>
-     </div>
-
- <div class="col-xl-3 col-lg-6 col-md-6 col-sm-6">
-            <div class="card bg-secondary text-white stat-card">
-         <div class="card-body p-2">
-      <div class="d-flex justify-content-between align-items-center">
-    <div>
-           <h6 class="card-title mb-0"><i class="bi bi-bug-fill"></i> ³�����������</h6>
-                <p class="stat-number mb-0">@debugCount</p>
+     <div class="card bg-secondary text-white stat-card">
+   <div class="card-body p-2">
+        <div class="d-flex justify-content-between align-items-center">
+         <div>
+  <h6 class="card-title mb-0"><i class="bi bi-bug-fill"></i> Відлагодження</h6>
+      <p class="stat-number mb-0">@debugCount</p>
           </div>
-          </div>
-  </div>
-    </div>
+           </div>
+      </div>
+      </div>
         </div>
     </div>
 
-    <!-- ������ ��������� -->
-    <div class="card mb-3 control-panel">
+    <!-- Панель управління -->
+  <div class="card mb-3 control-panel">
         <div class="card-body p-2">
             <div class="row g-2">
-       <!-- Գ���� �� ����� -->
-          <div class="col-xl-3 col-lg-4 col-md-6 col-12">
-        <label class="form-label fw-bold mb-1 small">г����:</label>
-         <select class="form-select form-select-sm" @bind="selectedLevel">
-          <option value="">��</option>
-          <option value="Info">?? ����������</option>
-          <option value="Warning">?? ������������</option>
-    <option value="Error">? �������</option>
-<option value="Debug">?? ³�����������</option>
+   <div class="col-xl-3 col-lg-4 col-md-6 col-12">
+<label class="form-label fw-bold mb-1 small">Рівень:</label>
+     <select class="form-select form-select-sm" @bind="selectedLevel">
+      <option value="">Всі</option>
+      <option value="Info">ℹ️ Інформація</option>
+         <option value="Warning">⚠️ Попередження</option>
+            <option value="Error">❌ Помилки</option>
+  <option value="Debug">🐛 Відлагодження</option>
         </select>
-     </div>
+                </div>
 
-         <!-- Գ���� �� �������� -->
- <div class="col-xl-3 col-lg-4 col-md-6 col-12">
-        <label class="form-label fw-bold mb-1 small">�������:</label>
-  <input type="text" class="form-control form-control-sm" @bind="sourceFilter" placeholder="���������..." />
-        </div>
+         <div class="col-xl-3 col-lg-4 col-md-6 col-12">
+               <label class="form-label fw-bold mb-1 small">Джерело:</label>
+ <input type="text" class="form-control form-control-sm" @bind="sourceFilter" placeholder="Фільтрувати..." />
+    </div>
 
-        <!-- ������ �� -->
-          <div class="col-xl-6 col-lg-4 col-md-12 col-12">
- <label class="form-label mb-1 d-none d-lg-block">&nbsp;</label>
-           <div class="btn-toolbar" role="toolbar">
-   <div class="btn-group btn-group-sm me-1 mb-1" role="group">
-               <button class="btn btn-primary" @onclick="ApplyFilters" title="����������� �����">
-           <i class="bi bi-funnel-fill"></i><span class="d-none d-xl-inline ms-1">Գ����</span>
-           </button>
-     <button class="btn btn-secondary" @onclick="RefreshLogs" title="�������">
-            <i class="bi bi-arrow-clockwise"></i><span class="d-none d-xl-inline ms-1">�������</span>
+      <div class="col-xl-6 col-lg-4 col-md-12 col-12">
+         <label class="form-label mb-1 d-none d-lg-block">&nbsp;</label>
+          <div class="btn-toolbar" role="toolbar">
+      <div class="btn-group btn-group-sm me-1 mb-1" role="group">
+      <button class="btn btn-primary" @onclick="ApplyFilters" title="Застосувати фільтр">
+   <i class="bi bi-funnel-fill"></i><span class="d-none d-xl-inline ms-1">Фільтр</span>
+   </button>
+       <button class="btn btn-secondary" @onclick="RefreshLogs" title="Оновити">
+        <i class="bi bi-arrow-clockwise"></i><span class="d-none d-xl-inline ms-1">Оновити</span>
       </button>
-            </div>
-                <div class="btn-group btn-group-sm mb-1" role="group">
-          <button class="btn btn-success" @onclick="ExportLogs" title="�������">
-         <i class="bi bi-download"></i><span class="d-none d-xl-inline ms-1">�������</span>
+          </div>
+     <div class="btn-group btn-group-sm mb-1" role="group">
+        <button class="btn btn-success" @onclick="ExportLogs" title="Експорт">
+           <i class="bi bi-download"></i><span class="d-none d-xl-inline ms-1">Експорт</span>
+        </button>
+        <button class="btn btn-danger" @onclick="ClearLogs" title="Очистити">
+               <i class="bi bi-trash-fill"></i><span class="d-none d-xl-inline ms-1">Очистити</span>
        </button>
-   <button class="btn btn-danger" @onclick="ClearLogs" title="��������">
-         <i class="bi bi-trash-fill"></i><span class="d-none d-xl-inline ms-1">��������</span>
-</button>
-       </div>
-      </div>
-  </div>
+    </div>
+     </div>
+           </div>
             </div>
         </div>
     </div>
 
-    <!-- ������� ���� -->
+    <!-- Таблиця логів -->
     @if (!logs.Any())
     {
         <div class="alert alert-info">
    <i class="bi bi-info-circle-fill"></i>
-    <strong>������ �������.</strong> ������ �'�������� ���� ��������� �������� � ������.
-    </div>
- }
+ <strong>Логів немає.</strong> Записи з'являться після виконання операцій в системі.
+        </div>
+    }
     else
     {
-        <div class="card">
-   <div class="card-header bg-dark text-white py-2">
-     <h6 class="mb-0">
-     <i class="bi bi-list-ul"></i> ������ ������� (@filteredLogs.Count � @logs.Count)
-  </h6>
-   </div>
-     <div class="card-body p-0">
-        <div class="table-responsive">
-     <table class="table table-sm table-hover mb-0 log-table">
-      <thead class="table-dark">
-          <tr>
-               <th class="col-time">���</th>
-        <th class="col-level">г����</th>
-             <th class="col-source">�������</th>
-        <th class="col-message">�����������</th>
-       <th class="col-details">�����</th>
-            </tr>
-           </thead>
-       <tbody>
-     @foreach (var log in filteredLogs.Take(displayCount))
-    {
-            <tr class="@GetRowClass(log.Level)" @onclick="() => ToggleDetails(log.Timestamp.Ticks)">
-        <td class="col-time">
-     <small class="d-block">@log.Timestamp.ToString("dd.MM.yyyy")</small>
-      <strong>@log.Timestamp.ToString("HH:mm:ss")</strong>
-     </td>
-        <td class="col-level">
- <span class="badge @GetBadgeClass(log.Level)">
-               @GetLevelIcon(log.Level) @log.Level
-  </span>
-             </td>
-              <td class="col-source"><small class="text-muted">@log.Source</small></td>
-         <td class="col-message">
-   <div class="log-message">@log.Message</div>
-
-             @if (expandedLogId == log.Timestamp.Ticks && (!string.IsNullOrEmpty(log.Details) || !string.IsNullOrEmpty(log.StackTrace)))
-            {
-           <div class="mt-2 p-2 bg-light border rounded">
-         @if (!string.IsNullOrEmpty(log.Details))
-         {
-            <div class="mb-2">
-          <strong>�����:</strong>
-       <pre class="mb-0" style="font-size: 11px; max-height: 200px; overflow-y: auto;">@log.Details</pre>
-        </div>
-   }
-      @if (!string.IsNullOrEmpty(log.StackTrace))
-        {
-      <div>
-       <strong>Stack Trace:</strong>
-           <pre class="mb-0 text-danger" style="font-size: 10px; max-height: 300px; overflow-y: auto;">@log.StackTrace</pre>
-         </div>
-           }
-   </div>
-                 }
-</td>
-           <td class="col-details text-center">
-  @if (!string.IsNullOrEmpty(log.Details) || !string.IsNullOrEmpty(log.StackTrace))
-   {
-              <button class="btn btn-sm btn-outline-secondary" @onclick:stopPropagation="true" @onclick="() => ToggleDetails(log.Timestamp.Ticks)">
-    <i class="bi @(expandedLogId == log.Timestamp.Ticks ? "bi-chevron-up" : "bi-chevron-down")"></i>
- </button>
-     }
-    </td>
-    </tr>
-     }
-        </tbody>
-         </table>
-            </div>
-
-                @if (filteredLogs.Count > displayCount)
-                {
-         <div class="text-center p-2">
-      <button class="btn btn-outline-primary btn-sm" @onclick="LoadMore">
-         <i class="bi bi-arrow-down-circle"></i> ����������� �� (@(filteredLogs.Count - displayCount) ������)
-        </button>
+  <div class="card">
+     <div class="card-header bg-dark text-white py-2">
+       <h6 class="mb-0">
+    <i class="bi bi-list-ul"></i> Записи журналу (@filteredLogs.Count з @logs.Count)
+        </h6>
       </div>
+         <div class="card-body p-0">
+   <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 log-table">
+              <thead class="table-dark">
+     <tr>
+    <th class="col-time">Час</th>
+    <th class="col-level">Рівень</th>
+         <th class="col-source">Джерело</th>
+         <th class="col-message">Повідомлення</th>
+          <th class="col-details">Деталі</th>
+   </tr>
+  </thead>
+         <tbody>
+     @foreach (var log in filteredLogs.Take(displayCount))
+   {
+         <tr class="@GetRowClass(log.Level)" @onclick="() => ToggleDetails(log.Timestamp.Ticks)">
+     <td class="col-time">
+     <small class="d-block">@log.Timestamp.ToString("dd.MM.yyyy")</small>
+       <strong>@log.Timestamp.ToString("HH:mm:ss")</strong>
+        </td>
+   <td class="col-level">
+    <span class="badge @GetBadgeClass(log.Level)">
+            @GetLevelIcon(log.Level) @log.Level
+         </span>
+       </td>
+         <td class="col-source"><small class="text-muted">@log.Source</small></td>
+        <td class="col-message">
+      <div class="log-message">@log.Message</div>
+
+                 @if (expandedLogId == log.Timestamp.Ticks && (!string.IsNullOrEmpty(log.Details) || !string.IsNullOrEmpty(log.StackTrace)))
+         {
+     <div class="mt-2 p-2 bg-light border rounded">
+      @if (!string.IsNullOrEmpty(log.Details))
+    {
+       <div class="mb-2">
+             <strong>Деталі:</strong>
+          <pre class="mb-0" style="font-size: 11px; max-height: 200px; overflow-y: auto;">@log.Details</pre>
+     </div>
+      }
+              @if (!string.IsNullOrEmpty(log.StackTrace))
+  {
+       <div>
+        <strong>Stack Trace:</strong>
+  <pre class="mb-0 text-danger" style="font-size: 10px; max-height: 300px; overflow-y: auto;">@log.StackTrace</pre>
+          </div>
+    }
+        </div>
+               }
+      </td>
+  <td class="col-details text-center">
+        @if (!string.IsNullOrEmpty(log.Details) || !string.IsNullOrEmpty(log.StackTrace))
+           {
+   <button class="btn btn-sm btn-outline-secondary" @onclick:stopPropagation="true" @onclick="() => ToggleDetails(log.Timestamp.Ticks)">
+ <i class="bi @(expandedLogId == log.Timestamp.Ticks ? "bi-chevron-up" : "bi-chevron-down")"></i>
+       </button>
+   }
+           </td>
+         </tr>
+ }
+   </tbody>
+            </table>
+                </div>
+
+    @if (filteredLogs.Count > displayCount)
+         {
+           <div class="text-center p-2">
+  <button class="btn btn-outline-primary btn-sm" @onclick="LoadMore">
+     <i class="bi bi-arrow-down-circle"></i> Завантажити ще (@(filteredLogs.Count - displayCount) записів)
+          </button>
+         </div>
             }
-            </div>
+    </div>
         </div>
     }
 </div>
@@ -221,97 +218,97 @@
     private List<LogEntry> filteredLogs = new();
     private string selectedLevel = "";
     private string sourceFilter = "";
-    private int displayCount = 50;
-    private long expandedLogId = 0;
+  private int displayCount = 50;
+ private long expandedLogId = 0;
 
     protected override void OnInitialized()
     {
         Logger.OnLogAdded += RefreshLogs;
-    RefreshLogs();
-      Logger.LogInfo("³������ ������� ������� ����", "LogViewer");
+        RefreshLogs();
+  Logger.LogInfo("Відкрито сторінку журналу подій", "LogViewer");
     }
 
     private void RefreshLogs()
     {
         InvokeAsync(() =>
-    {
-  logs = Logger.GetLogs();
-            ApplyFilters();
+     {
+            logs = Logger.GetLogs();
+          ApplyFilters();
         });
-    }
+  }
 
     private void ApplyFilters()
     {
-  LogLevel? levelFilter = null;
-   if (!string.IsNullOrEmpty(selectedLevel) && Enum.TryParse<LogLevel>(selectedLevel, out var level))
-        {
-  levelFilter = level;
+      LogLevel? levelFilter = null;
+        if (!string.IsNullOrEmpty(selectedLevel) && Enum.TryParse<LogLevel>(selectedLevel, out var level))
+ {
+            levelFilter = level;
         }
 
         filteredLogs = Logger.GetLogs(levelFilter, string.IsNullOrEmpty(sourceFilter) ? null : sourceFilter);
         displayCount = 50;
- StateHasChanged();
-    }
+        StateHasChanged();
+}
 
     private void LoadMore()
     {
-     displayCount += 50;
+      displayCount += 50;
         StateHasChanged();
     }
 
-    private async Task ClearLogs()
-    {
-        if (await JSRuntime.InvokeAsync<bool>("confirm", "�� �������, �� ������ �������� ������ ����?"))
- {
-     Logger.ClearLogs();
-       RefreshLogs();
-      }
+  private async Task ClearLogs()
+  {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "Ви впевнені, що хочете очистити журнал подій?"))
+        {
+            Logger.ClearLogs();
+            RefreshLogs();
+        }
     }
 
     private async Task ExportLogs()
     {
-        var text = Logger.ExportLogsAsText();
-        var bytes = System.Text.Encoding.UTF8.GetBytes(text);
+ var text = Logger.ExportLogsAsText();
+     var bytes = System.Text.Encoding.UTF8.GetBytes(text);
         var base64 = Convert.ToBase64String(bytes);
     
-     await JSRuntime.InvokeVoidAsync("downloadFile", $"logs_{DateTime.Now:yyyyMMdd_HHmmss}.txt", base64);
+        await JSRuntime.InvokeVoidAsync("downloadFile", $"logs_{DateTime.Now:yyyyMMdd_HHmmss}.txt", base64);
         
-        Logger.LogInfo($"������������ {logs.Count} ������ �������", "LogViewer");
+      Logger.LogInfo($"Експортовано {logs.Count} записів журналу", "LogViewer");
     }
 
     private void ToggleDetails(long logId)
     {
-   expandedLogId = expandedLogId == logId ? 0 : logId;
-    }
+        expandedLogId = expandedLogId == logId ? 0 : logId;
+  }
 
-  private string GetRowClass(LogLevel level) => level switch
+    private string GetRowClass(LogLevel level) => level switch
     {
-   LogLevel.Error => "table-danger",
-     LogLevel.Warning => "table-warning",
-    LogLevel.Debug => "table-secondary",
-        _ => ""
+      LogLevel.Error => "table-danger",
+ LogLevel.Warning => "table-warning",
+        LogLevel.Debug => "table-secondary",
+   _ => ""
     };
 
-  private string GetBadgeClass(LogLevel level) => level switch
+    private string GetBadgeClass(LogLevel level) => level switch
     {
-     LogLevel.Info => "bg-primary",
-  LogLevel.Warning => "bg-warning text-dark",
-      LogLevel.Error => "bg-danger",
-LogLevel.Debug => "bg-secondary",
+      LogLevel.Info => "bg-primary",
+        LogLevel.Warning => "bg-warning text-dark",
+        LogLevel.Error => "bg-danger",
+        LogLevel.Debug => "bg-secondary",
         _ => "bg-secondary"
-    };
+  };
 
     private string GetLevelIcon(LogLevel level) => level switch
     {
-    LogLevel.Info => "??",
-  LogLevel.Warning => "??",
-   LogLevel.Error => "?",
-      LogLevel.Debug => "??",
-  _ => "??"
+        LogLevel.Info => "ℹ️",
+    LogLevel.Warning => "⚠️",
+   LogLevel.Error => "❌",
+    LogLevel.Debug => "🐛",
+      _ => "📝"
     };
 
- public void Dispose()
+    public void Dispose()
     {
-        Logger.OnLogAdded -= RefreshLogs;
+  Logger.OnLogAdded -= RefreshLogs();
     }
 }
