@@ -6,16 +6,16 @@
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
 
-<PageTitle>������ �������� ���������</PageTitle>
+<PageTitle>Масове введення замовлень</PageTitle>
 
-<h1 class="mb-4">������ �������� ��������� ��� ��� �����</h1>
+<h1 class="mb-4">Масове введення замовлень Цех №�� �����</h1>
 
 <div class="row mb-4">
     <div class="col-12">
         <div class="alert alert-info">
       <i class="bi bi-info-circle"></i>
-      <strong>����������:</strong> �� ����� �������� ��������� ������ ���������� ��� ��� ����� ����� (�1, �3, �6) �� ���� ����.
-            ������ ���� ���������� �� ������ ��� ������� ����.
+      <strong>Інструкція:</strong> �� ����� Очистити Тривалість ������ Інструкція Цех №�� ��Цех №���� (�1, �3, �6) �� �Цех №���.
+            ���Цех №��� Інструкція �� ���Цех №�� ����Цех №���.
         </div>
     </div>
 </div>
@@ -23,17 +23,17 @@
 <div class="card">
     <div class="card-header bg-primary text-white">
         <h5 class="mb-0">
-            <i class="bi bi-calendar-plus"></i> ������ ���������� ��� ��� �����
+            <i class="bi bi-calendar-plus"></i> ������ Інструкція Цех №�� �����
     </h5>
   </div>
     <div class="card-body">
         <EditForm Model="@bulkOrder" OnValidSubmit="AddBulkOrder">
          <DataAnnotationsValidator />
       
-            <!-- ���� ���������� -->
+            <!-- ���� Інструкція -->
             <div class="row mb-4">
            <div class="col-md-4">
- <label class="form-label fw-bold">���� ����������</label>
+ <label class="form-label fw-bold">���� Інструкція</label>
      <InputDate @bind-Value="bulkOrder.OrderDate" class="form-control" />
         <ValidationMessage For="@(() => bulkOrder.OrderDate)" />
      </div>
@@ -41,43 +41,43 @@
 
             <hr />
 
-            <!-- ��� �1 -->
+            <!-- Цех №1 -->
             <div class="row mb-3">
            <div class="col-12">
 <h5 class="text-primary">
-      <i class="bi bi-building"></i> ��� �1
+      <i class="bi bi-building"></i> Цех №1
             </h5>
          </div>
   <div class="col-md-4">
-    <label class="form-label">���������� 1</label>
-        <input type="text" @bind="bulkOrder.Workshop1_Order1_Name" class="form-control form-control-sm mb-1" placeholder="����� ����������..." />
-      <InputNumber @bind-Value="bulkOrder.Workshop1_Order1" class="form-control" placeholder="0 (�?)" />
+    <label class="form-label">Інструкція 1</label>
+        <input type="text" @bind="bulkOrder.Workshop1_Order1_Name" class="form-control form-control-sm mb-1" placeholder="����� Інструкція..." />
+      <InputNumber @bind-Value="bulkOrder.Workshop1_Order1" class="form-control" placeholder="0 (м²)" />
       @if (bulkOrder.Workshop1_Order1 > 0)
      {
           <small class="text-muted">
-       ���������: @((bulkOrder.Workshop1_Order1 / dailyCapacity).ToString("F2")) ���
+       Тривалість: @((bulkOrder.Workshop1_Order1 / dailyCapacity).ToString("F2")) ���
    </small>
          }
     </div>
      <div class="col-md-4">
- <label class="form-label">���������� 2</label>
-        <input type="text" @bind="bulkOrder.Workshop1_Order2_Name" class="form-control form-control-sm mb-1" placeholder="����� ����������..." />
-     <InputNumber @bind-Value="bulkOrder.Workshop1_Order2" class="form-control" placeholder="0 (�?)" />
+ <label class="form-label">Інструкція 2</label>
+        <input type="text" @bind="bulkOrder.Workshop1_Order2_Name" class="form-control form-control-sm mb-1" placeholder="����� Інструкція..." />
+     <InputNumber @bind-Value="bulkOrder.Workshop1_Order2" class="form-control" placeholder="0 (м²)" />
     @if (bulkOrder.Workshop1_Order2 > 0)
 {
            <small class="text-muted">
-���������: @((bulkOrder.Workshop1_Order2 / dailyCapacity).ToString("F2")) ���
+Тривалість: @((bulkOrder.Workshop1_Order2 / dailyCapacity).ToString("F2")) ���
     </small>
      }
          </div>
        <div class="col-md-4">
-    <label class="form-label">���������� 3</label>
-      <input type="text" @bind="bulkOrder.Workshop1_Order3_Name" class="form-control form-control-sm mb-1" placeholder="����� ����������..." />
-       <InputNumber @bind-Value="bulkOrder.Workshop1_Order3" class="form-control" placeholder="0 (�?)" />
+    <label class="form-label">Інструкція 3</label>
+      <input type="text" @bind="bulkOrder.Workshop1_Order3_Name" class="form-control form-control-sm mb-1" placeholder="����� Інструкція..." />
+       <InputNumber @bind-Value="bulkOrder.Workshop1_Order3" class="form-control" placeholder="0 (м²)" />
    @if (bulkOrder.Workshop1_Order3 > 0)
  {
         <small class="text-muted">
-         ���������: @((bulkOrder.Workshop1_Order3 / dailyCapacity).ToString("F2")) ���
+         Тривалість: @((bulkOrder.Workshop1_Order3 / dailyCapacity).ToString("F2")) ���
    </small>
   }
      </div>
@@ -85,43 +85,43 @@
 
             <hr />
 
-  <!-- ��� �3 -->
+  <!-- Цех №3 -->
         <div class="row mb-3">
   <div class="col-12">
    <h5 class="text-success">
-       <i class="bi bi-building"></i> ��� �3
+       <i class="bi bi-building"></i> Цех №3
    </h5>
     </div>
 <div class="col-md-4">
-    <label class="form-label">���������� 1</label>
-        <input type="text" @bind="bulkOrder.Workshop3_Order1_Name" class="form-control form-control-sm mb-1" placeholder="����� ����������..." />
-     <InputNumber @bind-Value="bulkOrder.Workshop3_Order1" class="form-control" placeholder="0 (�?)" />
+    <label class="form-label">Інструкція 1</label>
+        <input type="text" @bind="bulkOrder.Workshop3_Order1_Name" class="form-control form-control-sm mb-1" placeholder="����� Інструкція..." />
+     <InputNumber @bind-Value="bulkOrder.Workshop3_Order1" class="form-control" placeholder="0 (м²)" />
   @if (bulkOrder.Workshop3_Order1 > 0)
   {
          <small class="text-muted">
-    ���������: @((bulkOrder.Workshop3_Order1 / dailyCapacity).ToString("F2")) ���
+    Тривалість: @((bulkOrder.Workshop3_Order1 / dailyCapacity).ToString("F2")) ���
         </small>
    }
     </div>
        <div class="col-md-4">
-  <label class="form-label">���������� 2</label>
-      <input type="text" @bind="bulkOrder.Workshop3_Order2_Name" class="form-control form-control-sm mb-1" placeholder="����� ����������..." />
-<InputNumber @bind-Value="bulkOrder.Workshop3_Order2" class="form-control" placeholder="0 (�?)" />
+  <label class="form-label">Інструкція 2</label>
+      <input type="text" @bind="bulkOrder.Workshop3_Order2_Name" class="form-control form-control-sm mb-1" placeholder="����� Інструкція..." />
+<InputNumber @bind-Value="bulkOrder.Workshop3_Order2" class="form-control" placeholder="0 (м²)" />
  @if (bulkOrder.Workshop3_Order2 > 0)
       {
       <small class="text-muted">
-     ���������: @((bulkOrder.Workshop3_Order2 / dailyCapacity).ToString("F2")) ���
+     Тривалість: @((bulkOrder.Workshop3_Order2 / dailyCapacity).ToString("F2")) ���
  </small>
    }
      </div>
          <div class="col-md-4">
-    <label class="form-label">���������� 3</label>
-      <input type="text" @bind="bulkOrder.Workshop3_Order3_Name" class="form-control form-control-sm mb-1" placeholder="����� ����������..." />
-      <InputNumber @bind-Value="bulkOrder.Workshop3_Order3" class="form-control" placeholder="0 (�?)" />
+    <label class="form-label">Інструкція 3</label>
+      <input type="text" @bind="bulkOrder.Workshop3_Order3_Name" class="form-control form-control-sm mb-1" placeholder="����� Інструкція..." />
+      <InputNumber @bind-Value="bulkOrder.Workshop3_Order3" class="form-control" placeholder="0 (м²)" />
           @if (bulkOrder.Workshop3_Order3 > 0)
        {
             <small class="text-muted">
-       ���������: @((bulkOrder.Workshop3_Order3 / dailyCapacity).ToString("F2")) ���
+       Тривалість: @((bulkOrder.Workshop3_Order3 / dailyCapacity).ToString("F2")) ���
         </small>
     }
     </div>
@@ -129,43 +129,43 @@
 
        <hr />
 
-          <!-- ��� �6 -->
+          <!-- Цех №6 -->
     <div class="row mb-3">
   <div class="col-12">
         <h5 class="text-warning">
-         <i class="bi bi-building"></i> ��� �6
+         <i class="bi bi-building"></i> Цех №6
        </h5>
  </div>
 <div class="col-md-4">
-  <label class="form-label">���������� 1</label>
-        <input type="text" @bind="bulkOrder.Workshop6_Order1_Name" class="form-control form-control-sm mb-1" placeholder="����� ����������..." />
- <InputNumber @bind-Value="bulkOrder.Workshop6_Order1" class="form-control" placeholder="0 (�?)" />
+  <label class="form-label">Інструкція 1</label>
+        <input type="text" @bind="bulkOrder.Workshop6_Order1_Name" class="form-control form-control-sm mb-1" placeholder="����� Інструкція..." />
+ <InputNumber @bind-Value="bulkOrder.Workshop6_Order1" class="form-control" placeholder="0 (м²)" />
    @if (bulkOrder.Workshop6_Order1 > 0)
      {
  <small class="text-muted">
-  ���������: @((bulkOrder.Workshop6_Order1 / dailyCapacity).ToString("F2")) ���
+  Тривалість: @((bulkOrder.Workshop6_Order1 / dailyCapacity).ToString("F2")) ���
 </small>
    }
          </div>
      <div class="col-md-4">
-        <label class="form-label">���������� 2</label>
-     <input type="text" @bind="bulkOrder.Workshop6_Order2_Name" class="form-control form-control-sm mb-1" placeholder="����� ����������..." />
-    <InputNumber @bind-Value="bulkOrder.Workshop6_Order2" class="form-control" placeholder="0 (�?)" />
+        <label class="form-label">Інструкція 2</label>
+     <input type="text" @bind="bulkOrder.Workshop6_Order2_Name" class="form-control form-control-sm mb-1" placeholder="����� Інструкція..." />
+    <InputNumber @bind-Value="bulkOrder.Workshop6_Order2" class="form-control" placeholder="0 (м²)" />
      @if (bulkOrder.Workshop6_Order2 > 0)
        {
            <small class="text-muted">
-        ���������: @((bulkOrder.Workshop6_Order2 / dailyCapacity).ToString("F2")) ���
+        Тривалість: @((bulkOrder.Workshop6_Order2 / dailyCapacity).ToString("F2")) ���
      </small>
     }
       </div>
     <div class="col-md-4">
- <label class="form-label">���������� 3</label>
-   <input type="text" @bind="bulkOrder.Workshop6_Order3_Name" class="form-control form-control-sm mb-1" placeholder="����� ����������..." />
-   <InputNumber @bind-Value="bulkOrder.Workshop6_Order3" class="form-control" placeholder="0 (�?)" />
+ <label class="form-label">Інструкція 3</label>
+   <input type="text" @bind="bulkOrder.Workshop6_Order3_Name" class="form-control form-control-sm mb-1" placeholder="����� Інструкція..." />
+   <InputNumber @bind-Value="bulkOrder.Workshop6_Order3" class="form-control" placeholder="0 (м²)" />
          @if (bulkOrder.Workshop6_Order3 > 0)
        {
       <small class="text-muted">
-���������: @((bulkOrder.Workshop6_Order3 / dailyCapacity).ToString("F2")) ���
+Тривалість: @((bulkOrder.Workshop6_Order3 / dailyCapacity).ToString("F2")) ���
  </small>
       }
 </div>
@@ -177,13 +177,13 @@
      <div class="row">
      <div class="col-12">
       <button type="submit" class="btn btn-primary btn-lg" disabled="@isSaving">
-    <i class="bi bi-check-circle"></i> @(isSaving ? "����������..." : "������ �� ����������")
+    <i class="bi bi-check-circle"></i> @(isSaving ? "Інструкція..." : "���Цех №� Інструкція")
          </button>
          <button type="button" class="btn btn-secondary btn-lg ms-2" @onclick="ClearForm">
-      <i class="bi bi-x-circle"></i> ��������
+      <i class="bi bi-x-circle"></i> Очистити
          </button>
 <button type="button" class="btn btn-outline-primary btn-lg ms-2" @onclick="GoToPlanning">
-     <i class="bi bi-arrow-left"></i> �� ����������
+     <i class="bi bi-arrow-left"></i> �� Інструкція
     </button>
      </div>
             </div>
@@ -198,12 +198,12 @@
  </div>
 </div>
 
-<!-- ��������� �������� -->
+<!-- Тривалість Очистити -->
 @if (HasAnyOrders())
 {
     <div class="card mt-4">
         <div class="card-header bg-light">
-       <h5 class="mb-0">��������� ��������</h5>
+       <h5 class="mb-0">Тривалість Очистити</h5>
      </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -212,9 +212,9 @@
              <tr>
    <th>���</th>
      <th>����</th>
-                <th>���������� 1</th>
-   <th>���������� 2</th>
-       <th>���������� 3</th>
+                <th>Інструкція 1</th>
+   <th>Інструкція 2</th>
+       <th>Інструкція 3</th>
             <th>�������</th>
            </tr>
 </thead>
@@ -222,34 +222,34 @@
        @if (bulkOrder.Workshop1_Order1 > 0 || bulkOrder.Workshop1_Order2 > 0 || bulkOrder.Workshop1_Order3 > 0)
  {
          <tr>
-       <td><strong>��� �1</strong></td>
+       <td><strong>Цех №1</strong></td>
        <td>@bulkOrder.OrderDate.ToString("dd.MM.yyyy")</td>
-                <td>@bulkOrder.Workshop1_Order1.ToString("N0") �?</td>
-             <td>@bulkOrder.Workshop1_Order2.ToString("N0") �?</td>
-      <td>@bulkOrder.Workshop1_Order3.ToString("N0") �?</td>
-          <td><strong>@((bulkOrder.Workshop1_Order1 + bulkOrder.Workshop1_Order2 + bulkOrder.Workshop1_Order3).ToString("N0")) �?</strong></td>
+                <td>@bulkOrder.Workshop1_Order1.ToString("N0") м²</td>
+             <td>@bulkOrder.Workshop1_Order2.ToString("N0") м²</td>
+      <td>@bulkOrder.Workshop1_Order3.ToString("N0") м²</td>
+          <td><strong>@((bulkOrder.Workshop1_Order1 + bulkOrder.Workshop1_Order2 + bulkOrder.Workshop1_Order3).ToString("N0")) м²</strong></td>
        </tr>
   }
        @if (bulkOrder.Workshop3_Order1 > 0 || bulkOrder.Workshop3_Order2 > 0 || bulkOrder.Workshop3_Order3 > 0)
              {
           <tr>
-       <td><strong>��� �3</strong></td>
+       <td><strong>Цех №3</strong></td>
         <td>@bulkOrder.OrderDate.ToString("dd.MM.yyyy")</td>
- <td>@bulkOrder.Workshop3_Order1.ToString("N0") �?</td>
-      <td>@bulkOrder.Workshop3_Order2.ToString("N0") �?</td>
-                  <td>@bulkOrder.Workshop3_Order3.ToString("N0") �?</td>
-              <td><strong>@((bulkOrder.Workshop3_Order1 + bulkOrder.Workshop3_Order2 + bulkOrder.Workshop3_Order3).ToString("N0")) �?</strong></td>
+ <td>@bulkOrder.Workshop3_Order1.ToString("N0") м²</td>
+      <td>@bulkOrder.Workshop3_Order2.ToString("N0") м²</td>
+                  <td>@bulkOrder.Workshop3_Order3.ToString("N0") м²</td>
+              <td><strong>@((bulkOrder.Workshop3_Order1 + bulkOrder.Workshop3_Order2 + bulkOrder.Workshop3_Order3).ToString("N0")) м²</strong></td>
           </tr>
         }
     @if (bulkOrder.Workshop6_Order1 > 0 || bulkOrder.Workshop6_Order2 > 0 || bulkOrder.Workshop6_Order3 > 0)
       {
            <tr>
-           <td><strong>��� �6</strong></td>
+           <td><strong>Цех №6</strong></td>
      <td>@bulkOrder.OrderDate.ToString("dd.MM.yyyy")</td>
-    <td>@bulkOrder.Workshop6_Order1.ToString("N0") �?</td>
-            <td>@bulkOrder.Workshop6_Order2.ToString("N0") �?</td>
-               <td>@bulkOrder.Workshop6_Order3.ToString("N0") �?</td>
-        <td><strong>@((bulkOrder.Workshop6_Order1 + bulkOrder.Workshop6_Order2 + bulkOrder.Workshop6_Order3).ToString("N0")) �?</strong></td>
+    <td>@bulkOrder.Workshop6_Order1.ToString("N0") м²</td>
+            <td>@bulkOrder.Workshop6_Order2.ToString("N0") м²</td>
+               <td>@bulkOrder.Workshop6_Order3.ToString("N0") м²</td>
+        <td><strong>@((bulkOrder.Workshop6_Order1 + bulkOrder.Workshop6_Order2 + bulkOrder.Workshop6_Order3).ToString("N0")) м²</strong></td>
         </tr>
          }
          </tbody>
@@ -270,7 +270,7 @@
 
     protected override void OnInitialized()
     {
- // ������������ ��������� ����
+ // Інструкція�� Тривалість ����
         if (!string.IsNullOrEmpty(InitialDate) && DateTime.TryParse(InitialDate, out var date))
         {
    bulkOrder.OrderDate = date;
@@ -292,7 +292,7 @@
     {
         if (!HasAnyOrders())
       {
-            statusMessage = "���� �����, ������ ���� � ���� ����������!";
+            statusMessage = "�Цех №����, ���Цех №Цех № ���� Інструкція!";
       return;
         }
 
@@ -301,10 +301,10 @@
      
         try
         {
-      // ����������� ������ ���
+      // Інструкція� ���Цех №��
       var data = await StorageService.LoadWorkshopDataAsync() ?? new WorkshopData();
   
-     // ���������� �������� ���� ���� ����
+     // Інструкція Очистити �Цех №Цех №���
    if (data.WorkshopOrderDates == null || !data.WorkshopOrderDates.Any())
  {
    data.WorkshopOrderDates = new()
@@ -315,10 +315,10 @@
     };
         }
 
-     // ������ ��� ����������
+     // ���Цех №�� Інструкція
          int totalOrders = 0;
      
-     // ��� �1
+     // Цех №1
         if (bulkOrder.Workshop1_Order1 > 0)
        {
      if (!data.WorkshopOrders.ContainsKey(1)) data.WorkshopOrders[1] = new List<double>();
@@ -353,7 +353,7 @@ if (!data.WorkshopOrderDates.ContainsKey(1)) data.WorkshopOrderDates[1] = new Li
          totalOrders++;
     }
     
-    // ��� �3
+    // Цех №3
  if (bulkOrder.Workshop3_Order1 > 0)
     {
     if (!data.WorkshopOrders.ContainsKey(3)) data.WorkshopOrders[3] = new List<double>();
@@ -388,7 +388,7 @@ if (!data.WorkshopOrderDates.ContainsKey(1)) data.WorkshopOrderDates[1] = new Li
 totalOrders++;
       }
      
-    // ��� �6
+    // Цех №6
       if (bulkOrder.Workshop6_Order1 > 0)
  {
         if (!data.WorkshopOrders.ContainsKey(6)) data.WorkshopOrders[6] = new List<double>();
@@ -423,18 +423,18 @@ totalOrders++;
    totalOrders++;
     }
 
-   // �������� ���
+   // Очистити ���
           await StorageService.SaveWorkshopDataAsync(data);
          
-   statusMessage = $"? ������ ������ {totalOrders} ���������� �� ���� {bulkOrder.OrderDate:dd.MM.yyyy} �� ���������!";
+   statusMessage = $"? ���Цех №����� {totalOrders} Інструкція �� ���� {bulkOrder.OrderDate:dd.MM.yyyy} �� Тривалість!";
       
-  // ������� ����� ���� �������� ����������
+  // ����Цех №�Цех №��� Очистити Інструкція
  await Task.Delay(2000);
  ClearForm();
     }
         catch (Exception ex)
         {
- statusMessage = $"? ������� ����������: {ex.Message}";
+ statusMessage = $"? ������� Інструкція: {ex.Message}";
         }
         finally
         {
@@ -453,12 +453,12 @@ totalOrders++;
 Navigation.NavigateTo("/production-planning");
     }
 
-    // ������ ��� �������� ��������
+    // ���Цех №�� Очистити Очистити
     public class BulkOrderModel
     {
    public DateTime OrderDate { get; set; } = DateTime.Today;
   
-        // ��� �1
+        // Цех №1
    public string Workshop1_Order1_Name { get; set; } = string.Empty;
     public double Workshop1_Order1 { get; set; }
         public string Workshop1_Order2_Name { get; set; } = string.Empty;
@@ -466,7 +466,7 @@ Navigation.NavigateTo("/production-planning");
         public string Workshop1_Order3_Name { get; set; } = string.Empty;
     public double Workshop1_Order3 { get; set; }
     
-  // ��� �3
+  // Цех №3
         public string Workshop3_Order1_Name { get; set; } = string.Empty;
       public double Workshop3_Order1 { get; set; }
         public string Workshop3_Order2_Name { get; set; } = string.Empty;
@@ -474,7 +474,7 @@ Navigation.NavigateTo("/production-planning");
         public string Workshop3_Order3_Name { get; set; } = string.Empty;
     public double Workshop3_Order3 { get; set; }
         
-  // ��� �6
+  // Цех №6
         public string Workshop6_Order1_Name { get; set; } = string.Empty;
         public double Workshop6_Order1 { get; set; }
         public string Workshop6_Order2_Name { get; set; } = string.Empty;
