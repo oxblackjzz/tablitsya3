@@ -19,37 +19,48 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
     Console.WriteLine($"🔍 First 20 chars: {connectionString.Substring(0, Math.Min(20, connectionString.Length))}...");
     
  try
-    {
+  {
       // Check if it's already in Npgsql format (Host=...)
-      if (connectionString.Contains("Host=") && connectionString.Contains("Database="))
+    if (connectionString.Contains("Host=") && connectionString.Contains("Database="))
     {
          Console.WriteLine("✅ Connection string is already in Npgsql format");
-        }
+    }
         // Якщо це Render/Heroku формат (postgres:// або postgresql://)
         else if (connectionString.StartsWith("postgres://") || connectionString.StartsWith("postgresql://"))
-        {
+ {
       var uri = new Uri(connectionString);
      var host = uri.Host;
-      var port = uri.Port;
-      var username = uri.UserInfo.Split(':')[0];
-            var password = uri.UserInfo.Split(':').Length > 1 ? uri.UserInfo.Split(':')[1] : "";
+     var port = uri.Port > 0 ? uri.Port : 5432; // Default PostgreSQL port
+      
+    string username = "";
+      string password = "";
+ 
+            if (!string.IsNullOrEmpty(uri.UserInfo))
+            {
+   var userInfoParts = uri.UserInfo.Split(':');
+         username = userInfoParts[0];
+  password = userInfoParts.Length > 1 ? userInfoParts[1] : "";
+            }
+            
    var database = uri.AbsolutePath.Trim('/');
+
+            Console.WriteLine($"🔍 Parsed - Host: {host}, Port: {port}, Database: {database}, User: {username}");
 
             connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
          Console.WriteLine($"✅ Converted Postgres URL to Npgsql format");
         }
-        else
+    else
      {
     // Unknown format
    Console.WriteLine($"⚠️ Unknown connection string format. Expected 'postgres://' or 'Host='");
-            Console.WriteLine($"⚠️ Please use the 'Internal Database URL' from Render dashboard");
-            connectionString = null;
+    Console.WriteLine($"⚠️ Please use the 'Internal Database URL' from Render dashboard");
+        connectionString = null;
       }
 
-        if (!string.IsNullOrEmpty(connectionString))
+     if (!string.IsNullOrEmpty(connectionString))
   {
-            builder.Services.AddDbContext<ApplicationDbContext>(options =>
-         options.UseNpgsql(connectionString));
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseNpgsql(connectionString));
   
             builder.Services.AddScoped<DatabaseStorageService>();
             builder.Logging.AddConsole();
@@ -60,7 +71,7 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"❌ Error parsing DATABASE_URL: {ex.Message}");
+     Console.WriteLine($"❌ Error parsing DATABASE_URL: {ex.Message}");
         Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
         Console.WriteLine("⚠️ Falling back to file storage");
         connectionString = null;
@@ -96,18 +107,18 @@ if (isDatabaseConfigured && !string.IsNullOrEmpty(connectionString))
     {
  try
      {
-            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
  
-            Console.WriteLine("🔄 Running database migrations...");
-       await dbContext.Database.MigrateAsync();
-            Console.WriteLine("✅ Database migrations completed");
+          Console.WriteLine("🔄 Running database migrations...");
+     await dbContext.Database.MigrateAsync();
+   Console.WriteLine("✅ Database migrations completed");
           
-            var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
+       var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
      var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
  
    // Перевіряємо чи є дані в БД
-            if (!await dbStorage.HasSavedDataAsync())
-        {
+         if (!await dbStorage.HasSavedDataAsync())
+   {
   Console.WriteLine("🌱 Seeding initial data...");
     await seedService.SeedInitialDataIfEmpty();
     Console.WriteLine("✅ Initial data seeded");
@@ -120,7 +131,7 @@ if (isDatabaseConfigured && !string.IsNullOrEmpty(connectionString))
         catch (Exception ex)
         {
  var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-            logger.LogError(ex, "❌ Error during database migration or seeding");
+ logger.LogError(ex, "❌ Error during database migration or seeding");
       Console.WriteLine($"❌ Database error: {ex.Message}");
    Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
         }
@@ -129,7 +140,7 @@ if (isDatabaseConfigured && !string.IsNullOrEmpty(connectionString))
 else
 {
     // Fallback seed для файлової системи
-    Console.WriteLine("🌱 Using file storage mode, seeding initial data if needed...");
+  Console.WriteLine("🌱 Using file storage mode, seeding initial data if needed...");
     using (var scope = app.Services.CreateScope())
     {
       var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
@@ -148,7 +159,7 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+  .AddInteractiveServerRenderMode();
 
 Console.WriteLine("🚀 Application started successfully!");
 app.Run();
