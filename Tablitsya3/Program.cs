@@ -7,52 +7,69 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Підключення PostgreSQL
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? Environment.GetEnvironmentVariable("DATABASE_URL");
+  ?? Environment.GetEnvironmentVariable("DATABASE_URL");
 
 Console.WriteLine($"🔍 DATABASE_URL present: {!string.IsNullOrEmpty(connectionString)}");
-if (!string.IsNullOrEmpty(connectionString))
-{
-    Console.WriteLine($"🔍 DATABASE_URL length: {connectionString.Length}");
-    Console.WriteLine($"🔍 DATABASE_URL starts with postgres://: {connectionString.StartsWith("postgres://")}");
-}
+
+bool isDatabaseConfigured = false;
 
 if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
 {
-    try
+    Console.WriteLine($"🔍 DATABASE_URL length: {connectionString.Length}");
+    Console.WriteLine($"🔍 First 20 chars: {connectionString.Substring(0, Math.Min(20, connectionString.Length))}...");
+    
+ try
     {
-        // Якщо це Render/Heroku формат (postgres://user:pass@host:port/db)
-        if (connectionString.StartsWith("postgres://"))
-      {
-            var uri = new Uri(connectionString);
-         var host = uri.Host;
-      var port = uri.Port;
-            var username = uri.UserInfo.Split(':')[0];
-        var password = uri.UserInfo.Split(':')[1];
-    var database = uri.AbsolutePath.Trim('/');
-
-    connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
-            Console.WriteLine($"✅ Converted Render URL to Npgsql format");
+      // Check if it's already in Npgsql format (Host=...)
+      if (connectionString.Contains("Host=") && connectionString.Contains("Database="))
+    {
+         Console.WriteLine("✅ Connection string is already in Npgsql format");
         }
+        // Якщо це Render/Heroku формат (postgres:// або postgresql://)
+        else if (connectionString.StartsWith("postgres://") || connectionString.StartsWith("postgresql://"))
+        {
+      var uri = new Uri(connectionString);
+     var host = uri.Host;
+      var port = uri.Port;
+      var username = uri.UserInfo.Split(':')[0];
+            var password = uri.UserInfo.Split(':').Length > 1 ? uri.UserInfo.Split(':')[1] : "";
+   var database = uri.AbsolutePath.Trim('/');
 
- builder.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(connectionString));
-        
-  builder.Services.AddScoped<DatabaseStorageService>();
-  builder.Logging.AddConsole();
-        
+            connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+         Console.WriteLine($"✅ Converted Postgres URL to Npgsql format");
+        }
+        else
+     {
+    // Unknown format
+   Console.WriteLine($"⚠️ Unknown connection string format. Expected 'postgres://' or 'Host='");
+            Console.WriteLine($"⚠️ Please use the 'Internal Database URL' from Render dashboard");
+            connectionString = null;
+      }
+
+        if (!string.IsNullOrEmpty(connectionString))
+  {
+            builder.Services.AddDbContext<ApplicationDbContext>(options =>
+         options.UseNpgsql(connectionString));
+  
+            builder.Services.AddScoped<DatabaseStorageService>();
+            builder.Logging.AddConsole();
+            
+            isDatabaseConfigured = true;
    Console.WriteLine("✅ PostgreSQL Database configured");
+        }
     }
     catch (Exception ex)
     {
         Console.WriteLine($"❌ Error parsing DATABASE_URL: {ex.Message}");
+        Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
         Console.WriteLine("⚠️ Falling back to file storage");
-     builder.Services.AddSingleton<DataStorageService>();
-        connectionString = null; // Reset to trigger file storage
+        connectionString = null;
     }
 }
-else
+
+if (!isDatabaseConfigured)
 {
-    // Fallback до файлової системи якщо немає БД
+  // Fallback до файлової системи якщо немає БД
     builder.Services.AddSingleton<DataStorageService>();
     Console.WriteLine("⚠️ Using file storage (no database configured)");
     connectionString = null;
@@ -73,47 +90,49 @@ builder.Services.AddSingleton<DataSeedService>();
 var app = builder.Build();
 
 // Migrate database and seed data
-if (!string.IsNullOrEmpty(connectionString))
+if (isDatabaseConfigured && !string.IsNullOrEmpty(connectionString))
 {
     using (var scope = app.Services.CreateScope())
     {
-    try
-   {
+ try
+     {
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
  
-        Console.WriteLine("🔄 Running database migrations...");
-            await dbContext.Database.MigrateAsync();
-         Console.WriteLine("✅ Database migrations completed");
+            Console.WriteLine("🔄 Running database migrations...");
+       await dbContext.Database.MigrateAsync();
+            Console.WriteLine("✅ Database migrations completed");
           
-     var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
-            var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
+            var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
+     var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
  
-            // Перевіряємо чи є дані в БД
-   if (!await dbStorage.HasSavedDataAsync())
-   {
-Console.WriteLine("🌱 Seeding initial data...");
-        await seedService.SeedInitialDataIfEmpty();
-         Console.WriteLine("✅ Initial data seeded");
-        }
-            else
+   // Перевіряємо чи є дані в БД
+            if (!await dbStorage.HasSavedDataAsync())
         {
-             Console.WriteLine("ℹ️ Database already contains data, skipping seed");
-       }
-        }
-   catch (Exception ex)
- {
-var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-         logger.LogError(ex, "❌ Error during database migration or seeding");
+  Console.WriteLine("🌱 Seeding initial data...");
+    await seedService.SeedInitialDataIfEmpty();
+    Console.WriteLine("✅ Initial data seeded");
+      }
+ else
+  {
+    Console.WriteLine("ℹ️ Database already contains data, skipping seed");
+    }
+     }
+        catch (Exception ex)
+        {
+ var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "❌ Error during database migration or seeding");
       Console.WriteLine($"❌ Database error: {ex.Message}");
+   Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
         }
     }
 }
 else
 {
     // Fallback seed для файлової системи
+    Console.WriteLine("🌱 Using file storage mode, seeding initial data if needed...");
     using (var scope = app.Services.CreateScope())
     {
-        var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
+      var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
         await seedService.SeedInitialDataIfEmpty();
     }
 }
