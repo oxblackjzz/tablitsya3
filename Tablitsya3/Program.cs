@@ -16,7 +16,7 @@ bool isDatabaseConfigured = false;
 if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
 {
     Console.WriteLine($"🔍 DATABASE_URL length: {connectionString.Length}");
-    Console.WriteLine($"🔍 First 20 chars: {connectionString.Substring(0, Math.Min(20, connectionString.Length))}...");
+ Console.WriteLine($"🔍 First 20 chars: {connectionString.Substring(0, Math.Min(20, connectionString.Length))}...");
     
  try
   {
@@ -33,20 +33,20 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
      var port = uri.Port > 0 ? uri.Port : 5432; // Default PostgreSQL port
       
     string username = "";
-      string password = "";
+    string password = "";
  
             if (!string.IsNullOrEmpty(uri.UserInfo))
-            {
+      {
    var userInfoParts = uri.UserInfo.Split(':');
          username = userInfoParts[0];
   password = userInfoParts.Length > 1 ? userInfoParts[1] : "";
-            }
-            
+   }
+     
    var database = uri.AbsolutePath.Trim('/');
 
-            Console.WriteLine($"🔍 Parsed - Host: {host}, Port: {port}, Database: {database}, User: {username}");
+    Console.WriteLine($"🔍 Parsed - Host: {host}, Port: {port}, Database: {database}, User: {username}");
 
-            connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+          connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
          Console.WriteLine($"✅ Converted Postgres URL to Npgsql format");
         }
     else
@@ -59,21 +59,26 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
 
      if (!string.IsNullOrEmpty(connectionString))
   {
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString));
+  builder.Services.AddDbContext<ApplicationDbContext>(options =>
+      {
+ options.UseNpgsql(connectionString);
+     // Suppress pending model changes warning in production
+    options.ConfigureWarnings(warnings => 
+  warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+       });
   
-            builder.Services.AddScoped<DatabaseStorageService>();
-            builder.Logging.AddConsole();
-            
-            isDatabaseConfigured = true;
+     builder.Services.AddScoped<DatabaseStorageService>();
+     builder.Logging.AddConsole();
+   
+   isDatabaseConfigured = true;
    Console.WriteLine("✅ PostgreSQL Database configured");
         }
     }
     catch (Exception ex)
     {
      Console.WriteLine($"❌ Error parsing DATABASE_URL: {ex.Message}");
-        Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
-        Console.WriteLine("⚠️ Falling back to file storage");
+     Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+    Console.WriteLine("⚠️ Falling back to file storage");
         connectionString = null;
     }
 }
@@ -113,8 +118,8 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
      await dbContext.Database.MigrateAsync();
    Console.WriteLine("✅ Database migrations completed");
           
-       var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
-     var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
+     var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
+   var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
  
    // Перевіряємо чи є дані в БД
          if (!await dbStorage.HasSavedDataAsync())
@@ -125,11 +130,11 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
       }
  else
   {
-    Console.WriteLine("ℹ️ Database already contains data, skipping seed");
+ Console.WriteLine("ℹ️ Database already contains data, skipping seed");
     }
-     }
-        catch (Exception ex)
-        {
+  }
+   catch (Exception ex)
+ {
  var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
  logger.LogError(ex, "❌ Error during database migration or seeding");
       Console.WriteLine($"❌ Database error: {ex.Message}");
