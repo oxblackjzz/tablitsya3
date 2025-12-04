@@ -293,7 +293,7 @@
         if (!HasAnyOrders())
         {
             statusMessage = "Будь ласка, введіть хоча б одне замовлення!";
-      return;
+            return;
         }
 
         isSaving = true;
@@ -301,185 +301,188 @@
         
         try
         {
-     // Завантажуємо поточні дані
-         var data = await StorageService.LoadWorkshopDataAsync() ?? new WorkshopData();
+            // Завантажуємо поточні дані
+            var data = await StorageService.LoadWorkshopDataAsync() ?? new WorkshopData();
        
-    // Ініціалізуємо колекції дат якщо потрібно
-         if (data.WorkshopOrderDates == null || !data.WorkshopOrderDates.Any())
-     {
-    data.WorkshopOrderDates = new()
- {
-    { 1, new List<DateTime>() },
-  { 3, new List<DateTime>() },
-        { 6, new List<DateTime>() }
-        };
-        }
+ // ✅ КОНВЕРТУЄМО ДАТУ В UTC ОДРАЗУ
+  var utcOrderDate = DateTime.SpecifyKind(bulkOrder.OrderDate.Date, DateTimeKind.Utc);
 
-         // Лічильник нових замовлень
-     int totalOrders = 0;
-    
-  // Цех №1
-            if (bulkOrder.Workshop1_Order1 > 0)
-            {
+        // Ініціалізуємо колекції дат якщо потрібно
+  if (data.WorkshopOrderDates == null || !data.WorkshopOrderDates.Any())
+        {
+      data.WorkshopOrderDates = new()
+        {
+      { 1, new List<DateTime>() },
+         { 3, new List<DateTime>() },
+   { 6, new List<DateTime>() }
+            };
+ }
+
+        // Лічильник нових замовлень
+        int totalOrders = 0;
+      
+   // Цех №1
+  if (bulkOrder.Workshop1_Order1 > 0)
+        {
      if (!data.WorkshopOrders.ContainsKey(1)) data.WorkshopOrders[1] = new List<double>();
-        if (!data.WorkshopOrderDates.ContainsKey(1)) data.WorkshopOrderDates[1] = new List<DateTime>();
-     if (!data.WorkshopOrderNames.ContainsKey(1)) data.WorkshopOrderNames[1] = new List<string>();
-    
-          data.WorkshopOrders[1].Add(bulkOrder.Workshop1_Order1);
-  data.WorkshopOrderDates[1].Add(bulkOrder.OrderDate);
-          data.WorkshopOrderNames[1].Add(bulkOrder.Workshop1_Order1_Name);
-      totalOrders++;
-}
-            if (bulkOrder.Workshop1_Order2 > 0)
-            {
-           if (!data.WorkshopOrders.ContainsKey(1)) data.WorkshopOrders[1] = new List<double>();
-      if (!data.WorkshopOrderDates.ContainsKey(1)) data.WorkshopOrderDates[1] = new List<DateTime>();
-       if (!data.WorkshopOrderNames.ContainsKey(1)) data.WorkshopOrderNames[1] = new List<string>();
-    
-       data.WorkshopOrders[1].Add(bulkOrder.Workshop1_Order2);
-        data.WorkshopOrderDates[1].Add(bulkOrder.OrderDate);
-      data.WorkshopOrderNames[1].Add(bulkOrder.Workshop1_Order2_Name);
+     if (!data.WorkshopOrderDates.ContainsKey(1)) data.WorkshopOrderDates[1] = new List<DateTime>();
+        if (!data.WorkshopOrderNames.ContainsKey(1)) data.WorkshopOrderNames[1] = new List<string>();
+      
+  data.WorkshopOrders[1].Add(bulkOrder.Workshop1_Order1);
+            data.WorkshopOrderDates[1].Add(utcOrderDate); // ✅ UTC дата
+     data.WorkshopOrderNames[1].Add(bulkOrder.Workshop1_Order1_Name);
+totalOrders++;
+        }
+   if (bulkOrder.Workshop1_Order2 > 0)
+    {
+    if (!data.WorkshopOrders.ContainsKey(1)) data.WorkshopOrders[1] = new List<double>();
+if (!data.WorkshopOrderDates.ContainsKey(1)) data.WorkshopOrderDates[1] = new List<DateTime>();
+        if (!data.WorkshopOrderNames.ContainsKey(1)) data.WorkshopOrderNames[1] = new List<string>();
+      
+      data.WorkshopOrders[1].Add(bulkOrder.Workshop1_Order2);
+          data.WorkshopOrderDates[1].Add(utcOrderDate); // ✅ UTC дата
+  data.WorkshopOrderNames[1].Add(bulkOrder.Workshop1_Order2_Name);
     totalOrders++;
         }
- if (bulkOrder.Workshop1_Order3 > 0)
-            {
-     if (!data.WorkshopOrders.ContainsKey(1)) data.WorkshopOrders[1] = new List<double>();
-       if (!data.WorkshopOrderDates.ContainsKey(1)) data.WorkshopOrderDates[1] = new List<DateTime>();
-    if (!data.WorkshopOrderNames.ContainsKey(1)) data.WorkshopOrderNames[1] = new List<string>();
-                
-   data.WorkshopOrders[1].Add(bulkOrder.Workshop1_Order3);
-   data.WorkshopOrderDates[1].Add(bulkOrder.OrderDate);
-          data.WorkshopOrderNames[1].Add(bulkOrder.Workshop1_Order3_Name);
-     totalOrders++;
- }
-       
-            // Цех №3
-    if (bulkOrder.Workshop3_Order1 > 0)
-            {
-  if (!data.WorkshopOrders.ContainsKey(3)) data.WorkshopOrders[3] = new List<double>();
-         if (!data.WorkshopOrderDates.ContainsKey(3)) data.WorkshopOrderDates[3] = new List<DateTime>();
-  if (!data.WorkshopOrderNames.ContainsKey(3)) data.WorkshopOrderNames[3] = new List<string>();
- 
-       data.WorkshopOrders[3].Add(bulkOrder.Workshop3_Order1);
- data.WorkshopOrderDates[3].Add(bulkOrder.OrderDate);
- data.WorkshopOrderNames[3].Add(bulkOrder.Workshop3_Order1_Name);
-            totalOrders++;
-            }
-         if (bulkOrder.Workshop3_Order2 > 0)
-   {
-         if (!data.WorkshopOrders.ContainsKey(3)) data.WorkshopOrders[3] = new List<double>();
-       if (!data.WorkshopOrderDates.ContainsKey(3)) data.WorkshopOrderDates[3] = new List<DateTime>();
-                if (!data.WorkshopOrderNames.ContainsKey(3)) data.WorkshopOrderNames[3] = new List<string>();
+   if (bulkOrder.Workshop1_Order3 > 0)
+  {
+      if (!data.WorkshopOrders.ContainsKey(1)) data.WorkshopOrders[1] = new List<double>();
+      if (!data.WorkshopOrderDates.ContainsKey(1)) data.WorkshopOrderDates[1] = new List<DateTime>();
+            if (!data.WorkshopOrderNames.ContainsKey(1)) data.WorkshopOrderNames[1] = new List<string>();
      
-                data.WorkshopOrders[3].Add(bulkOrder.Workshop3_Order2);
-  data.WorkshopOrderDates[3].Add(bulkOrder.OrderDate);
+            data.WorkshopOrders[1].Add(bulkOrder.Workshop1_Order3);
+ data.WorkshopOrderDates[1].Add(utcOrderDate); // ✅ UTC дата
+ data.WorkshopOrderNames[1].Add(bulkOrder.Workshop1_Order3_Name);
+    totalOrders++;
+  }
+     
+      // Цех №3
+ if (bulkOrder.Workshop3_Order1 > 0)
+        {
+if (!data.WorkshopOrders.ContainsKey(3)) data.WorkshopOrders[3] = new List<double>();
+    if (!data.WorkshopOrderDates.ContainsKey(3)) data.WorkshopOrderDates[3] = new List<DateTime>();
+ if (!data.WorkshopOrderNames.ContainsKey(3)) data.WorkshopOrderNames[3] = new List<string>();
+     
+    data.WorkshopOrders[3].Add(bulkOrder.Workshop3_Order1);
+      data.WorkshopOrderDates[3].Add(utcOrderDate); // ✅ UTC дата
+      data.WorkshopOrderNames[3].Add(bulkOrder.Workshop3_Order1_Name);
+totalOrders++;
+}
+        if (bulkOrder.Workshop3_Order2 > 0)
+        {
+        if (!data.WorkshopOrders.ContainsKey(3)) data.WorkshopOrders[3] = new List<double>();
+ if (!data.WorkshopOrderDates.ContainsKey(3)) data.WorkshopOrderDates[3] = new List<DateTime>();
+    if (!data.WorkshopOrderNames.ContainsKey(3)) data.WorkshopOrderNames[3] = new List<string>();
+   
+            data.WorkshopOrders[3].Add(bulkOrder.Workshop3_Order2);
+      data.WorkshopOrderDates[3].Add(utcOrderDate); // ✅ UTC дата
       data.WorkshopOrderNames[3].Add(bulkOrder.Workshop3_Order2_Name);
-        totalOrders++;
-            }
-  if (bulkOrder.Workshop3_Order3 > 0)
-   {
-      if (!data.WorkshopOrders.ContainsKey(3)) data.WorkshopOrders[3] = new List<double>();
-     if (!data.WorkshopOrderDates.ContainsKey(3)) data.WorkshopOrderDates[3] = new List<DateTime>();
-              if (!data.WorkshopOrderNames.ContainsKey(3)) data.WorkshopOrderNames[3] = new List<string>();
-         
-       data.WorkshopOrders[3].Add(bulkOrder.Workshop3_Order3);
-      data.WorkshopOrderDates[3].Add(bulkOrder.OrderDate);
-   data.WorkshopOrderNames[3].Add(bulkOrder.Workshop3_Order3_Name);
-       totalOrders++;
-            }
-    
-       // Цех №6
-   if (bulkOrder.Workshop6_Order1 > 0)
-     {
-    if (!data.WorkshopOrders.ContainsKey(6)) data.WorkshopOrders[6] = new List<double>();
-          if (!data.WorkshopOrderDates.ContainsKey(6)) data.WorkshopOrderDates[6] = new List<DateTime>();
-   if (!data.WorkshopOrderNames.ContainsKey(6)) data.WorkshopOrderNames[6] = new List<string>();
+  totalOrders++;
+        }
+        if (bulkOrder.Workshop3_Order3 > 0)
+    {
+if (!data.WorkshopOrders.ContainsKey(3)) data.WorkshopOrders[3] = new List<double>();
+ if (!data.WorkshopOrderDates.ContainsKey(3)) data.WorkshopOrderDates[3] = new List<DateTime>();
+  if (!data.WorkshopOrderNames.ContainsKey(3)) data.WorkshopOrderNames[3] = new List<string>();
         
-         data.WorkshopOrders[6].Add(bulkOrder.Workshop6_Order1);
-                data.WorkshopOrderDates[6].Add(bulkOrder.OrderDate);
-                data.WorkshopOrderNames[6].Add(bulkOrder.Workshop6_Order1_Name);
-      totalOrders++;
+     data.WorkshopOrders[3].Add(bulkOrder.Workshop3_Order3);
+data.WorkshopOrderDates[3].Add(utcOrderDate); // ✅ UTC дата
+     data.WorkshopOrderNames[3].Add(bulkOrder.Workshop3_Order3_Name);
+totalOrders++;
     }
-   if (bulkOrder.Workshop6_Order2 > 0)
-     {
+  
+        // Цех №6
+      if (bulkOrder.Workshop6_Order1 > 0)
+   {
        if (!data.WorkshopOrders.ContainsKey(6)) data.WorkshopOrders[6] = new List<double>();
     if (!data.WorkshopOrderDates.ContainsKey(6)) data.WorkshopOrderDates[6] = new List<DateTime>();
-       if (!data.WorkshopOrderNames.ContainsKey(6)) data.WorkshopOrderNames[6] = new List<string>();
+      if (!data.WorkshopOrderNames.ContainsKey(6)) data.WorkshopOrderNames[6] = new List<string>();
      
-       data.WorkshopOrders[6].Add(bulkOrder.Workshop6_Order2);
-           data.WorkshopOrderDates[6].Add(bulkOrder.OrderDate);
-                data.WorkshopOrderNames[6].Add(bulkOrder.Workshop6_Order2_Name);
-          totalOrders++;
-            }
-      if (bulkOrder.Workshop6_Order3 > 0)
-   {
-    if (!data.WorkshopOrders.ContainsKey(6)) data.WorkshopOrders[6] = new List<double>();
-           if (!data.WorkshopOrderDates.ContainsKey(6)) data.WorkshopOrderDates[6] = new List<DateTime>();
- if (!data.WorkshopOrderNames.ContainsKey(6)) data.WorkshopOrderNames[6] = new List<string>();
-   
-       data.WorkshopOrders[6].Add(bulkOrder.Workshop6_Order3);
-     data.WorkshopOrderDates[6].Add(bulkOrder.OrderDate);
-            data.WorkshopOrderNames[6].Add(bulkOrder.Workshop6_Order3_Name);
-   totalOrders++;
-            }
-
-            // Зберігаємо дані
-            await StorageService.SaveWorkshopDataAsync(data);
-            
-            statusMessage = $"✅ Успішно додано {totalOrders} замовлень на дату {bulkOrder.OrderDate:dd.MM.yyyy} до планування!";
-   
-      // Очищаємо форму після успішного додавання
- await Task.Delay(2000);
-            ClearForm();
-        }
-        catch (Exception ex)
- {
-            statusMessage = $"❌ Помилка збереження: {ex.Message}";
+data.WorkshopOrders[6].Add(bulkOrder.Workshop6_Order1);
+            data.WorkshopOrderDates[6].Add(utcOrderDate); // ✅ UTC дата
+      data.WorkshopOrderNames[6].Add(bulkOrder.Workshop6_Order1_Name);
+totalOrders++;
+  }
+  if (bulkOrder.Workshop6_Order2 > 0)
+  {
+if (!data.WorkshopOrders.ContainsKey(6)) data.WorkshopOrders[6] = new List<double>();
+          if (!data.WorkshopOrderDates.ContainsKey(6)) data.WorkshopOrderDates[6] = new List<DateTime>();
+            if (!data.WorkshopOrderNames.ContainsKey(6)) data.WorkshopOrderNames[6] = new List<string>();
+        
+  data.WorkshopOrders[6].Add(bulkOrder.Workshop6_Order2);
+            data.WorkshopOrderDates[6].Add(utcOrderDate); // ✅ UTC дата
+     data.WorkshopOrderNames[6].Add(bulkOrder.Workshop6_Order2_Name);
+    totalOrders++;
    }
-        finally
-{
-    isSaving = false;
+    if (bulkOrder.Workshop6_Order3 > 0)
+        {
+      if (!data.WorkshopOrders.ContainsKey(6)) data.WorkshopOrders[6] = new List<double>();
+      if (!data.WorkshopOrderDates.ContainsKey(6)) data.WorkshopOrderDates[6] = new List<DateTime>();
+if (!data.WorkshopOrderNames.ContainsKey(6)) data.WorkshopOrderNames[6] = new List<string>();
+    
+        data.WorkshopOrders[6].Add(bulkOrder.Workshop6_Order3);
+      data.WorkshopOrderDates[6].Add(utcOrderDate); // ✅ UTC дата
+data.WorkshopOrderNames[6].Add(bulkOrder.Workshop6_Order3_Name);
+totalOrders++;
+     }
+
+    // Зберігаємо дані
+        await StorageService.SaveWorkshopDataAsync(data);
+   
+ statusMessage = $"✅ Успішно додано {totalOrders} замовлень на дату {bulkOrder.OrderDate:dd.MM.yyyy} до планування!";
+  
+   // Очищаємо форму після успішного додавання
+await Task.Delay(2000);
+        ClearForm();
     }
+ catch (Exception ex)
+    {
+  statusMessage = $"❌ Помилка збереження: {ex.Message}";
     }
+    finally
+    {
+  isSaving = false;
+    }
+}
 
     private void ClearForm()
     {
-   bulkOrder = new BulkOrderModel { OrderDate = DateTime.Today };
-    statusMessage = string.Empty;
+        bulkOrder = new BulkOrderModel { OrderDate = DateTime.Today };
+        statusMessage = string.Empty;
     }
 
     private void GoToPlanning()
     {
-    Navigation.NavigateTo("/production-planning");
+  Navigation.NavigateTo("/production-planning");
     }
 
     // Модель для масового введення
     public class BulkOrderModel
     {
-        public DateTime OrderDate { get; set; } = DateTime.Today;
-     
-// Цех №1
+      public DateTime OrderDate { get; set; } = DateTime.Today;
+        
+        // Цех №1
         public string Workshop1_Order1_Name { get; set; } = string.Empty;
         public double Workshop1_Order1 { get; set; }
         public string Workshop1_Order2_Name { get; set; } = string.Empty;
         public double Workshop1_Order2 { get; set; }
-  public string Workshop1_Order3_Name { get; set; } = string.Empty;
- public double Workshop1_Order3 { get; set; }
+     public string Workshop1_Order3_Name { get; set; } = string.Empty;
+        public double Workshop1_Order3 { get; set; }
         
-        // Цех №3
+      // Цех №3
         public string Workshop3_Order1_Name { get; set; } = string.Empty;
-        public double Workshop3_Order1 { get; set; }
-  public string Workshop3_Order2_Name { get; set; } = string.Empty;
- public double Workshop3_Order2 { get; set; }
-      public string Workshop3_Order3_Name { get; set; } = string.Empty;
+   public double Workshop3_Order1 { get; set; }
+        public string Workshop3_Order2_Name { get; set; } = string.Empty;
+        public double Workshop3_Order2 { get; set; }
+        public string Workshop3_Order3_Name { get; set; } = string.Empty;
         public double Workshop3_Order3 { get; set; }
-        
+     
         // Цех №6
-     public string Workshop6_Order1_Name { get; set; } = string.Empty;
+        public string Workshop6_Order1_Name { get; set; } = string.Empty;
         public double Workshop6_Order1 { get; set; }
-     public string Workshop6_Order2_Name { get; set; } = string.Empty;
+   public string Workshop6_Order2_Name { get; set; } = string.Empty;
         public double Workshop6_Order2 { get; set; }
-      public string Workshop6_Order3_Name { get; set; } = string.Empty;
+   public string Workshop6_Order3_Name { get; set; } = string.Empty;
         public double Workshop6_Order3 { get; set; }
     }
 }
