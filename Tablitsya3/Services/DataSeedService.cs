@@ -52,7 +52,8 @@ namespace Tablitsya3.Services
             // Create initial workshop data with original backup data
   var workshopData = new WorkshopData
       {
-   StartDate = new DateTime(2025, 1, 1),
+   // ✅ UTC ДАТА
+   StartDate = DateTime.SpecifyKind(new DateTime(2025, 1, 1), DateTimeKind.Utc),
         ProductionLeadTime = 5,
              DaysBeforeProduction = 3
        };
@@ -67,18 +68,18 @@ namespace Tablitsya3.Services
         workshopData.WorkshopOrderDates[1] = new List<DateTime>();
           workshopData.WorkshopOrderNames[1] = new List<string>();
 
-       // Add Workshop 1 orders (from backup)
+       // ✅ Add Workshop 1 orders - ВСІ ДАТИ В UTC
           var workshop1Orders = new List<(int sqm, DateTime date, string name)>
    {
-    (1241, new DateTime(2025, 10, 14), "14.10"),
-      (1184, new DateTime(2025, 10, 15), "15.10"),
-   (1386, new DateTime(2025, 10, 16), "16.10"),
-(1105, new DateTime(2025, 10, 17), "17.10"),
-      (1724, new DateTime(2025, 10, 20), "20.10"),
-     (1159, new DateTime(2025, 10, 21), "21.10"),
-     (746, new DateTime(2025, 10, 22), "22.10"),
-   (897, new DateTime(2025, 10, 23), "23.10"),
-   (951, new DateTime(2025, 10, 24), "24.10")
+    (1241, DateTime.SpecifyKind(new DateTime(2025, 10, 14), DateTimeKind.Utc), "14.10"),
+      (1184, DateTime.SpecifyKind(new DateTime(2025, 10, 15), DateTimeKind.Utc), "15.10"),
+   (1386, DateTime.SpecifyKind(new DateTime(2025, 10, 16), DateTimeKind.Utc), "16.10"),
+(1105, DateTime.SpecifyKind(new DateTime(2025, 10, 17), DateTimeKind.Utc), "17.10"),
+      (1724, DateTime.SpecifyKind(new DateTime(2025, 10, 20), DateTimeKind.Utc), "20.10"),
+     (1159, DateTime.SpecifyKind(new DateTime(2025, 10, 21), DateTimeKind.Utc), "21.10"),
+     (746, DateTime.SpecifyKind(new DateTime(2025, 10, 22), DateTimeKind.Utc), "22.10"),
+   (897, DateTime.SpecifyKind(new DateTime(2025, 10, 23), DateTimeKind.Utc), "23.10"),
+   (951, DateTime.SpecifyKind(new DateTime(2025, 10, 24), DateTimeKind.Utc), "24.10")
               };
 
    foreach (var (sqm, date, name) in workshop1Orders)
@@ -88,8 +89,8 @@ namespace Tablitsya3.Services
       workshopData.WorkshopOrderNames[1].Add(name);
           }
 
-       // Add custom completion date from backup
-       workshopData.CustomCompletionDates["1_3"] = new DateTime(2025, 12, 5, 0, 0, 0, DateTimeKind.Local);
+       // ✅ Add custom completion date - UTC
+       workshopData.CustomCompletionDates["1_3"] = DateTime.SpecifyKind(new DateTime(2025, 12, 5), DateTimeKind.Utc);
 
       // Save to storage (БД або файл)
                 using (var scope = _serviceProvider.CreateScope())
