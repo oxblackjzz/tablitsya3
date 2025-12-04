@@ -8,7 +8,7 @@ namespace Tablitsya3.Components.Pages;
 public partial class ProductionPlanning : ComponentBase
 {
  [Inject] private ProductionPlanningService PlanningService { get; set; } = default!;
-    [Inject] private DataStorageService StorageService { get; set; } = default!;
+[Inject] private UnifiedStorageService StorageService { get; set; } = default!;
     [Inject] private WorkingDaysService WorkingDaysService { get; set; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
