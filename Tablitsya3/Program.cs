@@ -9,34 +9,53 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
     ?? Environment.GetEnvironmentVariable("DATABASE_URL");
 
+Console.WriteLine($"🔍 DATABASE_URL present: {!string.IsNullOrEmpty(connectionString)}");
 if (!string.IsNullOrEmpty(connectionString))
 {
-    // Якщо це Render/Heroku формат (postgres://user:pass@host:port/db)
-    if (connectionString.StartsWith("postgres://"))
+    Console.WriteLine($"🔍 DATABASE_URL length: {connectionString.Length}");
+    Console.WriteLine($"🔍 DATABASE_URL starts with postgres://: {connectionString.StartsWith("postgres://")}");
+}
+
+if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
+{
+    try
     {
-        var uri = new Uri(connectionString);
-        var host = uri.Host;
+        // Якщо це Render/Heroku формат (postgres://user:pass@host:port/db)
+        if (connectionString.StartsWith("postgres://"))
+      {
+            var uri = new Uri(connectionString);
+         var host = uri.Host;
       var port = uri.Port;
-    var username = uri.UserInfo.Split(':')[0];
-      var password = uri.UserInfo.Split(':')[1];
+            var username = uri.UserInfo.Split(':')[0];
+        var password = uri.UserInfo.Split(':')[1];
     var database = uri.AbsolutePath.Trim('/');
 
-        connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
-    }
+    connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+            Console.WriteLine($"✅ Converted Render URL to Npgsql format");
+        }
 
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseNpgsql(connectionString));
-    
-    builder.Services.AddScoped<DatabaseStorageService>();
-    builder.Logging.AddConsole();
-    
-    Console.WriteLine("✅ PostgreSQL Database configured");
+ builder.Services.AddDbContext<ApplicationDbContext>(options =>
+            options.UseNpgsql(connectionString));
+        
+  builder.Services.AddScoped<DatabaseStorageService>();
+  builder.Logging.AddConsole();
+        
+   Console.WriteLine("✅ PostgreSQL Database configured");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Error parsing DATABASE_URL: {ex.Message}");
+        Console.WriteLine("⚠️ Falling back to file storage");
+     builder.Services.AddSingleton<DataStorageService>();
+        connectionString = null; // Reset to trigger file storage
+    }
 }
 else
 {
     // Fallback до файлової системи якщо немає БД
     builder.Services.AddSingleton<DataStorageService>();
     Console.WriteLine("⚠️ Using file storage (no database configured)");
+    connectionString = null;
 }
 
 // Додаємо універсальний сервіс
