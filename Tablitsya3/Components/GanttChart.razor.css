@@ -1,4 +1,4 @@
-﻿.gantt-chart {
+.gantt-chart {
   background: #f8f9fa;
   border: 1px solid #dee2e6;
   border-radius: 8px;
@@ -6,21 +6,21 @@
   padding: 20px;
 }
 
-/* ��������� ��� ��������������� ������ */
+/* Контейнер для горизонтального скролу */
 .gantt-wrapper {
   width: 100% !important;
   max-width: 100% !important;
   overflow-x: auto !important;
   overflow-y: visible !important;
   position: relative;
-  margin-bottom: 10px;
+margin-bottom: 10px;
   scrollbar-width: thin;
   scrollbar-color: #4a90e2 #f8f9fa;
   -webkit-overflow-scrolling: touch;
   z-index: 1;
 }
 
-/* Timeline - �������� ������ ��� ������������� ������ */
+/* Timeline - основна область для горизонтального скролу */
 .gantt-timeline {
   position: relative;
   height: 400px;
@@ -32,7 +32,7 @@
   z-index: 1;
 }
 
-/* ѳ��� ��� (���������� ���) � ������������ ������ */
+/* Сітка днів (календарний фон) з низьким пріоритетом */
 .gantt-grid {
   position: absolute;
   top: 0;
@@ -43,7 +43,7 @@
   pointer-events: none;
 }
 
-/* �������� ��� ������� ��������� ��� */
+/* Легенда для нового візуалу вихідних днів */
 .legend-status-box.weekend-pattern {
   background: repeating-linear-gradient(
     45deg,
@@ -67,7 +67,7 @@
 }
 
 .legend-status-box.completed {
-  background-color: #6c757d;
+background-color: #6c757d;
   opacity: 0.6;
   filter: grayscale(50%);
   border-style: dashed;
@@ -84,7 +84,7 @@
   pointer-events: none;
 }
 
-/* ����� ��� ��������� ��� (������ �� �����) */
+/* Стиль для вихідних днів (червоні та товсті) */
 .day-separator.non-working {
   border-left: 3px solid #dc3545;
   width: 3px;
@@ -128,7 +128,7 @@
   color: #1b5e20;
 }
 
-/* ���� ��� ��������� ��� */
+/* Стиль для вихідних днів */
 .day-separator.non-working .day-number {
   background: #ffcdd2;
   border-color: #e57373;
@@ -142,20 +142,20 @@
   color: #c62828;
 }
 
-/* ������ ������ ���������� � ������ ��������� */
+/* Значок номеру замовлення в бежджі вихідного */
 .order-badge {
   display: inline-block;
-  font-size: 8px; /* ? �������� � 10px �� 8px */
+  font-size: 8px;
   font-weight: 700;
   color: #fff;
-  padding: 2px 4px; /* ? �������� � 2px 5px �� 2px 4px */
+  padding: 2px 4px;
   border-radius: 3px;
   margin: 1px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
 }
 
-/* ��������� ���� �� ������� ��� */
+/* Календарна дата на кожному дні */
 .calendar-date {
   position: absolute;
   top: 35px;
@@ -177,7 +177,7 @@
   gap: 2px;
 }
 
-/* ���� ��� ��������� ��� */
+/* Стиль для вихідних днів */
 .day-separator.non-working .calendar-date {
   background: #ffebee;
   border-color: #ef5350;
@@ -190,7 +190,7 @@
   color: #c62828;
 }
 
-/* ����� ��� ���� */
+/* Бейдж для свят */
 .holiday-badge {
   display: inline-block;
   background: rgba(255, 193, 7, 0.9);
@@ -202,23 +202,23 @@
   margin-top: 2px;
 }
 
-/* ��������� � ������� - ��� ������������� ������ */
+/* Контейнер з барами - над горизонтальним скролом */
 .gantt-bars-container {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  padding: 80px 0 40px 0; /* ? �̲����: ���� 60px 0 20px 0, ����� 80px 0 40px 0 ��� ������� ������� */
+  padding: 80px 0 40px 0;
   z-index: 100;
   pointer-events: auto;
   overflow: visible;
 }
 
-/* ����� ��������� - ���̲��Ͳ � ����� ˲Ͳ� ��������� ��� �� ���������� */
+/* Барчик замовлень - ЗМІЩЕНО З НОВОЇ ЛІНІЇ ПОЧАТКУ ДНЯ ВІД ГОРИЗОНТАЛІ */
 .gantt-bar {
   position: absolute;
-  top: 80px; /* ? ���������: ���� 60px, ����� 80px ��� �� ����������� ��������� �������� */
+  top: 80px;
   height: 60px;
   display: flex;
   align-items: center;
@@ -242,7 +242,7 @@
   border-left: 2px solid rgba(0, 0, 0, 0.2);
 }
 
-/* ������� ��������� */
+/* Статуси замовлень */
 .gantt-bar.completed {
   opacity: 0.7;
   filter: grayscale(50%);
@@ -265,33 +265,33 @@
 @keyframes barPulse {
   0%,
   100% {
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
   }
   50% {
     box-shadow: 0 3px 15px rgba(0, 123, 255, 0.5);
   }
 }
 
-/* ? �������� TRANSFORM ��� ���������� �� �������� */
+/* Видалено TRANSFORM для запобігання сміщення */
 .gantt-bar:hover {
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
   filter: brightness(1.2);
   opacity: 1;
-  z-index: 110; /* ? ������ z-index �� tooltip */
+  z-index: 110;
 }
 
-/* ������ ��� draggable �������� */
+/* Стилі для draggable елементів */
 .gantt-bar[draggable="true"] {
   cursor: grab;
   transition: all 0.2s ease;
 }
 
-/* ? �������0 TRANSFORM ��� draggable ��� hover */
+/* Видалено TRANSFORM для draggable при hover */
 .gantt-bar[draggable="true"]:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-/* ���������� tooltip ��� �������� �� ����� ���������� - ���� ϲ� ������ */
+/* Розширений tooltip для показу на hover замовлення - тепер Під баром */
 .order-details-tooltip {
   opacity: 0;
   visibility: hidden;
@@ -319,13 +319,13 @@
   transform: translateY(0);
 }
 
-/* ��� ��������� � ����� ������ ������ - ����������� ������ */
+/* Для замовлень в правій частині екрану - вирівнювання справа */
 .gantt-bar[data-start-index]:hover .order-details-tooltip {
   left: auto;
   right: 0;
 }
 
-/* ���� ��� ����� tooltip */
+/* Стиль для хедера tooltip */
 .tooltip-header {
   border-bottom: 1px solid #dee2e6;
   padding-bottom: 8px;
@@ -377,24 +377,24 @@
   text-align: right;
 }
 
-/* ����: ������ � ����� ������������ */
+/* Стрілка: показує з кінця виробництва */
 .completion-date-arrow {
   position: absolute;
   right: 0;
   top: 100%;
   z-index: 200;
   pointer-events: all;
-  margin-top: 15px; /* ? ���������: ���� 5px, ����� 15px ��� ������� ������� */
+  margin-top: 15px;
 }
 
-/* ˳�� ������ */
+/* Лінія стрілки */
 .arrow-line {
   position: absolute;
   right: 0;
   top: 0;
   width: 3px;
-  background: linear-gradient(
-    to bottom,
+background: linear-gradient(
+  to bottom,
     rgba(52, 152, 219, 0.8) 0%,
     rgba(52, 152, 219, 1) 100%
   );
@@ -403,7 +403,7 @@
   height: 80px;
 }
 
-/* ³���� ������ */
+/* Вістря стрілки */
 .arrow-head {
   position: absolute;
   right: -4px;
@@ -416,7 +416,7 @@
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.2));
 }
 
-/* ����� � ����� ���������� */
+/* Бейдж з датою відвантаження */
 .completion-date-badge {
   position: absolute;
   right: -60px;
@@ -442,9 +442,9 @@
   border-color: #2980b9;
 }
 
-/* ����� ���� */
+/* Текст дати */
 .date-text {
-  display: flex;
+display: flex;
   flex-direction: column;
   gap: 2px;
   width: 100%;
@@ -468,7 +468,7 @@
   font-style: italic;
 }
 
-/* ���� ������ � ��������� �� ������� */
+/* Змін кольору в залежності від статусу */
 .completion-date-badge.completed {
   border-color: #6c757d;
   background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
@@ -495,7 +495,7 @@
   }
 }
 
-/* ������ ���� */
+/* Іконка дати */
 .date-icon {
   font-size: 18px;
   flex-shrink: 0;
@@ -505,7 +505,7 @@
   display: inline-block;
 }
 
-/* ������ ���� ����������� */
+/* Маркер кінця виробництва */
 .production-end-marker {
   position: absolute;
   right: 0;
@@ -538,7 +538,7 @@
   border-radius: 2px;
 }
 
-/* ϳ���� �� ����� ���������� */
+/* Підпис на барах замовлення */
 .bar-label {
   position: relative;
   z-index: 101;
@@ -555,13 +555,13 @@
   gap: 5px;
 }
 
-/* ������ ������� */
+/* Значок статусу */
 .status-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 18px;
-height: 18px;
+  height: 18px;
   border-radius: 50%;
   font-size: 12px;
   font-weight: 700;
@@ -579,7 +579,7 @@ height: 18px;
   animation: badgePulse 2s infinite;
 }
 
-/* ������ ������� */
+/* Маркер поточної */
 .day-separator.today {
   border-left: 4px solid #ff6b6b;
   width: 4px;
@@ -598,7 +598,7 @@ height: 18px;
   100% {
     box-shadow: 0 2px 6px rgba(255, 193, 7, 0.3);
   }
-  50% {
+50% {
     box-shadow: 0 4px 12px rgba(255, 193, 7, 0.6);
   }
 }
@@ -613,7 +613,7 @@ height: 18px;
   margin-top: 2px;
 }
 
-/* ������� */
+/* Легенда */
 .gantt-legend {
   margin-top: 20px;
 }
@@ -639,13 +639,13 @@ height: 18px;
   background: #ffa500;
 }
 
-/* ������ ������ */
+/* Панель фільтрів */
 .gantt-filter-panel {
   background: #f8f9fa;
   border: 1px solid #dee2e6;
   border-radius: 6px;
   padding: 15px;
-margin-bottom: 15px;
+  margin-bottom: 15px;
 }
 
 .gantt-title {

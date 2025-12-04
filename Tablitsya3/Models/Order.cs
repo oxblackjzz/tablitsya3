@@ -19,42 +19,42 @@ namespace Tablitsya3.Models
         public int WorkshopNumber { get; set; }
 
         /// <summary>
-        /// �������� �� ���������� ����� � ����� (�� ����� ������ ����������� � ����� ����)
+        /// Перевірка чи замовлення зараз у роботі (на основі дати початку виробництва і дати кінця)
         /// </summary>
         public bool IsInProduction(DateTime currentDate)
         {
             return currentDate.Date >= ProductionStartDate.Date && 
-     currentDate.Date <= ProductionEndDate.Date;
+                   currentDate.Date <= ProductionEndDate.Date;
+    }
+
+      /// <summary>
+        /// Перевірка чи замовлення завершене
+        /// </summary>
+    public bool IsCompleted(DateTime currentDate)
+   {
+         return currentDate.Date > ProductionEndDate.Date;
    }
 
         /// <summary>
-        /// �������� �� ���������� ���������
+        /// Перевірка чи замовлення ще не розпочате
         /// </summary>
-        public bool IsCompleted(DateTime currentDate)
-        {
-     return currentDate.Date > ProductionEndDate.Date;
-        }
+        public bool IsNotStarted(DateTime currentDate)
+{
+ return currentDate.Date < ProductionStartDate.Date;
+  }
 
-        /// <summary>
-      /// �������� �� ���������� �� �� ��������
+     /// <summary>
+   /// Отримати статус замовлення на поточну дату
         /// </summary>
-    public bool IsNotStarted(DateTime currentDate)
-    {
-          return currentDate.Date < ProductionStartDate.Date;
-        }
-
- /// <summary>
-      /// �������� ������ ���������� �� ������� ����
-     /// </summary>
-     public string GetStatus(DateTime currentDate)
-        {
-       if (IsNotStarted(currentDate))
-            return "�����";
-            if (IsInProduction(currentDate))
-        return "� �����";
-       if (IsCompleted(currentDate))
-                return "���������";
-   return "�������";
+        public string GetStatus(DateTime currentDate)
+     {
+        if (IsNotStarted(currentDate))
+      return "Очікує";
+   if (IsInProduction(currentDate))
+    return "В роботі";
+ if (IsCompleted(currentDate))
+      return "Завершено";
+         return "Невідомо";
         }
     }
 }

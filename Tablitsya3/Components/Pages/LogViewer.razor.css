@@ -1,18 +1,18 @@
-﻿/* ��������� ������� */
+/* Контейнер журналу */
 .log-viewer-container {
     max-width: 100%;
     padding: 0;
 }
 
-/* ��������� ������� */
+/* Заголовок сторінки */
 .page-title {
     font-size: 1.5rem;
     font-weight: 600;
 }
 
-/* ���������� ������ */
+/* Статистичні картки */
 .stat-card {
-    min-height: 60px;
+ min-height: 60px;
     transition: transform 0.2s ease;
 }
 
@@ -31,9 +31,9 @@
     font-weight: 700;
 }
 
-/* ������ ��������� */
+/* Панель управління */
 .control-panel .card-body {
- padding: 0.75rem;
+  padding: 0.75rem;
 }
 
 .form-label.small {
@@ -41,7 +41,7 @@
     font-size: 0.8rem;
 }
 
-/* ������ */
+/* Кнопки */
 .btn-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -53,12 +53,12 @@
     font-size: 0.8rem;
 }
 
-/* ������� ���� */
+/* Таблиця логів */
 .log-table {
- font-size: 0.875rem;
+    font-size: 0.875rem;
 }
 
-/* ����������� ��������� ������� */
+/* Темний заголовок таблиці */
 .log-table thead {
     background-color: #212529 !important;
 }
@@ -68,8 +68,8 @@
     padding: 0.5rem;
     white-space: nowrap;
     vertical-align: middle;
-    background-color: #212529 !important;
-    color: #ffffff !important;
+ background-color: #212529 !important;
+  color: #ffffff !important;
     border-color: #32383e !important;
     font-weight: 600;
 }
@@ -81,24 +81,24 @@
     color: #212529;
 }
 
-/* ������� ������� */
+/* Колонки таблиці */
 .col-time {
     width: 100px;
     min-width: 100px;
 }
 
 .col-level {
-    width: 110px;
+width: 110px;
     min-width: 110px;
 }
 
 .col-source {
     width: 120px;
     min-width: 120px;
-  max-width: 150px;
+    max-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
- white-space: nowrap;
+    white-space: nowrap;
 }
 
 .col-message {
@@ -110,16 +110,16 @@
     min-width: 60px;
 }
 
-/* ����������� ���� */
+/* Повідомлення логу */
 .log-message {
-  font-family: 'Courier New', Courier, monospace;
+    font-family: 'Courier New', Courier, monospace;
     font-size: 0.8rem;
     line-height: 1.4;
     white-space: pre-wrap;
     word-break: break-word;
 }
 
-/* ������� ��� ����� ������� */
+/*Ховер на рядки таблиці */
 tbody tr {
     cursor: pointer;
     transition: background-color 0.2s ease;
@@ -129,25 +129,25 @@ tbody tr:hover {
     background-color: rgba(0, 123, 255, 0.05) !important;
 }
 
-/* ���� ��� ����������� ������� */
+/* Блок для розгорнутих деталей */
 .bg-light.border {
     animation: slideDown 0.3s ease;
 }
 
 @keyframes slideDown {
     from {
-        opacity: 0;
+     opacity: 0;
         max-height: 0;
-    }
+  }
     to {
         opacity: 1;
   max-height: 500px;
-    }
+}
 }
 
-/* ���� ��� pre ����� */
+/* Стилі для pre блоків */
 pre {
-    background-color: #f8f9fa;
+  background-color: #f8f9fa;
     border: 1px solid #dee2e6;
     border-radius: 4px;
     padding: 8px;
@@ -159,65 +159,65 @@ pre {
     font-size: 0.7rem;
     font-weight: 600;
     padding: 0.25rem 0.5rem;
-    white-space: nowrap;
+  white-space: nowrap;
 }
 
-/* ����������� ��� ������� ������ */
+/* Адаптивність для великих екранів */
 @media (min-width: 1400px) {
     .btn-group-sm > .btn span {
         display: inline !important;
     }
 }
 
-/* ����������� ��� ������� ������ */
+/* Адаптивність для великих екранів */
 @media (max-width: 1200px) {
     .page-title {
         font-size: 1.25rem;
-}
+    }
     
     .stat-number {
-     font-size: 1.25rem;
-    }
+        font-size: 1.25rem;
+}
     
     .col-time {
         width: 90px;
         min-width: 90px;
- }
+    }
     
     .col-source {
         width: 100px;
-  min-width: 100px;
+        min-width: 100px;
     }
 }
 
-/* ����������� ��� �������� */
+/* Адаптивність для планшетів */
 @media (max-width: 992px) {
     .log-table {
         font-size: 0.8rem;
     }
-  
-  .col-time {
-   width: 85px;
-        min-width: 85px;
+    
+    .col-time {
+        width: 85px;
+min-width: 85px;
     }
     
     .col-level {
-   width: 100px;
-        min-width: 100px;
+        width: 100px;
+     min-width: 100px;
     }
     
     .col-source {
         width: 90px;
-     min-width: 90px;
+        min-width: 90px;
     }
     
     .log-table thead th {
         font-size: 0.75rem;
- padding: 0.4rem;
+        padding: 0.4rem;
     }
 }
 
-/* ����������� ��� �������� */
+/* Адаптивність для мобільних */
 @media (max-width: 768px) {
     .page-title {
         font-size: 1.1rem;
@@ -229,9 +229,9 @@ pre {
     
     .stat-number {
         font-size: 1.1rem;
-}
+  }
     
-    .log-table {
+  .log-table {
         font-size: 0.75rem;
     }
 
@@ -250,8 +250,8 @@ pre {
     }
 }
 
-/* ����������� ��� g-2 */
+/* Адаптивність для g-2 */
 .g-2 {
     --bs-gutter-x: 0.5rem;
---bs-gutter-y: 0.5rem;
+    --bs-gutter-y: 0.5rem;
 }

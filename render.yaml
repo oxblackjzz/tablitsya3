@@ -11,4 +11,16 @@ services:
         value: Production
       - key: ASPNETCORE_URLS
         value: http://+:$PORT
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tablitsya3-db
+          property: connectionString
     healthCheckPath: /
+
+databases:
+  - name: tablitsya3-db
+    databaseName: tablitsya3
+    user: tablitsya3user
+    region: frankfurt
+    plan: free
+    ipAllowList: []

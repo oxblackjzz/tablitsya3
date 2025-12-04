@@ -17,9 +17,9 @@ namespace Tablitsya3.Models
         };
         public DateTime LastUpdated { get; set; } = DateTime.Now;
         public DateTime StartDate { get; set; } = new DateTime(2025, 1, 1);
-        [Obsolete("�������������� WorkshopCapacities ��� ������������ ��������� ������� ����")]
+        [Obsolete("Використовуйте WorkshopCapacities для індивідуальної потужності кожного цеху")]
         public int DailyCapacity { get; set; } = 1000;
         public int ProductionLeadTime { get; set; } = 5;
-        public int DaysBeforeProduction { get; set; } = 1; // �̲����: �� ������������� 1 ���� ������ 2
+        public int DaysBeforeProduction { get; set; } = 1; // Змінено: від рекомендованих 1 днів замість 2
     }
 }

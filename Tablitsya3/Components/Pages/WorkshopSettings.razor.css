@@ -1,8 +1,8 @@
-﻿/* ������� ����������� ����� */
+/* Workshop Settings Styles */
 
-/* ������ ���� */
+/* Card styles */
 .card.h-100 {
-  transition: all 0.3s ease;
+    transition: all 0.3s ease;
 }
 
 .card.h-100:hover {
@@ -10,13 +10,13 @@
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* �������� ������ ��������� */
+/* Active workshop card */
 .card.border-success {
     border-width: 2px !important;
     box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.15);
 }
 
-/* ���� �������� ��������� */
+/* Number input fields */
 input[type="number"].form-control {
     font-size: 1.2rem;
     font-weight: bold;
@@ -27,20 +27,20 @@ input[type="number"].form-control-lg {
     font-size: 1.5rem;
 }
 
-/* ������� ������� */
+/* Help text */
 .text-muted {
     font-size: 0.85rem;
 }
 
-/* Alert ������ ���� */
+/* Alert animation */
 .alert-success {
     animation: fadeIn 0.3s ease;
 }
 
 @keyframes fadeIn {
     from {
-     opacity: 0;
- transform: translateY(-10px);
+        opacity: 0;
+transform: translateY(-10px);
     }
     to {
         opacity: 1;
@@ -48,29 +48,29 @@ input[type="number"].form-control-lg {
     }
 }
 
-/* ������ */
+/* Buttons */
 .btn-lg {
     padding: 0.75rem 1.5rem;
     font-size: 1.1rem;
 }
 
-/* ������������ ������ */
+/* Info card styles */
 .card.border-info {
-    background-color: #f8f9fa;
+  background-color: #f8f9fa;
 }
 
 .card-header.bg-info {
     background-color: #0dcaf0 !important;
 }
 
-/* ����������� */
+/* Responsive styles */
 @media (max-width: 768px) {
-.col-md-4 {
+    .col-md-4 {
         margin-bottom: 1rem;
     }
     
- .btn-lg {
-        width: 100%;
+    .btn-lg {
+ width: 100%;
         margin-bottom: 0.5rem;
     }
 }

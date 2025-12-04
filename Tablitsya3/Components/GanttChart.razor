@@ -353,17 +353,6 @@ data-left-percent="@leftPercent4Str"
        {
        <text>@barLabel</text>
   }
-@if (isLargestSegment) 
-      {
-    @if (isCompleted)
-           {
-    <span class="status-badge completed-badge"></span>
-}
-          else if (isInProgress)
-       {
-   <span class="status-badge progress-badge"></span>
-   }
- }
    </div>
 
       <div class="order-details-tooltip">
@@ -454,12 +443,12 @@ data-left-percent="@leftPercent4Str"
        </div>
     <div class="legend-status-item">
       <div class="legend-status-box in-progress"></div>
-   <span>Виконується зараз <span class="status-badge progress-badge"></span></span>
+   <span>Виконується зараз</span>
     </div>
      <div class="legend-status-item">
       <div class="legend-status-box completed"></div>
-      <span>Виробництво завершено <span class="status-badge completed-badge"></span></span>
-     </div>
+      <span>Виробництво завершено</span>
+   </div>
  </div>
  
    <hr class="my-3"/>
