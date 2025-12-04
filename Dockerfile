@@ -1,7 +1,7 @@
 # Stage 1: Build
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 
-# Force rebuild - version 3.0 - AUTO CREATE SCHEMA WITHOUT MIGRATIONS
+# Force rebuild - version 3.1 - FIX DATABASE SAVE WITH PROPER ENTITY TRACKING
 # Set UTF-8 environment
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \

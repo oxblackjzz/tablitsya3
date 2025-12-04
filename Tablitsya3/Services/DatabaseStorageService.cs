@@ -22,7 +22,7 @@ public DatabaseStorageService(ApplicationDbContext context, ILogger<DatabaseStor
    }
 
         public async Task SaveWorkshopDataAsync(WorkshopData data)
-        {
+    {
       try
     {
                 data.LastUpdated = DateTime.UtcNow;
@@ -46,62 +46,88 @@ public DatabaseStorageService(ApplicationDbContext context, ILogger<DatabaseStor
        entity.ProductionLeadTime = data.ProductionLeadTime;
    entity.DaysBeforeProduction = data.DaysBeforeProduction;
 
-    // Видаляємо старі замовлення та додаємо нові
-          entity.Orders.Clear();
-        foreach (var workshopPair in data.WorkshopOrders)
-                {
-        var workshopNumber = workshopPair.Key;
-        var orders = workshopPair.Value;
-       var dates = data.WorkshopOrderDates.ContainsKey(workshopNumber) 
-           ? data.WorkshopOrderDates[workshopNumber] 
-          : new List<DateTime>();
-        var names = data.WorkshopOrderNames.ContainsKey(workshopNumber) 
-       ? data.WorkshopOrderNames[workshopNumber] 
- : new List<string>();
-
-      for (int i = 0; i < orders.Count; i++)
-{
-            entity.Orders.Add(new OrderEntity
-          {
-           WorkshopNumber = workshopNumber,
-         SquareMeters = orders[i],
-               OrderDate = i < dates.Count ? dates[i] : DateTime.Today,
-   OrderName = i < names.Count ? names[i] : string.Empty
-     });
-          }
-    }
-
-     // Оновлюємо потужності цехів
-     entity.WorkshopCapacities.Clear();
- foreach (var capacity in data.WorkshopCapacities)
-  {
-    entity.WorkshopCapacities.Add(new WorkshopCapacityEntity
+        // Видаляємо ВСІ старі записи через колекції
+ if (entity.Orders.Any())
+        {
+      var ordersToRemove = entity.Orders.ToList();
+            foreach (var order in ordersToRemove)
     {
-        WorkshopNumber = capacity.Key,
-            Capacity = capacity.Value
-   });
+       entity.Orders.Remove(order);
+       }
  }
 
-        // Оновлюємо кастомні дати
-             entity.CustomCompletionDates.Clear();
-     foreach (var customDate in data.CustomCompletionDates)
-       {
-           entity.CustomCompletionDates.Add(new CustomCompletionDateEntity
-     {
-    OrderKey = customDate.Key,
-     CompletionDate = customDate.Value
-            });
-           }
+        if (entity.WorkshopCapacities.Any())
+    {
+   var capacitiesToRemove = entity.WorkshopCapacities.ToList();
+ foreach (var capacity in capacitiesToRemove)
+      {
+   entity.WorkshopCapacities.Remove(capacity);
+  }
+        }
 
-        await _context.SaveChangesAsync();
-           _logger.LogInformation("Workshop data saved to database successfully");
+   if (entity.CustomCompletionDates.Any())
+ {
+    var datesToRemove = entity.CustomCompletionDates.ToList();
+     foreach (var date in datesToRemove)
+     {
+       entity.CustomCompletionDates.Remove(date);
+ }
+   }
+
+  // Додаємо нові замовлення
+  foreach (var workshopPair in data.WorkshopOrders)
+{
+var workshopNumber = workshopPair.Key;
+var orders = workshopPair.Value;
+    var dates = data.WorkshopOrderDates.ContainsKey(workshopNumber) 
+       ? data.WorkshopOrderDates[workshopNumber] 
+    : new List<DateTime>();
+  var names = data.WorkshopOrderNames.ContainsKey(workshopNumber) 
+      ? data.WorkshopOrderNames[workshopNumber] 
+         : new List<string>();
+
+     for (int i = 0; i < orders.Count; i++)
+   {
+    entity.Orders.Add(new OrderEntity
+ {
+    WorkshopNumber = workshopNumber,
+    SquareMeters = orders[i],
+  OrderDate = i < dates.Count ? dates[i] : DateTime.UtcNow.Date,
+     OrderName = i < names.Count ? names[i] : string.Empty
+  });
+   }
+        }
+
+        // Додаємо нові потужності
+        foreach (var capacity in data.WorkshopCapacities)
+      {
+entity.WorkshopCapacities.Add(new WorkshopCapacityEntity
+      {
+  WorkshopNumber = capacity.Key,
+      Capacity = capacity.Value
+   });
+   }
+
+   // Додаємо нові кастомні дати
+        foreach (var customDate in data.CustomCompletionDates)
+{
+    entity.CustomCompletionDates.Add(new CustomCompletionDateEntity
+      {
+ OrderKey = customDate.Key,
+     CompletionDate = customDate.Value
+       });
     }
-   catch (Exception ex)
-            {
-       _logger.LogError(ex, "Error saving workshop data to database");
-          throw;
-         }
+
+        // Зберігаємо всі зміни
+     await _context.SaveChangesAsync();
+        _logger.LogInformation("Workshop data saved to database successfully");
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error saving workshop data to database");
+        throw;
+    }
+}
 
         public async Task<WorkshopData?> LoadWorkshopDataAsync()
         {
