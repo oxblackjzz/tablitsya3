@@ -44,11 +44,11 @@ public DatabaseStorageService(ApplicationDbContext context, ILogger<DatabaseStor
             await _context.SaveChangesAsync(); // Зберігаємо щоб отримати Id
     }
 
-        // Оновлюємо основні дані
-        entity.LastUpdated = data.LastUpdated;
-        entity.StartDate = data.StartDate;
-     entity.ProductionLeadTime = data.ProductionLeadTime;
-entity.DaysBeforeProduction = data.DaysBeforeProduction;
+        // ✅ КОНВЕРТУЄМО ВСІ ДАТИ В UTC
+        entity.LastUpdated = DateTime.SpecifyKind(data.LastUpdated, DateTimeKind.Utc);
+ entity.StartDate = DateTime.SpecifyKind(data.StartDate.Date, DateTimeKind.Utc);
+        entity.ProductionLeadTime = data.ProductionLeadTime;
+    entity.DaysBeforeProduction = data.DaysBeforeProduction;
 
     // ✅ ПАКЕТНЕ ВИДАЛЕННЯ замість циклу
   var oldOrders = entity.Orders.ToList();
@@ -59,9 +59,9 @@ entity.DaysBeforeProduction = data.DaysBeforeProduction;
 
     var oldCapacities = entity.WorkshopCapacities.ToList();
         if (oldCapacities.Any())
-        {
-       _context.WorkshopCapacities.RemoveRange(oldCapacities);
-    }
+      {
+  _context.WorkshopCapacities.RemoveRange(oldCapacities);
+   }
 
         var oldDates = entity.CustomCompletionDates.ToList();
      if (oldDates.Any())
@@ -84,11 +84,15 @@ entity.DaysBeforeProduction = data.DaysBeforeProduction;
 
       for (int i = 0; i < orders.Count; i++)
     {
-       newOrders.Add(new OrderEntity
+     // ✅ КОНВЕРТУЄМО ДАТУ ЗАМОВЛЕННЯ В UTC
+       var orderDate = i < dates.Count ? dates[i] : DateTime.UtcNow.Date;
+         orderDate = DateTime.SpecifyKind(orderDate.Date, DateTimeKind.Utc);
+
+      newOrders.Add(new OrderEntity
           {
         WorkshopNumber = workshopNumber,
     SquareMeters = orders[i],
-  OrderDate = i < dates.Count ? dates[i] : DateTime.UtcNow.Date,
+  OrderDate = orderDate,
        OrderName = i < names.Count ? names[i] : string.Empty
         });
     }
@@ -100,48 +104,54 @@ entity.DaysBeforeProduction = data.DaysBeforeProduction;
       await _context.Orders.AddRangeAsync(newOrders);
         }
 
-   // Додаємо нові потужності
- var newCapacities = data.WorkshopCapacities
+      // Додаємо нові потужності
+        var newCapacities = data.WorkshopCapacities
             .Select(c => new WorkshopCapacityEntity
             {
       WorkshopNumber = c.Key,
     Capacity = c.Value
             })
-          .ToList();
+            .ToList();
         
-        if (newCapacities.Any())
-   {
-      await _context.WorkshopCapacities.AddRangeAsync(newCapacities);
-        }
+    if (newCapacities.Any())
+        {
+    await _context.WorkshopCapacities.AddRangeAsync(newCapacities);
+      }
 
         // Додаємо нові кастомні дати
         var newCustomDates = data.CustomCompletionDates
-     .Select(cd => new CustomCompletionDateEntity
-     {
-       OrderKey = cd.Key,
-        CompletionDate = cd.Value
-          })
-      .ToList();
+          .Select(cd =>
+   {
+       // ✅ КОНВЕРТУЄМО КАСТОМНУ ДАТУ В UTC
+      var completionDate = DateTime.SpecifyKind(cd.Value.Date, DateTimeKind.Utc);
+         
+         return new CustomCompletionDateEntity
+           {
+            OrderKey = cd.Key,
+       CompletionDate = completionDate
+       };
+   })
+            .ToList();
         
-        if (newCustomDates.Any())
-    {
-            await _context.CustomCompletionDates.AddRangeAsync(newCustomDates);
-   }
+     if (newCustomDates.Any())
+     {
+  await _context.CustomCompletionDates.AddRangeAsync(newCustomDates);
+        }
 
         // Зберігаємо всі зміни
         await _context.SaveChangesAsync();
-        
-// ✅ COMMIT ТРАНЗАКЦІЇ - все пройшло успішно
+  
+        // ✅ COMMIT ТРАНЗАКЦІЇ - все пройшло успішно
         await transaction.CommitAsync();
-        
+    
         _logger.LogInformation($"✅ Workshop data saved: {newOrders.Count} orders, {newCapacities.Count} capacities");
     }
     catch (Exception ex)
     {
-     // ✅ ROLLBACK - відкат всіх змін при помилці
+   // ✅ ROLLBACK - відкат всіх змін при помилці
         await transaction.RollbackAsync();
-        _logger.LogError(ex, "❌ Error saving workshop data - transaction rolled back");
-    throw;
+      _logger.LogError(ex, "❌ Error saving workshop data - transaction rolled back");
+        throw;
     }
 }
         public async Task<WorkshopData?> LoadWorkshopDataAsync()
@@ -160,49 +170,55 @@ entity.DaysBeforeProduction = data.DaysBeforeProduction;
    return null;
      }
 
-        var data = new WorkshopData
-          {
-          LastUpdated = entity.LastUpdated,
-      StartDate = entity.StartDate,
+        // ✅ КОНВЕРТУЄМО UTC НАЗАД У LOCAL
+   var data = new WorkshopData
+        {
+     LastUpdated = entity.LastUpdated.ToLocalTime(),
+       StartDate = entity.StartDate.ToLocalTime().Date,
         ProductionLeadTime = entity.ProductionLeadTime,
-    DaysBeforeProduction = entity.DaysBeforeProduction
-     };
+            DaysBeforeProduction = entity.DaysBeforeProduction
+      };
 
-     // Конвертуємо замовлення
-     var ordersByWorkshop = entity.Orders
-      .GroupBy(o => o.WorkshopNumber)
+        // Конвертуємо замовлення
+        var ordersByWorkshop = entity.Orders
+    .GroupBy(o => o.WorkshopNumber)
       .ToDictionary(g => g.Key, g => g.OrderBy(o => o.OrderDate).ToList());
 
-             foreach (var workshopPair in ordersByWorkshop)
-        {
+     foreach (var workshopPair in ordersByWorkshop)
+     {
     data.WorkshopOrders[workshopPair.Key] = workshopPair.Value.Select(o => o.SquareMeters).ToList();
-  data.WorkshopOrderDates[workshopPair.Key] = workshopPair.Value.Select(o => o.OrderDate).ToList();
+    
+      // ✅ КОНВЕРТУЄМО ДАТИ ЗАМОВЛЕНЬ З UTC В LOCAL
+  data.WorkshopOrderDates[workshopPair.Key] = workshopPair.Value
+       .Select(o => o.OrderDate.ToLocalTime().Date)
+         .ToList();
+      
    data.WorkshopOrderNames[workshopPair.Key] = workshopPair.Value.Select(o => o.OrderName).ToList();
-       }
-
-     // Конвертуємо потужності
-       foreach (var capacity in entity.WorkshopCapacities)
-   {
-                data.WorkshopCapacities[capacity.WorkshopNumber] = capacity.Capacity;
-     }
-
-    // Конвертуємо кастомні дати
-       foreach (var customDate in entity.CustomCompletionDates)
-                {
-           data.CustomCompletionDates[customDate.OrderKey] = customDate.CompletionDate;
-      }
-
-        _logger.LogInformation($"Workshop data loaded from database. Orders count: {entity.Orders.Count}");
-            return data;
-            }
-    catch (Exception ex)
-            {
-    _logger.LogError(ex, "Error loading workshop data from database");
-     return null;
-            }
         }
 
-      public async Task ClearAllDataAsync()
+        // Конвертуємо потужності
+    foreach (var capacity in entity.WorkshopCapacities)
+        {
+    data.WorkshopCapacities[capacity.WorkshopNumber] = capacity.Capacity;
+        }
+
+        // Конвертуємо кастомні дати
+    foreach (var customDate in entity.CustomCompletionDates)
+  {
+      // ✅ КОНВЕРТУЄМО КАСТОМНІ ДАТИ З UTC В LOCAL
+      data.CustomCompletionDates[customDate.OrderKey] = customDate.CompletionDate.ToLocalTime().Date;
+  }
+
+        _logger.LogInformation($"Workshop data loaded from database. Orders count: {entity.Orders.Count}");
+ return data;
+ }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error loading workshop data from database");
+  return null;
+    }
+}
+        public async Task ClearAllDataAsync()
     {
    try
             {
