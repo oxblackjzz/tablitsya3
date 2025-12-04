@@ -62,16 +62,21 @@ namespace Tablitsya3.Services
       workshopData.WorkshopCapacities[3] = 1000;
       workshopData.WorkshopCapacities[6] = 1000;
 
+          // Initialize order collections for Workshop 1
+ workshopData.WorkshopOrders[1] = new List<double>();
+        workshopData.WorkshopOrderDates[1] = new List<DateTime>();
+          workshopData.WorkshopOrderNames[1] = new List<string>();
+
        // Add Workshop 1 orders (from backup)
-                var workshop1Orders = new List<(int sqm, DateTime date, string name)>
+          var workshop1Orders = new List<(int sqm, DateTime date, string name)>
    {
     (1241, new DateTime(2025, 10, 14), "14.10"),
-           (1184, new DateTime(2025, 10, 15), "15.10"),
-      (1386, new DateTime(2025, 10, 16), "16.10"),
-           (1105, new DateTime(2025, 10, 17), "17.10"),
-          (1724, new DateTime(2025, 10, 20), "20.10"),
+      (1184, new DateTime(2025, 10, 15), "15.10"),
+   (1386, new DateTime(2025, 10, 16), "16.10"),
+(1105, new DateTime(2025, 10, 17), "17.10"),
+      (1724, new DateTime(2025, 10, 20), "20.10"),
      (1159, new DateTime(2025, 10, 21), "21.10"),
-           (746, new DateTime(2025, 10, 22), "22.10"),
+     (746, new DateTime(2025, 10, 22), "22.10"),
    (897, new DateTime(2025, 10, 23), "23.10"),
    (951, new DateTime(2025, 10, 24), "24.10")
               };
