@@ -1,7 +1,7 @@
 # Stage 1: Build
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 
-# Force rebuild - version 2.8 - SUPPRESS PENDING MODEL WARNING
+# Force rebuild - version 2.9 - ADD MIGRATION FILES
 # Set UTF-8 environment
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
@@ -27,7 +27,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0
 
 # Set UTF-8 environment
 ENV LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8
+ LC_ALL=C.UTF-8
 
 WORKDIR /app
 
