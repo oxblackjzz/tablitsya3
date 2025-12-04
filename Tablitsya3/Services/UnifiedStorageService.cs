@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Tablitsya3.Models;
 
@@ -10,97 +11,112 @@ namespace Tablitsya3.Services
     /// </summary>
     public class UnifiedStorageService
     {
-   private readonly DatabaseStorageService? _dbStorage;
-   private readonly DataStorageService? _fileStorage;
-private readonly ILogger<UnifiedStorageService> _logger;
+        private readonly IServiceScopeFactory? _scopeFactory;
+        private readonly DataStorageService? _fileStorage;
+        private readonly ILogger<UnifiedStorageService> _logger;
+        private readonly bool _useDatabase;
 
-   public UnifiedStorageService(
-      IServiceProvider serviceProvider,
+        public UnifiedStorageService(
+          IServiceProvider serviceProvider,
             ILogger<UnifiedStorageService> logger)
-        {
- _logger = logger;
-       
-   // Пробуємо отримати DatabaseStorageService
-       _dbStorage = serviceProvider.GetService(typeof(DatabaseStorageService)) as DatabaseStorageService;
+    {
+       _logger = logger;
     
-            // Fallback до DataStorageService
-    if (_dbStorage == null)
- {
-    _fileStorage = serviceProvider.GetService(typeof(DataStorageService)) as DataStorageService;
-      }
+            // Перевіряємо чи зареєстрований DatabaseStorageService
+            using (var scope = serviceProvider.CreateScope())
+{
+      var dbStorage = scope.ServiceProvider.GetService<DatabaseStorageService>();
+            _useDatabase = dbStorage != null;
+            }
 
-   var storageType = _dbStorage != null ? "DATABASE" : "FILE";
-            _logger.LogInformation($"UnifiedStorageService initialized with {storageType} storage");
+    if (_useDatabase)
+{
+_scopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
+             _logger.LogInformation("UnifiedStorageService initialized with DATABASE storage");
+            }
+            else
+   {
+          _fileStorage = serviceProvider.GetService<DataStorageService>();
+    _logger.LogInformation("UnifiedStorageService initialized with FILE storage");
+            }
         }
 
-   public async Task SaveWorkshopDataAsync(WorkshopData data)
+        public async Task SaveWorkshopDataAsync(WorkshopData data)
         {
-       if (_dbStorage != null)
+  if (_useDatabase && _scopeFactory != null)
  {
        _logger.LogDebug("Saving to database...");
-    await _dbStorage.SaveWorkshopDataAsync(data);
+       using var scope = _scopeFactory.CreateScope();
+     var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
+          await dbStorage.SaveWorkshopDataAsync(data);
     }
             else if (_fileStorage != null)
-   {
-      _logger.LogDebug("Saving to file...");
-              await _fileStorage.SaveWorkshopDataAsync(data);
-     }
-         else
+      {
+   _logger.LogDebug("Saving to file...");
+   await _fileStorage.SaveWorkshopDataAsync(data);
+            }
+       else
             {
-                throw new InvalidOperationException("No storage service available");
-}
+          throw new InvalidOperationException("No storage service available");
  }
+        }
 
         public async Task<WorkshopData?> LoadWorkshopDataAsync()
         {
-            if (_dbStorage != null)
- {
-     _logger.LogDebug("Loading from database...");
-         return await _dbStorage.LoadWorkshopDataAsync();
-      }
-  else if (_fileStorage != null)
-  {
-        _logger.LogDebug("Loading from file...");
-    return await _fileStorage.LoadWorkshopDataAsync();
+            if (_useDatabase && _scopeFactory != null)
+            {
+ _logger.LogDebug("Loading from database...");
+                using var scope = _scopeFactory.CreateScope();
+        var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
+    return await dbStorage.LoadWorkshopDataAsync();
+  }
+            else if (_fileStorage != null)
+   {
+            _logger.LogDebug("Loading from file...");
+       return await _fileStorage.LoadWorkshopDataAsync();
      }
 
-   return null;
-      }
+        return null;
+        }
 
         public async Task ClearAllDataAsync()
         {
- if (_dbStorage != null)
-  {
-       await _dbStorage.ClearAllDataAsync();
-            }
-else if (_fileStorage != null)
-     {
-       await _fileStorage.ClearAllDataAsync();
-}
-   }
+            if (_useDatabase && _scopeFactory != null)
+            {
+                using var scope = _scopeFactory.CreateScope();
+       var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
+      await dbStorage.ClearAllDataAsync();
+      }
+            else if (_fileStorage != null)
+    {
+   await _fileStorage.ClearAllDataAsync();
+        }
+        }
 
         public async Task<bool> HasSavedDataAsync()
         {
-     if (_dbStorage != null)
-     {
-  return await _dbStorage.HasSavedDataAsync();
-}
-            else if (_fileStorage != null)
-{
-          return _fileStorage.HasSavedData();
+    if (_useDatabase && _scopeFactory != null)
+          {
+  using var scope = _scopeFactory.CreateScope();
+        var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
+  return await dbStorage.HasSavedDataAsync();
+         }
+       else if (_fileStorage != null)
+            {
+   return _fileStorage.HasSavedData();
   }
 
-  return false;
+            return false;
         }
 
         public bool IsUsingDatabase()
         {
-       return _dbStorage != null;
-        }
+      return _useDatabase;
+    }
 
         public string GetStorageType()
-  {
-            return _dbStorage != null ? "PostgreSQL Database" : "JSON File";
+        {
+            return _useDatabase ? "PostgreSQL Database" : "JSON File";
         }
     }
 }

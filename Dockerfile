@@ -1,7 +1,7 @@
 # Stage 1: Build
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 
-# Force rebuild - version 2.5 - DATABASE URL FIX
+# Force rebuild - version 2.6 - FIX SCOPED SERVICE IN SINGLETON
 # Set UTF-8 environment
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
