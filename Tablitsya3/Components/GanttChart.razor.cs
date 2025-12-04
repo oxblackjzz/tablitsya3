@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Tablitsya3.Models;
 using Tablitsya3.Services;
+using System.Collections.Concurrent;
 
 namespace Tablitsya3.Components;
 
@@ -15,7 +16,7 @@ public partial class GanttChart
     [Parameter]
     public int DailyCapacity { get; set; } = 1000;
 
-    [Parameter]
+  [Parameter]
     public int WorkshopNumber { get; set; } = 1;
 
     [Parameter]
@@ -30,19 +31,53 @@ public partial class GanttChart
     [Inject]
     protected WorkingDaysService WorkingDays { get; set; } = default!;
 
+    // ✅ КЕШУВАННЯ - зберігаємо розраховані позиції
+    private static ConcurrentDictionary<string, List<OrderPosition>> _globalPositionCache = new();
+    private string _currentCacheKey = string.Empty;
     private List<OrderPosition> cachedOrderPositions = new();
     private DateTime? cachedPositionsDate = null;
+
+    // Метод для генерації ключа кешу
+    private string GenerateCacheKey(List<Order> orders, DateTime baseDate)
+    {
+        var ordersHash = string.Join(",", orders.Select(o => $"{o.Day}:{o.SquareMeters}"));
+        return $"W{WorkshopNumber}_{baseDate:yyyyMMdd}_{ordersHash.GetHashCode()}";
+    }
+
+    // Метод для отримання з кешу або розрахунку
+  private List<OrderPosition> GetOrCalculatePositions(List<Order> allOrders, DateTime baseDate, List<DateTime> workingDays)
+    {
+        var cacheKey = GenerateCacheKey(allOrders, baseDate);
+        
+   if (_globalPositionCache.TryGetValue(cacheKey, out var cached))
+        {
+          Console.WriteLine($"[GanttChart W#{WorkshopNumber}] ✅ Using cached positions ({cached.Count} items)");
+            return cached;
+        }
+
+        Console.WriteLine($"[GanttChart W#{WorkshopNumber}] 🔄 Calculating new positions...");
+        var positions = CalculateOrderPositions(allOrders, baseDate, workingDays);
+        
+        // Зберігаємо в кеш (обмежуємо розмір кешу)
+        if (_globalPositionCache.Count > 100)
+        {
+    _globalPositionCache.Clear();
+        }
+        
+        _globalPositionCache[cacheKey] = positions;
+        return positions;
+    }
     
     public enum ViewMode
 {
         Pending,     // ����������
         InProduction,  // � ����� (�����!)
         All,  // ��
-        CustomDate// �������������� �����
-    }
+     CustomDate// �������������� �����
+  }
  
     private ViewMode currentViewMode = ViewMode.Pending;
-    private DateTime? customFromDate = null;
+ private DateTime? customFromDate = null;
     private DateTime? customToDate = null;
     
     protected void SetViewMode(ViewMode mode)

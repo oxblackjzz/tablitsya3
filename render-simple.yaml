@@ -1,16 +1,15 @@
 services:
   - type: web
     name: tablitsya3
-  runtime: docker
+    runtime: docker
     region: frankfurt
     plan: free
     branch: master
     dockerfilePath: ./Dockerfile
     dockerContext: .
     envVars:
- - key: ASPNETCORE_ENVIRONMENT
+      - key: ASPNETCORE_ENVIRONMENT
         value: Production
       - key: ASPNETCORE_URLS
         value: http://+:$PORT
-      # DATABASE_URL буде додано вручну через Dashboard
     healthCheckPath: /

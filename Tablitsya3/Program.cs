@@ -1,6 +1,7 @@
 ﻿using Tablitsya3.Components;
 using Tablitsya3.Services;
 using Tablitsya3.Data;
+using Tablitsya3.Middleware;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,7 +18,7 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
 {
     Console.WriteLine($"🔍 DATABASE_URL length: {connectionString.Length}");
  Console.WriteLine($"🔍 First 20 chars: {connectionString.Substring(0, Math.Min(20, connectionString.Length))}...");
-    
+
  try
   {
       // Check if it's already in Npgsql format (Host=...)
@@ -26,7 +27,7 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
          Console.WriteLine("✅ Connection string is already in Npgsql format");
     }
         // Якщо це Render/Heroku формат (postgres:// або postgresql://)
-        else if (connectionString.StartsWith("postgres://") || connectionString.StartsWith("postgresql://"))
+      else if (connectionString.StartsWith("postgres://") || connectionString.StartsWith("postgresql://"))
  {
       var uri = new Uri(connectionString);
      var host = uri.Host;
@@ -35,7 +36,7 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
     string username = "";
     string password = "";
  
-            if (!string.IsNullOrEmpty(uri.UserInfo))
+   if (!string.IsNullOrEmpty(uri.UserInfo))
       {
    var userInfoParts = uri.UserInfo.Split(':');
          username = userInfoParts[0];
@@ -46,16 +47,16 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
 
     Console.WriteLine($"🔍 Parsed - Host: {host}, Port: {port}, Database: {database}, User: {username}");
 
-          connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+   connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
          Console.WriteLine($"✅ Converted Postgres URL to Npgsql format");
-        }
+  }
     else
      {
     // Unknown format
    Console.WriteLine($"⚠️ Unknown connection string format. Expected 'postgres://' or 'Host='");
     Console.WriteLine($"⚠️ Please use the 'Internal Database URL' from Render dashboard");
         connectionString = null;
-      }
+  }
 
      if (!string.IsNullOrEmpty(connectionString))
   {
@@ -63,9 +64,9 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
       {
  options.UseNpgsql(connectionString);
      // Suppress pending model changes warning in production
-    options.ConfigureWarnings(warnings => 
+ options.ConfigureWarnings(warnings => 
   warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
-       });
+    });
   
      builder.Services.AddScoped<DatabaseStorageService>();
      builder.Logging.AddConsole();
@@ -79,7 +80,7 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
      Console.WriteLine($"❌ Error parsing DATABASE_URL: {ex.Message}");
      Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
     Console.WriteLine("⚠️ Falling back to file storage");
-        connectionString = null;
+     connectionString = null;
     }
 }
 
@@ -94,6 +95,10 @@ if (!isDatabaseConfigured)
 // Додаємо універсальний сервіс
 builder.Services.AddSingleton<UnifiedStorageService>();
 
+// ✅ ГЛОБАЛЬНА ОБРОБКА ПОМИЛОК
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -105,6 +110,9 @@ builder.Services.AddSingleton<DataSeedService>();
 
 var app = builder.Build();
 
+// ✅ ВИКОРИСТАННЯ EXCEPTION HANDLER
+app.UseExceptionHandler();
+
 // Migrate database and seed data
 if (isDatabaseConfigured && !string.IsNullOrEmpty(connectionString))
 {
@@ -115,7 +123,7 @@ if (isDatabaseConfigured && !string.IsNullOrEmpty(connectionString))
 var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
  
  Console.WriteLine("🔄 Creating database schema if not exists...");
-          // EnsureCreated автоматично створить всі таблиці якщо їх немає
+      // EnsureCreated автоматично створить всі таблиці якщо їх немає
      await dbContext.Database.EnsureCreatedAsync();
    Console.WriteLine("✅ Database schema ready");
        
@@ -123,7 +131,7 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
    var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
  
    // Перевіряємо чи є дані в БД
-         if (!await dbStorage.HasSavedDataAsync())
+      if (!await dbStorage.HasSavedDataAsync())
    {
   Console.WriteLine("🌱 Seeding initial data...");
     await seedService.SeedInitialDataIfEmpty();
@@ -132,7 +140,7 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
  else
   {
  Console.WriteLine("ℹ️ Database already contains data, skipping seed");
-    }
+ }
   }
    catch (Exception ex)
  {
@@ -140,7 +148,7 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
  logger.LogError(ex, "❌ Error during database setup or seeding");
       Console.WriteLine($"❌ Database error: {ex.Message}");
    Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
-        }
+   }
     }
 }
 else
@@ -150,7 +158,7 @@ else
     using (var scope = app.Services.CreateScope())
     {
  var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
-        await seedService.SeedInitialDataIfEmpty();
+    await seedService.SeedInitialDataIfEmpty();
     }
 }
 
