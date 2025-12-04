@@ -114,11 +114,12 @@ if (isDatabaseConfigured && !string.IsNullOrEmpty(connectionString))
      {
 var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
  
-          Console.WriteLine("🔄 Running database migrations...");
-     await dbContext.Database.MigrateAsync();
-   Console.WriteLine("✅ Database migrations completed");
-          
-     var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
+ Console.WriteLine("🔄 Creating database schema if not exists...");
+          // EnsureCreated автоматично створить всі таблиці якщо їх немає
+     await dbContext.Database.EnsureCreatedAsync();
+   Console.WriteLine("✅ Database schema ready");
+       
+   var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
    var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
  
    // Перевіряємо чи є дані в БД
@@ -127,7 +128,7 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
   Console.WriteLine("🌱 Seeding initial data...");
     await seedService.SeedInitialDataIfEmpty();
     Console.WriteLine("✅ Initial data seeded");
-      }
+    }
  else
   {
  Console.WriteLine("ℹ️ Database already contains data, skipping seed");
@@ -136,7 +137,7 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
    catch (Exception ex)
  {
  var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
- logger.LogError(ex, "❌ Error during database migration or seeding");
+ logger.LogError(ex, "❌ Error during database setup or seeding");
       Console.WriteLine($"❌ Database error: {ex.Message}");
    Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
         }
@@ -148,7 +149,7 @@ else
   Console.WriteLine("🌱 Using file storage mode, seeding initial data if needed...");
     using (var scope = app.Services.CreateScope())
     {
-      var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
+ var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
         await seedService.SeedInitialDataIfEmpty();
     }
 }
