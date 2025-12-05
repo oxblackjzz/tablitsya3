@@ -27,156 +27,143 @@ public DatabaseStorageService(ApplicationDbContext context, ILogger<DatabaseStor
     await using var transaction = await _context.Database.BeginTransactionAsync();
     
     try
-    {
+ {
         data.LastUpdated = DateTime.UtcNow;
 
-  // Отримуємо або створюємо головний запис
+        // Отримуємо або створюємо головний запис
    var entity = await _context.WorkshopData
-     .Include(w => w.Orders)
-.Include(w => w.WorkshopCapacities)
-      .Include(w => w.CustomCompletionDates)
-   .AsTracking() // ✅ Відслідковуємо зміни
-  .FirstOrDefaultAsync();
+            .Include(w => w.Orders)
+        .Include(w => w.WorkshopCapacities)
+  .Include(w => w.CustomCompletionDates)
+            .AsTracking() // ✅ Відслідковуємо зміни
+         .FirstOrDefaultAsync();
 
-        if (entity == null)
-   {
-     entity = new WorkshopDataEntity();
-  _context.WorkshopData.Add(entity);
-     
- // ✅ ЗБЕРІГАЄМО ОДРАЗУ ЩОБ ОТРИМАТИ ID
- await _context.SaveChangesAsync();
-    _logger.LogInformation("Created new workshop data entity with ID: {Id}", entity.Id);
-   }
-
-    // ✅ КОНВЕРТУЄМО ВСІ ДАТИ В UTC
-      entity.LastUpdated = DateTime.SpecifyKind(data.LastUpdated, DateTimeKind.Utc);
-  entity.StartDate = DateTime.SpecifyKind(data.StartDate.Date, DateTimeKind.Utc);
-      entity.ProductionLeadTime = data.ProductionLeadTime;
-     entity.DaysBeforeProduction = data.DaysBeforeProduction;
-
-        // ✅ ПЕРЕВІРЯЄМО ЧИ Є СТАРІ ДАНІ ПЕРЕД ВИДАЛЕННЯМ
-        bool hasOldData = entity.Orders.Any() || entity.WorkshopCapacities.Any() || entity.CustomCompletionDates.Any();
-
-    // ✅ ПАКЕТНЕ ВИДАЛЕННЯ - Крок 1: Видаляємо старі дані
- if (entity.Orders.Any())
-     {
-         _context.Orders.RemoveRange(entity.Orders.ToList());
- }
-
-        if (entity.WorkshopCapacities.Any())
+    if (entity == null)
         {
-      _context.WorkshopCapacities.RemoveRange(entity.WorkshopCapacities.ToList());
+ entity = new WorkshopDataEntity();
+   _context.WorkshopData.Add(entity);
+   
+            // ✅ ЗБЕРІГАЄМО ОДРАЗУ ЩОБ ОТРИМАТИ ID
+     await _context.SaveChangesAsync();
+            _logger.LogInformation("Created new workshop data entity with ID: {Id}", entity.Id);
         }
 
-    if (entity.CustomCompletionDates.Any())
-        {
-   _context.CustomCompletionDates.RemoveRange(entity.CustomCompletionDates.ToList());
-    }
+        // ✅ КОНВЕРТУЄМО ВСІ ДАТИ В UTC
+        entity.LastUpdated = DateTime.SpecifyKind(data.LastUpdated, DateTimeKind.Utc);
+        entity.StartDate = DateTime.SpecifyKind(data.StartDate.Date, DateTimeKind.Utc);
+        entity.ProductionLeadTime = data.ProductionLeadTime;
+        entity.DaysBeforeProduction = data.DaysBeforeProduction;
 
-        // ✅ ЗБЕРІГАЄМО ВИДАЛЕННЯ ТІЛЬКИ ЯКЩО БУЛИ СТАРІ ДАНІ
- if (hasOldData)
-        {
-  await _context.SaveChangesAsync();
-      _logger.LogInformation("Deleted old data before adding new");
-   
-  // ✅ ОЧИЩАЄМО КОЛЕКЦІЇ ПІСЛЯ ЗБЕРЕЖЕННЯ
-  entity.Orders.Clear();
-    entity.WorkshopCapacities.Clear();
-  entity.CustomCompletionDates.Clear();
-     }
+        // ✅ ВИДАЛЯЄМО ВСЕ ЧЕРЕЗ RAW SQL - НЕ ЧЕКАЮЧИ НА EF TRACKING!
+   await _context.Database.ExecuteSqlRawAsync(
+         "DELETE FROM orders WHERE \"WorkshopDataEntityId\" = {0}", 
+            entity.Id);
+        await _context.Database.ExecuteSqlRawAsync(
+    "DELETE FROM workshop_capacities WHERE \"WorkshopDataEntityId\" = {0}", 
+   entity.Id);
+        await _context.Database.ExecuteSqlRawAsync(
+   "DELETE FROM custom_completion_dates WHERE \"WorkshopDataEntityId\" = {0}", 
+  entity.Id);
+        
+  _logger.LogInformation("✅ Deleted all old data via SQL for entity ID: {Id}", entity.Id);
 
-    // Додаємо нові замовлення
+ // ✅ ОЧИЩАЄМО КОЛЕКЦІЇ В TRACKING
+   entity.Orders.Clear();
+      entity.WorkshopCapacities.Clear();
+        entity.CustomCompletionDates.Clear();
+
+        // Додаємо нові замовлення
         var newOrders = new List<OrderEntity>();
         foreach (var workshopPair in data.WorkshopOrders)
+      {
+            var workshopNumber = workshopPair.Key;
+        var orders = workshopPair.Value;
+            var dates = data.WorkshopOrderDates.ContainsKey(workshopNumber) 
+   ? data.WorkshopOrderDates[workshopNumber] 
+   : new List<DateTime>();
+            var names = data.WorkshopOrderNames.ContainsKey(workshopNumber) 
+  ? data.WorkshopOrderNames[workshopNumber] 
+     : new List<string>();
+
+     for (int i = 0; i < orders.Count; i++)
      {
-   var workshopNumber = workshopPair.Key;
-var orders = workshopPair.Value;
-  var dates = data.WorkshopOrderDates.ContainsKey(workshopNumber) 
-  ? data.WorkshopOrderDates[workshopNumber] 
-  : new List<DateTime>();
-var names = data.WorkshopOrderNames.ContainsKey(workshopNumber) 
-      ? data.WorkshopOrderNames[workshopNumber] 
-       : new List<string>();
+                // ✅ КОНВЕРТУЄМО ДАТУ ЗАМОВЛЕННЯ В UTC
+         var orderDate = i < dates.Count ? dates[i] : DateTime.UtcNow.Date;
+                orderDate = DateTime.SpecifyKind(orderDate.Date, DateTimeKind.Utc);
 
-         for (int i = 0; i < orders.Count; i++)
-       {
-     // ✅ КОНВЕРТУЄМО ДАТУ ЗАМОВЛЕННЯ В UTC
-   var orderDate = i < dates.Count ? dates[i] : DateTime.UtcNow.Date;
-      orderDate = DateTime.SpecifyKind(orderDate.Date, DateTimeKind.Utc);
-
-      newOrders.Add(new OrderEntity
-        {
-     WorkshopNumber = workshopNumber,
-      SquareMeters = orders[i],
-   OrderDate = orderDate,
- OrderName = i < names.Count ? names[i] : string.Empty
-  });
+  newOrders.Add(new OrderEntity
+    {
+         WorkshopNumber = workshopNumber,
+                  SquareMeters = orders[i],
+ OrderDate = orderDate,
+          OrderName = i < names.Count ? names[i] : string.Empty
+            });
     }
         }
 
-   // ✅ ДОДАЄМО НОВІ ЗАМОВЛЕННЯ
+        // ✅ ДОДАЄМО НОВІ ЗАМОВЛЕННЯ
         if (newOrders.Any())
-        {
-  foreach (var order in newOrders)
       {
-     entity.Orders.Add(order);
-   }
-  }
+       foreach (var order in newOrders)
+            {
+                entity.Orders.Add(order);
+       }
+        }
 
-        // Додаємо нові потужності
+    // Додаємо нові потужності
         var newCapacities = data.WorkshopCapacities
- .Select(c => new WorkshopCapacityEntity
- {
-   WorkshopNumber = c.Key,
-       Capacity = c.Value
-  })
-     .ToList();
-     
+            .Select(c => new WorkshopCapacityEntity
+            {
+      WorkshopNumber = c.Key,
+   Capacity = c.Value
+      })
+   .ToList();
+        
         if (newCapacities.Any())
         {
-foreach (var capacity in newCapacities)
-   {
-      entity.WorkshopCapacities.Add(capacity);
-     }
-        }
-
-    // Додаємо нові кастомні дати
- var newCustomDates = data.CustomCompletionDates
-    .Select(cd =>
-        {
-       // ✅ КОНВЕРТУЄМО КАСТОМНУ ДАТУ В UTC
-    var completionDate = DateTime.SpecifyKind(cd.Value.Date, DateTimeKind.Utc);
- 
-   return new CustomCompletionDateEntity
+  foreach (var capacity in newCapacities)
       {
-    OrderKey = cd.Key,
-   CompletionDate = completionDate
-    };
-       })
- .ToList();
-      
-  if (newCustomDates.Any())
+       entity.WorkshopCapacities.Add(capacity);
+       }
+    }
+
+  // Додаємо нові кастомні дати
+  var newCustomDates = data.CustomCompletionDates
+            .Select(cd =>
+         {
+       // ✅ КОНВЕРТУЄМО КАСТОМНУ ДАТУ В UTC
+           var completionDate = DateTime.SpecifyKind(cd.Value.Date, DateTimeKind.Utc);
+                
+         return new CustomCompletionDateEntity
+  {
+        OrderKey = cd.Key,
+ CompletionDate = completionDate
+     };
+ })
+        .ToList();
+        
+   if (newCustomDates.Any())
         {
     foreach (var customDate in newCustomDates)
-        {
-  entity.CustomCompletionDates.Add(customDate);
-  }
+            {
+    entity.CustomCompletionDates.Add(customDate);
     }
+        }
 
-     // ✅ ЗБЕРІГАЄМО НОВІ ДАНІ
-        await _context.SaveChangesAsync();
-  
-  // ✅ COMMIT ТРАНЗАКЦІЇ - все пройшло успішно
-  await transaction.CommitAsync();
+      // ✅ ЗБЕРІГАЄМО НОВІ ДАНІ
+  await _context.SaveChangesAsync();
     
- _logger.LogInformation($"✅ Workshop data saved: {newOrders.Count} orders, {newCapacities.Count} capacities");
-    }
+        // ✅ COMMIT ТРАНЗАКЦІЇ - все пройшло успішно
+      await transaction.CommitAsync();
+        
+        _logger.LogInformation($"✅ Workshop data saved: {newOrders.Count} orders, {newCapacities.Count} capacities");
+ }
     catch (Exception ex)
     {
- // ✅ ROLLBACK - відкат всіх змін при помилці
- await transaction.RollbackAsync();
-  _logger.LogError(ex, "❌ Error saving workshop data - transaction rolled back");
-      throw;
+        // ✅ ROLLBACK - відкат всіх змін при помилці
+    await transaction.RollbackAsync();
+        _logger.LogError(ex, "❌ Error saving workshop data - transaction rolled back");
+        throw;
     }
 }
         public async Task<WorkshopData?> LoadWorkshopDataAsync()
