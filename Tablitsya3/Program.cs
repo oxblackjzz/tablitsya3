@@ -119,18 +119,42 @@ if (isDatabaseConfigured && !string.IsNullOrEmpty(connectionString))
     using (var scope = app.Services.CreateScope())
     {
  try
-     {
+{
 var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
  
  Console.WriteLine("🔄 Creating database schema if not exists...");
-      // EnsureCreated автоматично створить всі таблиці якщо їх немає
+  
+      // ✅ СПОЧАТКУ ВИДАЛЯЄМО ВСЮ СТАРУ СХЕМУ (якщо вона є з проблемами)
+      try
+      {
+       Console.WriteLine("🧹 Cleaning old database schema...");
+    
+  // Видаляємо таблиці в правильному порядку (залежності)
+ await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS custom_completion_dates CASCADE;");
+          await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS workshop_capacities CASCADE;");
+       await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS orders CASCADE;");
+          await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS workshop_data CASCADE;");
+          
+   // Видаляємо індекси (якщо залишились)
+    await dbContext.Database.ExecuteSqlRawAsync("DROP INDEX IF EXISTS \"IX_workshop_capacities_workshop_number\";");
+          await dbContext.Database.ExecuteSqlRawAsync("DROP INDEX IF EXISTS \"IX_custom_completion_dates_order_key\";");
+    await dbContext.Database.ExecuteSqlRawAsync("DROP INDEX IF EXISTS \"IX_orders_workshop_number_order_date\";");
+     
+      Console.WriteLine("✅ Old schema cleaned successfully");
+      }
+      catch (Exception cleanEx)
+      {
+     Console.WriteLine($"⚠️ Note: Could not clean old schema (might not exist): {cleanEx.Message}");
+      }
+    
+      // ТЕПЕР створюємо чисту схему
      await dbContext.Database.EnsureCreatedAsync();
    Console.WriteLine("✅ Database schema ready");
   
-      // ✅ ВИДАЛЯЄМО ПРОБЛЕМНИЙ UNIQUE CONSTRAINT ОДРАЗУ ПІСЛЯ СТВОРЕННЯ СХЕМИ
+      // ✅ ДОДАТКОВА ПЕРЕВІРКА: видаляємо constraint якщо він все ще є
    try
   {
-      Console.WriteLine("🔧 Removing duplicate UNIQUE constraint from workshop_capacities...");
+      Console.WriteLine("🔧 Final check: removing any remaining constraints...");
        await dbContext.Database.ExecuteSqlRawAsync(@"
    DO $$ 
     BEGIN
@@ -143,24 +167,24 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
  END IF;
  END $$;
   ");
-        Console.WriteLine("✅ Constraint removed successfully");
-     
+        Console.WriteLine("✅ Constraint check completed");
+ 
       // ✅ ТАКОЖ ВИДАЛЯЄМО INDEX ЯКЩО ВІН ЗАЛИШИВСЯ
       await dbContext.Database.ExecuteSqlRawAsync(@"
    DROP INDEX IF EXISTS ""IX_workshop_capacities_workshop_number"";
   ");
-        Console.WriteLine("✅ Index removed successfully");
+        Console.WriteLine("✅ Index check completed");
 }
       catch (Exception constraintEx)
       {
-       Console.WriteLine($"⚠️ Note: Could not remove constraint (might not exist): {constraintEx.Message}");
+       Console.WriteLine($"⚠️ Note: Constraint check skipped: {constraintEx.Message}");
    }
 
    var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
    var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
  
    // Перевіряємо чи є дані в БД
-      if (!await dbStorage.HasSavedDataAsync())
+   if (!await dbStorage.HasSavedDataAsync())
    {
   Console.WriteLine("🌱 Seeding initial data...");
     await seedService.SeedInitialDataIfEmpty();
@@ -177,7 +201,7 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
  logger.LogError(ex, "❌ Error during database setup or seeding");
       Console.WriteLine($"❌ Database error: {ex.Message}");
    Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
- }
+   }
     }
 }
 else
