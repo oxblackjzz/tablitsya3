@@ -127,6 +127,29 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
      await dbContext.Database.EnsureCreatedAsync();
    Console.WriteLine("✅ Database schema ready");
        
+      // ✅ ВИДАЛЯЄМО ПРОБЛЕМНИЙ UNIQUE CONSTRAINT
+   try
+  {
+      Console.WriteLine("🔧 Removing duplicate UNIQUE constraint from workshop_capacities...");
+         await dbContext.Database.ExecuteSqlRawAsync(@"
+   DO $$ 
+    BEGIN
+       IF EXISTS (
+   SELECT 1 FROM pg_constraint 
+    WHERE conname = 'IX_workshop_capacities_workshop_number'
+    ) THEN
+ ALTER TABLE workshop_capacities DROP CONSTRAINT ""IX_workshop_capacities_workshop_number"";
+          RAISE NOTICE 'Dropped unique constraint IX_workshop_capacities_workshop_number';
+ END IF;
+ END $$;
+  ");
+        Console.WriteLine("✅ Constraint removed successfully");
+}
+      catch (Exception constraintEx)
+      {
+       Console.WriteLine($"⚠️ Note: Could not remove constraint (might not exist): {constraintEx.Message}");
+   }
+
    var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
    var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
  

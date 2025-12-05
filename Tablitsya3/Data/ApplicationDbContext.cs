@@ -87,12 +87,12 @@ namespace Tablitsya3.Data
       entity.HasIndex(e => new { e.WorkshopNumber, e.OrderDate });
     });
 
- // WorkshopCapacityEntity
+ // WorkshopCapacityEntity - ✅ ВИПРАВЛЕННЯ!
  modelBuilder.Entity<WorkshopCapacityEntity>(entity =>
    {
      entity.HasKey(e => e.Id);
-   entity.HasIndex(e => e.WorkshopNumber).IsUnique();
-});
+        // ❌ entity.HasIndex(e => e.WorkshopNumber).IsUnique(); // ВИДАЛЕНО!
+     });
 
             // CustomCompletionDateEntity
       modelBuilder.Entity<CustomCompletionDateEntity>(entity =>
