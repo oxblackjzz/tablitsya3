@@ -126,50 +126,22 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
   
       // ✅ ПЕРЕВІРЯЄМО ЧИ ІСНУЄ БД
       var canConnect = await dbContext.Database.CanConnectAsync();
-      
+   
       if (!canConnect)
       {
-          Console.WriteLine("❌ Cannot connect to database!");
+Console.WriteLine("❌ Cannot connect to database!");
  throw new Exception("Database connection failed");
    }
       
-    // ✅ СПОЧАТКУ ВИДАЛЯЄМО ПРОБЛЕМНИЙ CONSTRAINT (якщо він є)
-      try
-   {
-       Console.WriteLine("🧹 Checking for problematic constraints...");
+      Console.WriteLine("✅ Connected to database");
     
-     // Перевіряємо чи існує constraint
-       var constraintExists = await dbContext.Database.ExecuteSqlRawAsync(@"
-        SELECT 1 FROM pg_constraint WHERE conname = 'IX_workshop_capacities_workshop_number';
-          ");
-          
-   if (constraintExists > 0)
-    {
-       Console.WriteLine("🗑️ Found problematic constraint, dropping all tables to recreate...");
-    
-      // Видаляємо таблиці ТІЛЬКИ якщо є проблемний constraint
- await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS custom_completion_dates CASCADE;");
-       await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS workshop_capacities CASCADE;");
-           await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS orders CASCADE;");
-       await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS workshop_data CASCADE;");
-      
-              Console.WriteLine("✅ Old schema with constraint dropped");
-    }
-   else
-          {
-           Console.WriteLine("✅ No problematic constraint found");
-          }
-      }
- catch (Exception cleanEx)
-      {
-     Console.WriteLine($"⚠️ Constraint check skipped: {cleanEx.Message}");
-      }
-    
-      // ✅ СТВОРЮЄМО СХЕМУ (якщо її немає)
+      // ✅ ЗАВЖДИ СТВОРЮЄМО СХЕМУ (якщо її немає)
+      // EnsureCreatedAsync НЕ змінює існуючі таблиці, тільки створює нові
+     Console.WriteLine("🔧 Ensuring database schema exists...");
      await dbContext.Database.EnsureCreatedAsync();
    Console.WriteLine("✅ Database schema ready");
 
-   var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
+ var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
    var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
  
    // Перевіряємо чи є дані в БД
@@ -191,7 +163,7 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
       Console.WriteLine($"❌ Database error: {ex.Message}");
    Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
    }
-    }
+ }
 }
 else
 {
