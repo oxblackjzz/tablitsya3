@@ -126,12 +126,12 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
       // EnsureCreated автоматично створить всі таблиці якщо їх немає
      await dbContext.Database.EnsureCreatedAsync();
    Console.WriteLine("✅ Database schema ready");
-       
-      // ✅ ВИДАЛЯЄМО ПРОБЛЕМНИЙ UNIQUE CONSTRAINT
+  
+      // ✅ ВИДАЛЯЄМО ПРОБЛЕМНИЙ UNIQUE CONSTRAINT ОДРАЗУ ПІСЛЯ СТВОРЕННЯ СХЕМИ
    try
   {
       Console.WriteLine("🔧 Removing duplicate UNIQUE constraint from workshop_capacities...");
-         await dbContext.Database.ExecuteSqlRawAsync(@"
+       await dbContext.Database.ExecuteSqlRawAsync(@"
    DO $$ 
     BEGIN
        IF EXISTS (
@@ -144,6 +144,12 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
  END $$;
   ");
         Console.WriteLine("✅ Constraint removed successfully");
+     
+      // ✅ ТАКОЖ ВИДАЛЯЄМО INDEX ЯКЩО ВІН ЗАЛИШИВСЯ
+      await dbContext.Database.ExecuteSqlRawAsync(@"
+   DROP INDEX IF EXISTS ""IX_workshop_capacities_workshop_number"";
+  ");
+        Console.WriteLine("✅ Index removed successfully");
 }
       catch (Exception constraintEx)
       {
@@ -171,7 +177,7 @@ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
  logger.LogError(ex, "❌ Error during database setup or seeding");
       Console.WriteLine($"❌ Database error: {ex.Message}");
    Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
-   }
+ }
     }
 }
 else
