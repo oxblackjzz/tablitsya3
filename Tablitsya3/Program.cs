@@ -122,63 +122,52 @@ if (isDatabaseConfigured && !string.IsNullOrEmpty(connectionString))
 {
 var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
  
- Console.WriteLine("🔄 Creating database schema if not exists...");
+ Console.WriteLine("🔄 Checking database schema...");
   
-      // ✅ СПОЧАТКУ ВИДАЛЯЄМО ВСЮ СТАРУ СХЕМУ (якщо вона є з проблемами)
+      // ✅ ПЕРЕВІРЯЄМО ЧИ ІСНУЄ БД
+      var canConnect = await dbContext.Database.CanConnectAsync();
+      
+      if (!canConnect)
+      {
+          Console.WriteLine("❌ Cannot connect to database!");
+ throw new Exception("Database connection failed");
+   }
+      
+    // ✅ СПОЧАТКУ ВИДАЛЯЄМО ПРОБЛЕМНИЙ CONSTRAINT (якщо він є)
       try
-      {
-       Console.WriteLine("🧹 Cleaning old database schema...");
+   {
+       Console.WriteLine("🧹 Checking for problematic constraints...");
     
-  // Видаляємо таблиці в правильному порядку (залежності)
- await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS custom_completion_dates CASCADE;");
-          await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS workshop_capacities CASCADE;");
-       await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS orders CASCADE;");
-          await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS workshop_data CASCADE;");
+     // Перевіряємо чи існує constraint
+       var constraintExists = await dbContext.Database.ExecuteSqlRawAsync(@"
+        SELECT 1 FROM pg_constraint WHERE conname = 'IX_workshop_capacities_workshop_number';
+          ");
           
-   // Видаляємо індекси (якщо залишились)
-    await dbContext.Database.ExecuteSqlRawAsync("DROP INDEX IF EXISTS \"IX_workshop_capacities_workshop_number\";");
-          await dbContext.Database.ExecuteSqlRawAsync("DROP INDEX IF EXISTS \"IX_custom_completion_dates_order_key\";");
-    await dbContext.Database.ExecuteSqlRawAsync("DROP INDEX IF EXISTS \"IX_orders_workshop_number_order_date\";");
-     
-      Console.WriteLine("✅ Old schema cleaned successfully");
+   if (constraintExists > 0)
+    {
+       Console.WriteLine("🗑️ Found problematic constraint, dropping all tables to recreate...");
+    
+      // Видаляємо таблиці ТІЛЬКИ якщо є проблемний constraint
+ await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS custom_completion_dates CASCADE;");
+       await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS workshop_capacities CASCADE;");
+           await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS orders CASCADE;");
+       await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS workshop_data CASCADE;");
+      
+              Console.WriteLine("✅ Old schema with constraint dropped");
+    }
+   else
+          {
+           Console.WriteLine("✅ No problematic constraint found");
+          }
       }
-      catch (Exception cleanEx)
+ catch (Exception cleanEx)
       {
-     Console.WriteLine($"⚠️ Note: Could not clean old schema (might not exist): {cleanEx.Message}");
+     Console.WriteLine($"⚠️ Constraint check skipped: {cleanEx.Message}");
       }
     
-      // ТЕПЕР створюємо чисту схему
+      // ✅ СТВОРЮЄМО СХЕМУ (якщо її немає)
      await dbContext.Database.EnsureCreatedAsync();
    Console.WriteLine("✅ Database schema ready");
-  
-      // ✅ ДОДАТКОВА ПЕРЕВІРКА: видаляємо constraint якщо він все ще є
-   try
-  {
-      Console.WriteLine("🔧 Final check: removing any remaining constraints...");
-       await dbContext.Database.ExecuteSqlRawAsync(@"
-   DO $$ 
-    BEGIN
-       IF EXISTS (
-   SELECT 1 FROM pg_constraint 
-    WHERE conname = 'IX_workshop_capacities_workshop_number'
-    ) THEN
- ALTER TABLE workshop_capacities DROP CONSTRAINT ""IX_workshop_capacities_workshop_number"";
-          RAISE NOTICE 'Dropped unique constraint IX_workshop_capacities_workshop_number';
- END IF;
- END $$;
-  ");
-        Console.WriteLine("✅ Constraint check completed");
- 
-      // ✅ ТАКОЖ ВИДАЛЯЄМО INDEX ЯКЩО ВІН ЗАЛИШИВСЯ
-      await dbContext.Database.ExecuteSqlRawAsync(@"
-   DROP INDEX IF EXISTS ""IX_workshop_capacities_workshop_number"";
-  ");
-        Console.WriteLine("✅ Index check completed");
-}
-      catch (Exception constraintEx)
-      {
-       Console.WriteLine($"⚠️ Note: Constraint check skipped: {constraintEx.Message}");
-   }
 
    var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
    var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
