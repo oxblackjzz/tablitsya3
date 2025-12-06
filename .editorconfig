@@ -34,6 +34,14 @@ charset = utf-8
 indent_style = space
 indent_size = 2
 
+# SQL files (PostgreSQL)
+[*.sql]
+charset = utf-8
+indent_style = space
+indent_size = 4
+# Note: SQL validation errors are expected - these are PostgreSQL scripts
+# Visual Studio validates against SQL Server syntax
+
 # Markdown files
 [*.md]
 charset = utf-8

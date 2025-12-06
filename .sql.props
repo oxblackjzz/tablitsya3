@@ -1,0 +1,9 @@
+<!-- 
+  Цей файл вказує Visual Studio що SQL файли використовують PostgreSQL синтаксис
+  Це відключить перевірку SQL Server синтаксису для .sql файлів
+-->
+<Project>
+  <PropertyGroup>
+    <TargetDatabaseSet>PostgreSql</TargetDatabaseSet>
+  </PropertyGroup>
+</Project>

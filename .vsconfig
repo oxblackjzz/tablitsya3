@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "components": [
+    "Microsoft.VisualStudio.Component.CoreEditor",
+    "Microsoft.NetCore.Component.SDK",
+ "Microsoft.NetCore.Component.Web"
+  ],
+  "extensions": [],
+  "properties": {
+    "sql.languageService.enable": false,
+    "sql.validation.enable": false
+  }
+}

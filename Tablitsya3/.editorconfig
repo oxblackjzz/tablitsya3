@@ -1,0 +1,6 @@
+# SQL Files Configuration for Visual Studio
+# Disable SQL Server validation for PostgreSQL scripts
+
+[*.sql]
+# Disable all SQL validation
+sql_language_service.enabled = false

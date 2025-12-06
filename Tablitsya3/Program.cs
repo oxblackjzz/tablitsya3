@@ -21,25 +21,25 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
 
  try
   {
-      // Check if it's already in Npgsql format (Host=...)
+ // Check if it's already in Npgsql format (Host=...)
     if (connectionString.Contains("Host=") && connectionString.Contains("Database="))
     {
-         Console.WriteLine("✅ Connection string is already in Npgsql format");
+     Console.WriteLine("✅ Connection string is already in Npgsql format");
     }
-        // Якщо це Render/Heroku формат (postgres:// або postgresql://)
-      else if (connectionString.StartsWith("postgres://") || connectionString.StartsWith("postgresql://"))
+ // Якщо це Render/Heroku формат (postgres:// або postgresql://)
+ else if (connectionString.StartsWith("postgres://") || connectionString.StartsWith("postgresql://"))
  {
       var uri = new Uri(connectionString);
      var host = uri.Host;
-     var port = uri.Port > 0 ? uri.Port : 5432; // Default PostgreSQL port
+   var port = uri.Port > 0 ? uri.Port : 5432; // Default PostgreSQL port
       
-    string username = "";
+  string username = "";
     string password = "";
  
    if (!string.IsNullOrEmpty(uri.UserInfo))
       {
    var userInfoParts = uri.UserInfo.Split(':');
-         username = userInfoParts[0];
+     username = userInfoParts[0];
   password = userInfoParts.Length > 1 ? userInfoParts[1] : "";
    }
      
@@ -55,7 +55,7 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
     // Unknown format
    Console.WriteLine($"⚠️ Unknown connection string format. Expected 'postgres://' or 'Host='");
     Console.WriteLine($"⚠️ Please use the 'Internal Database URL' from Render dashboard");
-        connectionString = null;
+     connectionString = null;
   }
 
      if (!string.IsNullOrEmpty(connectionString))
@@ -75,7 +75,7 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
    Console.WriteLine("✅ PostgreSQL Database configured");
         }
     }
-    catch (Exception ex)
+catch (Exception ex)
     {
      Console.WriteLine($"❌ Error parsing DATABASE_URL: {ex.Message}");
      Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
@@ -95,6 +95,9 @@ if (!isDatabaseConfigured)
 // Додаємо універсальний сервіс
 builder.Services.AddSingleton<UnifiedStorageService>();
 
+// ✅ ДОДАЄМО СЕРВІС МІГРАЦІЇ
+builder.Services.AddSingleton<DatabaseMigrationService>();
+
 // ✅ ГЛОБАЛЬНА ОБРОБКА ПОМИЛОК
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -113,57 +116,126 @@ var app = builder.Build();
 // ✅ ВИКОРИСТАННЯ EXCEPTION HANDLER
 app.UseExceptionHandler();
 
-// Migrate database and seed data
+// ✅ АВТОМАТИЧНА МІГРАЦІЯ БД при старті
 if (isDatabaseConfigured && !string.IsNullOrEmpty(connectionString))
 {
     using (var scope = app.Services.CreateScope())
     {
- try
-{
-var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
- 
- Console.WriteLine("🔄 Checking database schema...");
-  
-      // ✅ ПЕРЕВІРЯЄМО ЧИ ІСНУЄ БД
-      var canConnect = await dbContext.Database.CanConnectAsync();
-   
-      if (!canConnect)
-      {
-Console.WriteLine("❌ Cannot connect to database!");
- throw new Exception("Database connection failed");
-   }
-      
-      Console.WriteLine("✅ Connected to database");
-    
-      // ✅ ЗАВЖДИ СТВОРЮЄМО СХЕМУ (якщо її немає)
-      // EnsureCreatedAsync НЕ змінює існуючі таблиці, тільки створює нові
-     Console.WriteLine("🔧 Ensuring database schema exists...");
-     await dbContext.Database.EnsureCreatedAsync();
-   Console.WriteLine("✅ Database schema ready");
+   try
+        {
+      var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+ var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var migrationService = scope.ServiceProvider.GetRequiredService<DatabaseMigrationService>();
 
- var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
-   var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
- 
-   // Перевіряємо чи є дані в БД
-   if (!await dbStorage.HasSavedDataAsync())
-   {
-  Console.WriteLine("🌱 Seeding initial data...");
-    await seedService.SeedInitialDataIfEmpty();
-    Console.WriteLine("✅ Initial data seeded");
-    }
- else
-  {
- Console.WriteLine("ℹ️ Database already contains data, skipping seed");
- }
-  }
-   catch (Exception ex)
+    Console.WriteLine("============================================");
+    Console.WriteLine("🔄 STARTING DATABASE INITIALIZATION");
+            Console.WriteLine("============================================");
+   logger.LogInformation("🔄 Starting database initialization");
+
+      // ✅ ПЕРЕВІРЯЄМО ЧИ ІСНУЄ БД
+    Console.WriteLine("🔄 Checking database connection...");
+    logger.LogInformation("🔄 Checking database connection...");
+
+   var canConnect = await dbContext.Database.CanConnectAsync();
+
+ if (!canConnect)
  {
- var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
- logger.LogError(ex, "❌ Error during database setup or seeding");
-      Console.WriteLine($"❌ Database error: {ex.Message}");
-   Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+ Console.WriteLine("❌ Cannot connect to database!");
+                logger.LogError("❌ Cannot connect to database!");
+         throw new Exception("Database connection failed");
+        }
+
+       Console.WriteLine("✅ Connected to database");
+            logger.LogInformation("✅ Connected to database");
+
+   // ✅ ПЕРЕВІРЯЄМО ЧИ ІСНУЮТЬ ТАБЛИЦІ
+        var tablesExist = await migrationService.CheckTablesExistAsync(connectionString);
+
+   if (!tablesExist)
+   {
+     Console.WriteLine("============================================");
+   Console.WriteLine("📋 TABLES NOT FOUND - STARTING MIGRATION");
+   Console.WriteLine("============================================");
+      logger.LogWarning("📋 Tables not found. Running automatic migration...");
+
+          // ✅ АВТОМАТИЧНО СТВОРЮЄМО ТАБЛИЦІ
+   var migrationSuccess = await migrationService.MigrateDatabaseAsync(connectionString);
+
+ if (migrationSuccess)
+     {
+   Console.WriteLine("============================================");
+         Console.WriteLine("✅ DATABASE MIGRATION COMPLETED!");
+        Console.WriteLine("============================================");
+logger.LogInformation("✅ Database migration completed successfully!");
+  }
+   else
+      {
+          Console.WriteLine("============================================");
+          Console.WriteLine("⚠️ MIGRATION FAILED - TRYING EnsureCreated");
+     Console.WriteLine("============================================");
+       logger.LogWarning("⚠️ Database migration failed. Trying EnsureCreated...");
+        
+            await dbContext.Database.EnsureCreatedAsync();
+              
+        Console.WriteLine("✅ EnsureCreated completed");
+     logger.LogInformation("✅ EnsureCreated completed");
+     }
+  }
+      else
+       {
+   Console.WriteLine("✅ All tables already exist - skipping migration");
+      logger.LogInformation("✅ All tables already exist");
+  }
+
+      var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
+      var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
+
+   // Перевіряємо чи є дані в БД
+         Console.WriteLine("🔍 Checking for existing data...");
+ logger.LogInformation("🔍 Checking for existing data...");
+
+            if (!await dbStorage.HasSavedDataAsync())
+            {
+      Console.WriteLine("🌱 Seeding initial data...");
+ logger.LogInformation("🌱 Seeding initial data...");
+  
+      await seedService.SeedInitialDataIfEmpty();
+    
+                Console.WriteLine("✅ Initial data seeded");
+                logger.LogInformation("✅ Initial data seeded");
+  }
+      else
+  {
+      Console.WriteLine("ℹ️ Database already contains data, skipping seed");
+             logger.LogInformation("ℹ️ Database already contains data, skipping seed");
    }
- }
+
+     Console.WriteLine("============================================");
+    Console.WriteLine("✅ DATABASE INITIALIZATION COMPLETE");
+            Console.WriteLine("============================================");
+        }
+   catch (Exception ex)
+        {
+   var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "❌ Error during database setup or seeding");
+            
+            Console.WriteLine("============================================");
+       Console.WriteLine("❌ DATABASE INITIALIZATION FAILED");
+            Console.WriteLine("============================================");
+            Console.WriteLine($"❌ Error: {ex.Message}");
+   Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+       Console.WriteLine("");
+      Console.WriteLine("🔧 TROUBLESHOOTING:");
+      Console.WriteLine("   1. Check DATABASE_URL environment variable");
+   Console.WriteLine("   2. Verify database connection settings");
+       Console.WriteLine("   3. Check Render PostgreSQL logs");
+        Console.WriteLine("   4. Ensure PostgreSQL is running and accessible");
+      Console.WriteLine("============================================");
+            
+    // ⚠️ НЕ КИДАЄМО ПОМИЛКУ - дозволяємо додатку запуститися
+// Він працюватиме з файловим сховищем
+        }
+    }
 }
 else
 {
@@ -171,8 +243,8 @@ else
   Console.WriteLine("🌱 Using file storage mode, seeding initial data if needed...");
     using (var scope = app.Services.CreateScope())
     {
- var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
-    await seedService.SeedInitialDataIfEmpty();
+        var seedService = scope.ServiceProvider.GetRequiredService<DataSeedService>();
+        await seedService.SeedInitialDataIfEmpty();
     }
 }
 

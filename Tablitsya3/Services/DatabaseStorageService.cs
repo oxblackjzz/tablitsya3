@@ -21,8 +21,25 @@ public DatabaseStorageService(ApplicationDbContext context, ILogger<DatabaseStor
         _logger = logger;
    }
 
-        public async Task SaveWorkshopDataAsync(WorkshopData data)
+     public async Task SaveWorkshopDataAsync(WorkshopData data)
     {
+  try
+  {
+        // ✅ ПЕРЕВІРЯЄМО ЧИ ІСНУЄ ТАБЛИЦЯ
+        await _context.Database.CanConnectAsync();
+    
+  // Спробуємо зробити простий запит для перевірки
+        var canQuery = await _context.WorkshopData.AnyAsync();
+ _logger.LogInformation("✅ Database connection verified, can query: {CanQuery}", canQuery);
+    }
+    catch (Exception ex)
+    {
+   _logger.LogError(ex, "❌ Database tables do not exist or cannot connect");
+  throw new InvalidOperationException(
+   "Database schema not initialized. Please run create-database.sql script in PostgreSQL.", 
+   ex);
+ }
+
     // ✅ ТРАНЗАКЦІЯ - якщо щось піде не так, все відкотиться
     await using var transaction = await _context.Database.BeginTransactionAsync();
     
@@ -30,41 +47,41 @@ public DatabaseStorageService(ApplicationDbContext context, ILogger<DatabaseStor
  {
         data.LastUpdated = DateTime.UtcNow;
 
-        // Отримуємо або створюємо головний запис
+   // Отримуємо або створюємо головний запис
    var entity = await _context.WorkshopData
-            .Include(w => w.Orders)
+      .Include(w => w.Orders)
         .Include(w => w.WorkshopCapacities)
   .Include(w => w.CustomCompletionDates)
             .AsTracking() // ✅ Відслідковуємо зміни
          .FirstOrDefaultAsync();
 
     if (entity == null)
-        {
+ {
  entity = new WorkshopDataEntity();
    _context.WorkshopData.Add(entity);
    
             // ✅ ЗБЕРІГАЄМО ОДРАЗУ ЩОБ ОТРИМАТИ ID
      await _context.SaveChangesAsync();
-            _logger.LogInformation("Created new workshop data entity with ID: {Id}", entity.Id);
-        }
+ _logger.LogInformation("Created new workshop data entity with ID: {Id}", entity.Id);
+      }
 
         // ✅ КОНВЕРТУЄМО ВСІ ДАТИ В UTC
         entity.LastUpdated = DateTime.SpecifyKind(data.LastUpdated, DateTimeKind.Utc);
-        entity.StartDate = DateTime.SpecifyKind(data.StartDate.Date, DateTimeKind.Utc);
+ entity.StartDate = DateTime.SpecifyKind(data.StartDate.Date, DateTimeKind.Utc);
         entity.ProductionLeadTime = data.ProductionLeadTime;
         entity.DaysBeforeProduction = data.DaysBeforeProduction;
 
-        // ✅ ВИДАЛЯЄМО ВСЕ ЧЕРЕЗ RAW SQL - НЕ ЧЕКАЮЧИ НА EF TRACKING!
+   // ✅ ВИДАЛЯЄМО ВСЕ ЧЕРЕЗ RAW SQL - НЕ ЧЕКАЮЧИ НА EF TRACKING!
    await _context.Database.ExecuteSqlRawAsync(
-         "DELETE FROM orders WHERE \"WorkshopDataEntityId\" = {0}", 
-            entity.Id);
+  "DELETE FROM orders WHERE \"WorkshopDataEntityId\" = {0}", 
+     entity.Id);
         await _context.Database.ExecuteSqlRawAsync(
     "DELETE FROM workshop_capacities WHERE \"WorkshopDataEntityId\" = {0}", 
    entity.Id);
         await _context.Database.ExecuteSqlRawAsync(
    "DELETE FROM custom_completion_dates WHERE \"WorkshopDataEntityId\" = {0}", 
   entity.Id);
-        
+    
   _logger.LogInformation("✅ Deleted all old data via SQL for entity ID: {Id}", entity.Id);
 
  // ✅ ОЧИЩАЄМО КОЛЕКЦІЇ В TRACKING
@@ -73,28 +90,28 @@ public DatabaseStorageService(ApplicationDbContext context, ILogger<DatabaseStor
         entity.CustomCompletionDates.Clear();
 
         // Додаємо нові замовлення
-        var newOrders = new List<OrderEntity>();
+    var newOrders = new List<OrderEntity>();
         foreach (var workshopPair in data.WorkshopOrders)
       {
-            var workshopNumber = workshopPair.Key;
+     var workshopNumber = workshopPair.Key;
         var orders = workshopPair.Value;
-            var dates = data.WorkshopOrderDates.ContainsKey(workshopNumber) 
+       var dates = data.WorkshopOrderDates.ContainsKey(workshopNumber) 
    ? data.WorkshopOrderDates[workshopNumber] 
    : new List<DateTime>();
-            var names = data.WorkshopOrderNames.ContainsKey(workshopNumber) 
+    var names = data.WorkshopOrderNames.ContainsKey(workshopNumber) 
   ? data.WorkshopOrderNames[workshopNumber] 
      : new List<string>();
 
      for (int i = 0; i < orders.Count; i++)
      {
-                // ✅ КОНВЕРТУЄМО ДАТУ ЗАМОВЛЕННЯ В UTC
+       // ✅ КОНВЕРТУЄМО ДАТУ ЗАМОВЛЕННЯ В UTC
          var orderDate = i < dates.Count ? dates[i] : DateTime.UtcNow.Date;
-                orderDate = DateTime.SpecifyKind(orderDate.Date, DateTimeKind.Utc);
+          orderDate = DateTime.SpecifyKind(orderDate.Date, DateTimeKind.Utc);
 
   newOrders.Add(new OrderEntity
     {
          WorkshopNumber = workshopNumber,
-                  SquareMeters = orders[i],
+          SquareMeters = orders[i],
  OrderDate = orderDate,
           OrderName = i < names.Count ? names[i] : string.Empty
             });
@@ -106,13 +123,13 @@ public DatabaseStorageService(ApplicationDbContext context, ILogger<DatabaseStor
       {
        foreach (var order in newOrders)
             {
-                entity.Orders.Add(order);
-       }
+      entity.Orders.Add(order);
+    }
         }
 
     // Додаємо нові потужності
-        var newCapacities = data.WorkshopCapacities
-            .Select(c => new WorkshopCapacityEntity
+     var newCapacities = data.WorkshopCapacities
+        .Select(c => new WorkshopCapacityEntity
             {
       WorkshopNumber = c.Key,
    Capacity = c.Value
@@ -120,7 +137,7 @@ public DatabaseStorageService(ApplicationDbContext context, ILogger<DatabaseStor
    .ToList();
         
         if (newCapacities.Any())
-        {
+ {
   foreach (var capacity in newCapacities)
       {
        entity.WorkshopCapacities.Add(capacity);
@@ -130,17 +147,17 @@ public DatabaseStorageService(ApplicationDbContext context, ILogger<DatabaseStor
   // Додаємо нові кастомні дати
   var newCustomDates = data.CustomCompletionDates
             .Select(cd =>
-         {
+     {
        // ✅ КОНВЕРТУЄМО КАСТОМНУ ДАТУ В UTC
-           var completionDate = DateTime.SpecifyKind(cd.Value.Date, DateTimeKind.Utc);
-                
-         return new CustomCompletionDateEntity
+         var completionDate = DateTime.SpecifyKind(cd.Value.Date, DateTimeKind.Utc);
+         
+ return new CustomCompletionDateEntity
   {
-        OrderKey = cd.Key,
+     OrderKey = cd.Key,
  CompletionDate = completionDate
      };
  })
-        .ToList();
+     .ToList();
         
    if (newCustomDates.Any())
         {
@@ -150,22 +167,23 @@ public DatabaseStorageService(ApplicationDbContext context, ILogger<DatabaseStor
     }
         }
 
-      // ✅ ЗБЕРІГАЄМО НОВІ ДАНІ
+ // ✅ ЗБЕРІГАЄМО НОВІ ДАНІ
   await _context.SaveChangesAsync();
     
         // ✅ COMMIT ТРАНЗАКЦІЇ - все пройшло успішно
-      await transaction.CommitAsync();
+ await transaction.CommitAsync();
         
-        _logger.LogInformation($"✅ Workshop data saved: {newOrders.Count} orders, {newCapacities.Count} capacities");
+    _logger.LogInformation($"✅ Workshop data saved: {newOrders.Count} orders, {newCapacities.Count} capacities");
  }
     catch (Exception ex)
     {
-        // ✅ ROLLBACK - відкат всіх змін при помилці
+   // ✅ ROLLBACK - відкат всіх змін при помилці
     await transaction.RollbackAsync();
         _logger.LogError(ex, "❌ Error saving workshop data - transaction rolled back");
-        throw;
+      throw;
     }
 }
+
         public async Task<WorkshopData?> LoadWorkshopDataAsync()
         {
      try
