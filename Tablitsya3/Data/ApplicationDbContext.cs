@@ -69,16 +69,8 @@ namespace Tablitsya3.Data
             modelBuilder.Entity<WorkshopDataEntity>(entity =>
    {
      entity.HasKey(e => e.Id);
-         entity.HasMany(e => e.Orders)
-       .WithOne()
-       .OnDelete(DeleteBehavior.Cascade);
-  entity.HasMany(e => e.WorkshopCapacities)
-    .WithOne()
-      .OnDelete(DeleteBehavior.Cascade);
-    entity.HasMany(e => e.CustomCompletionDates)
-   .WithOne()
-           .OnDelete(DeleteBehavior.Cascade);
-      });
+  // ❌ ВИДАЛЕНО navigation properties - таблиці незалежні
+            });
 
     // OrderEntity
  modelBuilder.Entity<OrderEntity>(entity =>
@@ -87,18 +79,18 @@ namespace Tablitsya3.Data
       entity.HasIndex(e => new { e.WorkshopNumber, e.OrderDate });
     });
 
- // WorkshopCapacityEntity - ✅ ВИПРАВЛЕННЯ!
+ // WorkshopCapacityEntity
  modelBuilder.Entity<WorkshopCapacityEntity>(entity =>
    {
      entity.HasKey(e => e.Id);
-        // ❌ entity.HasIndex(e => e.WorkshopNumber).IsUnique(); // ВИДАЛЕНО!
+       entity.HasIndex(e => e.WorkshopNumber);
      });
 
             // CustomCompletionDateEntity
       modelBuilder.Entity<CustomCompletionDateEntity>(entity =>
     {
            entity.HasKey(e => e.Id);
-      entity.HasIndex(e => e.OrderKey).IsUnique();
+            entity.HasIndex(e => e.OrderKey).IsUnique();
        });
       }
     }

@@ -8,42 +8,40 @@ namespace Tablitsya3.Data.Entities
     public class WorkshopDataEntity
     {
         [Key]
-   [Column("id")]
-   public int Id { get; set; }
+        [Column("id")]
+        public int Id { get; set; }
 
         [Column("last_updated")]
         public DateTime LastUpdated { get; set; }
 
-  [Column("start_date")]
-     public DateTime StartDate { get; set; }
+        [Column("start_date")]
+        public DateTime StartDate { get; set; }
 
         [Column("production_lead_time")]
-     public int ProductionLeadTime { get; set; }
+        public int ProductionLeadTime { get; set; }
 
-  [Column("days_before_production")]
-   public int DaysBeforeProduction { get; set; }
+        [Column("days_before_production")]
+        public int DaysBeforeProduction { get; set; }
 
-        // Navigation properties
-     public ICollection<OrderEntity> Orders { get; set; } = new List<OrderEntity>();
-   public ICollection<WorkshopCapacityEntity> WorkshopCapacities { get; set; } = new List<WorkshopCapacityEntity>();
-   public ICollection<CustomCompletionDateEntity> CustomCompletionDates { get; set; } = new List<CustomCompletionDateEntity>();
+        // ❌ ВИДАЛЕНО Navigation properties - таблиці незалежні
+        // Не потрібні для нашої схеми БД без foreign keys
     }
 
     [Table("orders")]
     public class OrderEntity
     {
-  [Key]
-     [Column("id")]
+        [Key]
+        [Column("id")]
         public int Id { get; set; }
 
-  [Column("workshop_number")]
-   public int WorkshopNumber { get; set; }
+        [Column("workshop_number")]
+        public int WorkshopNumber { get; set; }
 
         [Column("order_date")]
-   public DateTime OrderDate { get; set; }
+        public DateTime OrderDate { get; set; }
 
-  [Column("square_meters")]
-   public double SquareMeters { get; set; }
+        [Column("square_meters")]
+        public double SquareMeters { get; set; }
 
         [Column("order_name")]
         [MaxLength(500)]
@@ -53,12 +51,12 @@ namespace Tablitsya3.Data.Entities
     [Table("workshop_capacities")]
     public class WorkshopCapacityEntity
     {
-    [Key]
+        [Key]
         [Column("id")]
-   public int Id { get; set; }
+        public int Id { get; set; }
 
         [Column("workshop_number")]
-   public int WorkshopNumber { get; set; }
+        public int WorkshopNumber { get; set; }
 
         [Column("capacity")]
         public int Capacity { get; set; }
@@ -67,15 +65,15 @@ namespace Tablitsya3.Data.Entities
     [Table("custom_completion_dates")]
     public class CustomCompletionDateEntity
     {
-   [Key]
-  [Column("id")]
-  public int Id { get; set; }
+        [Key]
+        [Column("id")]
+        public int Id { get; set; }
 
-   [Column("order_key")]
-      [MaxLength(200)]
-   public string OrderKey { get; set; } = string.Empty;
+        [Column("order_key")]
+        [MaxLength(200)]
+        public string OrderKey { get; set; } = string.Empty;
 
-  [Column("completion_date")]
-     public DateTime CompletionDate { get; set; }
+        [Column("completion_date")]
+        public DateTime CompletionDate { get; set; }
     }
 }
