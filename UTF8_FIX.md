@@ -15,9 +15,11 @@
 ### Що було виправлено:
 
 1. **Connection String** - додано `Client Encoding=UTF8`
-2. **Database Migration Service** - встановлюється UTF-8 кодування для сесії
+2. **Database Migration Service** - встановлюється UTF-8 кодування для сесії + перевірка кодування БД
 3. **ApplicationDbContext** - зареєстровано CodePagesEncodingProvider
 4. **Npgsql налаштування** - додано правильні опції для роботи з UTF-8
+5. **HTML Meta Tag** - підтверджено `<meta charset="utf-8" />` в App.razor
+6. **Project File** - підтверджено `<Utf8Output>true</Utf8Output>` в .csproj
 
 ## 🔄 Якщо проблема залишилась (старі дані в БД)
 
@@ -75,6 +77,17 @@ GRANT ALL ON SCHEMA public TO tablitsya3user;
 2. Оновіть сторінку (F5)
 3. Якщо текст відображається правильно - все працює!
 
+### Діагностика в логах Render
+
+При старті перевірте лог на Render:
+
+```
+✅ UTF-8 encoding set for session
+📊 Database encoding: UTF8
+```
+
+Якщо бачите `⚠️ WARNING: Database encoding is SQL_ASCII` - база даних створена з неправильним кодуванням!
+
 ## 📝 Технічні деталі виправлення
 
 ### Program.cs
@@ -84,6 +97,12 @@ connectionString = $"Host={host};Port={port};Database={database};Username={usern
 
 // Додано AppContext для Npgsql
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
+// Налаштування Npgsql
+options.UseNpgsql(connectionString, npgsqlOptions =>
+{
+    npgsqlOptions.CommandTimeout(60);
+});
 ```
 
 ### DatabaseMigrationService.cs
@@ -92,6 +111,13 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 var setEncodingScript = @"
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
+";
+
+// Перевіряємо кодування БД
+var checkEncodingScript = @"
+SELECT pg_encoding_to_char(encoding) as encoding 
+FROM pg_database 
+WHERE datname = current_database();
 ";
 ```
 
@@ -105,11 +131,27 @@ public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
 }
 ```
 
+### App.razor
+```html
+<head>
+    <meta charset="utf-8" />
+    <!-- Інші meta tags -->
+</head>
+```
+
+### Tablitsya3.csproj
+```xml
+<PropertyGroup>
+    <Utf8Output>true</Utf8Output>
+</PropertyGroup>
+```
+
 ## ⚠️ Важливо
 
 - **Нові дані** будуть зберігатися правильно автоматично
 - **Старі пошкоджені дані** потрібно видалити та додати заново
 - Якщо у файлі `workshop-data.json` є правильні дані, просто очистіть БД та додаток завантажить їх звідти
+- **Перевірте лог** на Render після deploy - має бути `Database encoding: UTF8`
 
 ## 🎯 Результат
 
@@ -117,9 +159,10 @@ public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
 ✅ Українські літери відображаються правильно  
 ✅ Емодзі та спецсимволи працюють  
 ✅ Проблема не повторюватиметься  
+✅ Автоматична діагностика кодування БД при старті  
 
 ---
 
-**Версія:** 2.1  
+**Версія:** 2.2  
 **Дата:** 03.12.2025  
 **Автор:** oxblackjzz

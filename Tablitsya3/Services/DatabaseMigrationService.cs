@@ -49,6 +49,26 @@ SET standard_conforming_strings = on;
    
    _logger.LogInformation("✅ UTF-8 encoding set for session");
    Console.WriteLine("✅ UTF-8 encoding set for session");
+   
+   // ✅ ПЕРЕВІРЯЄМО КОДУВАННЯ БАЗИ ДАНИХ
+   var checkEncodingScript = @"
+SELECT pg_encoding_to_char(encoding) as encoding 
+FROM pg_database 
+WHERE datname = current_database();
+";
+   
+   await using (var command = new NpgsqlCommand(checkEncodingScript, connection))
+   {
+       var dbEncoding = await command.ExecuteScalarAsync();
+       _logger.LogInformation($"📊 Database encoding: {dbEncoding}");
+       Console.WriteLine($"📊 Database encoding: {dbEncoding}");
+       
+       if (dbEncoding?.ToString() != "UTF8")
+       {
+           _logger.LogWarning($"⚠️ Database is not UTF8! Current: {dbEncoding}");
+           Console.WriteLine($"⚠️ WARNING: Database encoding is {dbEncoding}, should be UTF8!");
+       }
+   }
 
    // SQL скрипт для створення таблиць
            var createTablesScript = @"
