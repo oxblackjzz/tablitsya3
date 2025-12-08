@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Tablitsya3.Data.Entities;
+using System.Text;
 
 namespace Tablitsya3.Data
 {
@@ -8,6 +9,8 @@ namespace Tablitsya3.Data
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
      : base(options)
         {
+            // ✅ ЯВНО ВСТАНОВЛЮЄМО UTF-8 КОДУВАННЯ
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         }
 
   public DbSet<WorkshopDataEntity> WorkshopData { get; set; }

@@ -25,6 +25,13 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
     if (connectionString.Contains("Host=") && connectionString.Contains("Database="))
     {
      Console.WriteLine("✅ Connection string is already in Npgsql format");
+     
+     // ✅ ДОДАЄМО UTF-8 якщо його немає
+     if (!connectionString.Contains("Client Encoding") && !connectionString.Contains("Encoding"))
+     {
+         connectionString = connectionString.TrimEnd(';') + ";Client Encoding=UTF8";
+         Console.WriteLine("✅ Added UTF-8 encoding to connection string");
+     }
     }
  // Якщо це Render/Heroku формат (postgres:// або postgresql://)
  else if (connectionString.StartsWith("postgres://") || connectionString.StartsWith("postgresql://"))
@@ -47,7 +54,7 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
 
     Console.WriteLine($"🔍 Parsed - Host: {host}, Port: {port}, Database: {database}, User: {username}");
 
-   connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+   connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true;Client Encoding=UTF8";
          Console.WriteLine($"✅ Converted Postgres URL to Npgsql format");
   }
     else
@@ -60,9 +67,16 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
 
      if (!string.IsNullOrEmpty(connectionString))
   {
+  // ✅ НАЛАШТОВУЄМО NPGSQL ДЛЯ UTF-8
+  AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+  
   builder.Services.AddDbContext<ApplicationDbContext>(options =>
       {
- options.UseNpgsql(connectionString);
+ options.UseNpgsql(connectionString, npgsqlOptions =>
+     {
+         // ✅ Встановлюємо таймаут для команд
+         npgsqlOptions.CommandTimeout(60);
+     });
      // Suppress pending model changes warning in production
  options.ConfigureWarnings(warnings => 
   warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));

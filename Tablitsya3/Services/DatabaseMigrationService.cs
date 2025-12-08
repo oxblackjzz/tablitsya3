@@ -36,6 +36,20 @@ namespace Tablitsya3.Services
       _logger.LogInformation("✅ Connection opened successfully");
  Console.WriteLine("✅ Connection opened successfully");
 
+   // ✅ ВСТАНОВЛЮЄМО UTF-8 КОДУВАННЯ ДЛЯ СЕСІЇ
+   var setEncodingScript = @"
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+";
+            
+   await using (var command = new NpgsqlCommand(setEncodingScript, connection))
+   {
+       await command.ExecuteNonQueryAsync();
+   }
+   
+   _logger.LogInformation("✅ UTF-8 encoding set for session");
+   Console.WriteLine("✅ UTF-8 encoding set for session");
+
    // SQL скрипт для створення таблиць
            var createTablesScript = @"
 -- Створюємо таблицю workshop_data
