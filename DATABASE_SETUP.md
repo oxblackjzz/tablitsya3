@@ -15,7 +15,7 @@ databases:
  user: tablitsya3user
     region: frankfurt
     plan: free
-```
+`
 
 Після деплою:
 1. Render створить безкоштовну PostgreSQL БД
