@@ -109,6 +109,11 @@ if (!isDatabaseConfigured)
 // Додаємо універсальний сервіс
 builder.Services.AddSingleton<UnifiedStorageService>();
 
+// ✅ ДОДАЄМО КЕШУВАННЯ
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<CachedStorageService>();
+Console.WriteLine("✅ Memory cache configured");
+
 // ✅ ДОДАЄМО СЕРВІС МІГРАЦІЇ
 builder.Services.AddSingleton<DatabaseMigrationService>();
 

@@ -1,0 +1,312 @@
+﻿@page "/cache-stats"
+@using Tablitsya3.Services
+@inject UnifiedStorageService StorageService
+@inject ILogger<CacheStats> Logger
+@rendermode InteractiveServer
+
+<PageTitle>Статистика кешу</PageTitle>
+
+<h1 class="mb-4">
+    <i class="bi bi-speedometer2"></i> Статистика кешу
+</h1>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-database"></i> Інформація про сховище
+                </h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-5">Тип сховища:</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge bg-info">@StorageService.GetStorageType()</span>
+                    </dd>
+                    
+                    <dt class="col-sm-5">Використовує БД:</dt>
+                    <dd class="col-sm-7">
+                        @if (StorageService.IsUsingDatabase())
+                        {
+                            <span class="badge bg-success">
+                                <i class="bi bi-check-circle"></i> Так (PostgreSQL)
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning">
+                                <i class="bi bi-file-earmark"></i> Ні (JSON файл)
+                            </span>
+                        }
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightning-charge-fill"></i> Статистика кешу
+                </h5>
+            </div>
+            <div class="card-body">
+                @if (cacheStats != null)
+                {
+                    <dl class="row mb-0">
+                        <dt class="col-sm-6">Дані в кеші:</dt>
+                        <dd class="col-sm-6">
+                            @if (cacheStats.WorkshopDataCached)
+                            {
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle-fill"></i> Так
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">
+                                    <i class="bi bi-x-circle-fill"></i> Ні
+                                </span>
+                            }
+                        </dd>
+                        
+                        <dt class="col-sm-6">Флаг HasData в кеші:</dt>
+                        <dd class="col-sm-6">
+                            @if (cacheStats.HasDataFlagCached)
+                            {
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle-fill"></i> Так
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">
+                                    <i class="bi bi-x-circle-fill"></i> Ні
+                                </span>
+                            }
+                        </dd>
+                        
+                        <dt class="col-sm-6">Час зберігання:</dt>
+                        <dd class="col-sm-6">
+                            <span class="badge bg-info">
+                                @cacheStats.CacheExpiration.TotalMinutes хв
+                            </span>
+                        </dd>
+                    </dl>
+                }
+                else
+                {
+                    <p class="text-muted">Статистика недоступна</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-warning">
+        <h5 class="mb-0">
+            <i class="bi bi-tools"></i> Управління кешем
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="btn-group" role="group">
+            <button class="btn btn-primary" @onclick="RefreshStats">
+                <i class="bi bi-arrow-clockwise"></i> Оновити статистику
+            </button>
+            <button class="btn btn-warning" @onclick="InvalidateCache">
+                <i class="bi bi-trash-fill"></i> Очистити кеш
+            </button>
+            <button class="btn btn-info" @onclick="TestCacheSpeed">
+                <i class="bi bi-speedometer2"></i> Тест швидкості
+            </button>
+        </div>
+        
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert alert-info mt-3 mb-0">
+                @statusMessage
+            </div>
+        }
+    </div>
+</div>
+
+@if (speedTestResults.Any())
+{
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">
+                <i class="bi bi-graph-up"></i> Результати тесту швидкості
+            </h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Спроба</th>
+                        <th>Час завантаження</th>
+                        <th>З кешу</th>
+                        <th>Покращення</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var result in speedTestResults)
+                    {
+                        <tr>
+                            <td>@result.AttemptNumber</td>
+                            <td>
+                                <span class="badge @(result.LoadTimeMs < 100 ? "bg-success" : "bg-warning")">
+                                    @result.LoadTimeMs ms
+                                </span>
+                            </td>
+                            <td>
+                                @if (result.FromCache)
+                                {
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-lightning-fill"></i> Так
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">
+                                        <i class="bi bi-database"></i> З БД
+                                    </span>
+                                }
+                            </td>
+                            <td>
+                                @if (result.Improvement.HasValue)
+                                {
+                                    <span class="badge bg-success">
+                                        ↓ @result.Improvement.Value.ToString("F1")x швидше
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            
+            @if (speedTestResults.Count > 1)
+            {
+                var firstLoad = speedTestResults.First().LoadTimeMs;
+                var cachedLoad = speedTestResults.Skip(1).Average(x => x.LoadTimeMs);
+                var improvement = (double)firstLoad / cachedLoad;
+                
+                <div class="alert alert-success mb-0">
+                    <strong>🚀 Покращення:</strong> 
+                    З кешуванням @improvement.ToString("F1")x швидше! 
+                    (Перше завантаження: @firstLoad ms, З кешу: @cachedLoad.ToString("F0") ms)
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private CacheStatistics? cacheStats;
+    private string statusMessage = "";
+    private List<SpeedTestResult> speedTestResults = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshStats();
+    }
+
+    private async Task RefreshStats()
+    {
+        try
+        {
+            cacheStats = StorageService.GetCacheStatistics();
+            statusMessage = "✅ Статистику оновлено";
+            Logger.LogInformation("Cache statistics refreshed");
+            await Task.Delay(2000);
+            statusMessage = "";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Помилка: {ex.Message}";
+            Logger.LogError(ex, "Error refreshing cache stats");
+        }
+    }
+
+    private async Task InvalidateCache()
+    {
+        try
+        {
+            StorageService.InvalidateCache();
+            statusMessage = "🗑️ Кеш очищено успішно";
+            Logger.LogInformation("Cache manually invalidated");
+            await RefreshStats();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Помилка: {ex.Message}";
+            Logger.LogError(ex, "Error invalidating cache");
+        }
+    }
+
+    private async Task TestCacheSpeed()
+    {
+        statusMessage = "⏳ Виконується тест швидкості...";
+        speedTestResults.Clear();
+        
+        try
+        {
+            // Очищаємо кеш перед тестом
+            StorageService.InvalidateCache();
+            
+            // Тест 1: Перше завантаження (без кешу)
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            await StorageService.LoadWorkshopDataAsync();
+            sw.Stop();
+            
+            speedTestResults.Add(new SpeedTestResult
+            {
+                AttemptNumber = 1,
+                LoadTimeMs = sw.ElapsedMilliseconds,
+                FromCache = false
+            });
+            
+            // Тести 2-5: Завантаження з кешу
+            for (int i = 2; i <= 5; i++)
+            {
+                sw.Restart();
+                await StorageService.LoadWorkshopDataAsync();
+                sw.Stop();
+                
+                var firstLoadTime = speedTestResults.First().LoadTimeMs;
+                var improvement = (double)firstLoadTime / sw.ElapsedMilliseconds;
+                
+                speedTestResults.Add(new SpeedTestResult
+                {
+                    AttemptNumber = i,
+                    LoadTimeMs = sw.ElapsedMilliseconds,
+                    FromCache = true,
+                    Improvement = improvement
+                });
+            }
+            
+            statusMessage = "✅ Тест завершено!";
+            Logger.LogInformation("Cache speed test completed");
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Помилка тесту: {ex.Message}";
+            Logger.LogError(ex, "Error during cache speed test");
+        }
+    }
+
+    public class SpeedTestResult
+    {
+        public int AttemptNumber { get; set; }
+        public long LoadTimeMs { get; set; }
+        public bool FromCache { get; set; }
+        public double? Improvement { get; set; }
+    }
+}

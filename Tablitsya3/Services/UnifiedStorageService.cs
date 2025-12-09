@@ -8,115 +8,82 @@ namespace Tablitsya3.Services
 {
     /// <summary>
     /// Універсальний сервіс що автоматично вибирає БД або файлове сховище
+    /// ОНОВЛЕНО: Тепер використовує кешування для швидкодії
     /// </summary>
     public class UnifiedStorageService
     {
-        private readonly IServiceScopeFactory? _scopeFactory;
-        private readonly DataStorageService? _fileStorage;
+        private readonly CachedStorageService _cachedStorage;
         private readonly ILogger<UnifiedStorageService> _logger;
         private readonly bool _useDatabase;
 
         public UnifiedStorageService(
-          IServiceProvider serviceProvider,
+            CachedStorageService cachedStorage,
+            IServiceProvider serviceProvider,
             ILogger<UnifiedStorageService> logger)
-    {
-       _logger = logger;
+        {
+            _cachedStorage = cachedStorage;
+            _logger = logger;
     
             // Перевіряємо чи зареєстрований DatabaseStorageService
             using (var scope = serviceProvider.CreateScope())
-{
-      var dbStorage = scope.ServiceProvider.GetService<DatabaseStorageService>();
-            _useDatabase = dbStorage != null;
+            {
+                var dbStorage = scope.ServiceProvider.GetService<DatabaseStorageService>();
+                _useDatabase = dbStorage != null;
             }
 
-    if (_useDatabase)
-{
-_scopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
-             _logger.LogInformation("UnifiedStorageService initialized with DATABASE storage");
-            }
-            else
-   {
-          _fileStorage = serviceProvider.GetService<DataStorageService>();
-    _logger.LogInformation("UnifiedStorageService initialized with FILE storage");
-            }
+            _logger.LogInformation(
+                "✅ UnifiedStorageService initialized with {StorageType} storage + CACHING", 
+                _useDatabase ? "DATABASE" : "FILE");
         }
 
         public async Task SaveWorkshopDataAsync(WorkshopData data)
         {
-  if (_useDatabase && _scopeFactory != null)
- {
-       _logger.LogDebug("Saving to database...");
-       using var scope = _scopeFactory.CreateScope();
-     var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
-          await dbStorage.SaveWorkshopDataAsync(data);
-    }
-            else if (_fileStorage != null)
-      {
-   _logger.LogDebug("Saving to file...");
-   await _fileStorage.SaveWorkshopDataAsync(data);
-            }
-       else
-            {
-          throw new InvalidOperationException("No storage service available");
- }
+            _logger.LogDebug("💾 Saving data through cached storage...");
+            await _cachedStorage.SaveWorkshopDataAsync(data);
         }
 
         public async Task<WorkshopData?> LoadWorkshopDataAsync()
         {
-            if (_useDatabase && _scopeFactory != null)
-            {
- _logger.LogDebug("Loading from database...");
-                using var scope = _scopeFactory.CreateScope();
-        var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
-    return await dbStorage.LoadWorkshopDataAsync();
-  }
-            else if (_fileStorage != null)
-   {
-            _logger.LogDebug("Loading from file...");
-       return await _fileStorage.LoadWorkshopDataAsync();
-     }
-
-        return null;
+            _logger.LogDebug("📖 Loading data through cached storage...");
+            return await _cachedStorage.LoadWorkshopDataAsync();
         }
 
         public async Task ClearAllDataAsync()
         {
-            if (_useDatabase && _scopeFactory != null)
-            {
-                using var scope = _scopeFactory.CreateScope();
-       var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
-      await dbStorage.ClearAllDataAsync();
-      }
-            else if (_fileStorage != null)
-    {
-   await _fileStorage.ClearAllDataAsync();
-        }
+            _logger.LogWarning("🗑️ Clearing all data through cached storage...");
+            await _cachedStorage.ClearAllDataAsync();
         }
 
         public async Task<bool> HasSavedDataAsync()
         {
-    if (_useDatabase && _scopeFactory != null)
-          {
-  using var scope = _scopeFactory.CreateScope();
-        var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
-  return await dbStorage.HasSavedDataAsync();
-         }
-       else if (_fileStorage != null)
-            {
-   return _fileStorage.HasSavedData();
-  }
-
-            return false;
+            return await _cachedStorage.HasSavedDataAsync();
         }
 
         public bool IsUsingDatabase()
         {
-      return _useDatabase;
-    }
+            return _useDatabase;
+        }
 
         public string GetStorageType()
         {
-            return _useDatabase ? "PostgreSQL Database" : "JSON File";
+            return _useDatabase ? "PostgreSQL Database (with cache)" : "JSON File (with cache)";
+        }
+        
+        /// <summary>
+        /// Очистити кеш вручну
+        /// </summary>
+        public void InvalidateCache()
+        {
+            _cachedStorage.InvalidateCache();
+            _logger.LogInformation("🔄 Cache manually invalidated");
+        }
+        
+        /// <summary>
+        /// Отримати статистику кешу
+        /// </summary>
+        public CacheStatistics GetCacheStatistics()
+        {
+            return _cachedStorage.GetCacheStatistics();
         }
     }
 }
