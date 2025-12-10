@@ -1,6 +1,11 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">🏭 Планування Виробництва</a>
+﻿@using Tablitsya3.Components.Shared
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid d-flex justify-content-between align-items-center">
+        <a class="navbar-brand" href="">
+            <i class="bi bi-building-gear"></i> Планування Виробництва
+        </a>
+        <ThemeToggle />
     </div>
 </div>
 
@@ -10,37 +15,43 @@
     <nav class="nav flex-column">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Головна
+                <i class="bi bi-house-door-fill"></i> 
+                <span>Головна</span>
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="production-planning">
-                <span class="bi bi-calendar-check-fill" aria-hidden="true"></span> Планування виробництва
+                <i class="bi bi-calendar-check-fill"></i> 
+                <span>Планування</span>
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="bulk-order-entry">
-                <span class="bi bi-grid-3x3-gap-fill" aria-hidden="true"></span> Масове введення замовлень
+                <i class="bi bi-plus-square-fill"></i> 
+                <span>Нові замовлення</span>
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="workshop-settings">
-                <span class="bi bi-gear-fill" aria-hidden="true"></span> Налаштування цехів
+                <i class="bi bi-sliders"></i> 
+                <span>Налаштування</span>
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="backup-management">
-                <span class="bi bi-clock-history" aria-hidden="true"></span> Бекапи
+                <i class="bi bi-cloud-arrow-up-fill"></i> 
+                <span>Бекапи</span>
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="logs">
-                <span class="bi bi-journal-text" aria-hidden="true"></span> Журнал подій
+                <i class="bi bi-file-text-fill"></i> 
+                <span>Журнал</span>
             </NavLink>
         </div>
     </nav>

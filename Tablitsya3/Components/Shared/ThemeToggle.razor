@@ -1,0 +1,47 @@
+﻿@using Tablitsya3.Services
+@inject ThemeService ThemeService
+@inject IJSRuntime JSRuntime
+@implements IDisposable
+
+<button class="theme-toggle" @onclick="ToggleTheme" title="@(isDarkMode ? "Перейти на світлу тему" : "Перейти на темну тему")">
+    @if (isDarkMode)
+    {
+        <i class="bi bi-sun-fill"></i>
+    }
+    else
+    {
+        <i class="bi bi-moon-fill"></i>
+    }
+</button>
+
+@code {
+    private bool isDarkMode = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await ThemeService.InitializeAsync();
+            isDarkMode = ThemeService.IsDarkMode;
+            ThemeService.OnThemeChanged += HandleThemeChanged;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleTheme()
+    {
+        await ThemeService.ToggleThemeAsync();
+        isDarkMode = ThemeService.IsDarkMode;
+    }
+
+    private void HandleThemeChanged(string theme)
+    {
+        isDarkMode = theme == "dark";
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= HandleThemeChanged;
+    }
+}
