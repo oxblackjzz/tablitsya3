@@ -5,52 +5,46 @@
 
 <PageTitle>Планування виробництва</PageTitle>
 
-<h1 class="mb-4">
-    <i class="bi bi-calendar-check-fill"></i> Планування виробництва
-</h1>
-
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle-fill"></i>
-            <strong>Інструкція:</strong>
-            <ul class="mb-0">
-                <li>Переглядайте графіки виробництва для всіх цехів</li>
-                <li><strong>🖱️ Drag & Drop:</strong> Перетягуйте замовлення за іконку <i class="bi bi-grip-vertical"></i> для зміни порядку</li>
-                <li>Використовуйте фільтри для перегляду певного періоду</li>
-            </ul>
-        </div>
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="mb-1">
+            <i class="bi bi-bar-chart-fill text-primary"></i> Діаграми виробництва
+        </h1>
+        <p class="text-secondary mb-0">Візуалізація завантаження цехів (діаграми Ганта)</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/orders" class="btn btn-outline-primary">
+            <i class="bi bi-table"></i> Таблиці замовлень
+        </a>
+        <a href="/bulk-order-entry" class="btn btn-success">
+            <i class="bi bi-plus-circle"></i> Додати замовлення
+        </a>
     </div>
 </div>
 
 <!-- Кнопки управління -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="btn-group flex-wrap" role="group">
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="d-flex flex-wrap gap-2">
             <button class="btn btn-primary" @onclick="CalculateAllSchedules">
                 <i class="bi bi-calculator-fill"></i> Розрахувати графіки
             </button>
-            <button class="btn btn-warning" @onclick="ForceRecalculate">
+            <button class="btn btn-outline-warning" @onclick="ForceRecalculate">
                 <i class="bi bi-arrow-repeat"></i> Примусовий перерахунок
             </button>
-            <button class="btn btn-success" @onclick="SaveAllData" disabled="@(!hasSchedules)">
-                <i class="bi bi-save-fill"></i> Зберегти зміни
-            </button>
-            <button class="btn btn-outline-primary" @onclick="GoToBulkOrderEntry">
-                <i class="bi bi-plus-circle-fill"></i> Додати замовлення
+            <button class="btn btn-outline-success" @onclick="SaveAllData" disabled="@(!hasSchedules)">
+                <i class="bi bi-save-fill"></i> Зберегти
             </button>
             <button class="btn btn-outline-secondary" @onclick="LoadData">
-                <i class="bi bi-arrow-clockwise"></i> Оновити дані
+                <i class="bi bi-arrow-clockwise"></i> Оновити
             </button>
             <button class="btn btn-outline-info" @onclick="CreateBackup">
                 <i class="bi bi-cloud-arrow-up"></i> Бекап
             </button>
-            <a href="/backup-management" class="btn btn-outline-secondary">
-                <i class="bi bi-clock-history"></i> Історія бекапів
+            <a href="/workshop-settings" class="btn btn-outline-secondary">
+                <i class="bi bi-sliders"></i> Налаштування цехів
             </a>
-            <button class="btn btn-outline-danger" @onclick="ClearAllData">
-                <i class="bi bi-trash-fill"></i> Очистити все
-            </button>
         </div>
     </div>
 </div>
@@ -63,315 +57,123 @@
     </div>
 }
 
-<!-- Загальні налаштування -->
-<div class="card mb-4">
-    <div class="card-header bg-secondary text-white">
-        <h5 class="mb-0">
-            <i class="bi bi-gear-fill"></i> Загальні параметри
-        </h5>
-    </div>
-    <div class="card-body">
-        <div class="row align-items-end">
-            <div class="col-md-4">
-                <label class="form-label fw-bold">Початкова дата планування</label>
-                <InputDate @bind-Value="workshopData.StartDate" class="form-control" />
-            </div>
-            <div class="col-md-4">
-                <label class="form-label fw-bold">Активних цехів</label>
-                <div class="fs-4">
-                    <span class="badge bg-primary">@workshops.Count</span>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <a href="/workshop-settings" class="btn btn-outline-primary">
-                    <i class="bi bi-gear"></i> Налаштування цехів
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Статистика по цехах -->
 @if (hasSchedules)
 {
-    <div class="row mb-4">
+    <div class="row g-4 mb-4">
         @foreach (var workshop in workshops.OrderBy(w => w.SortOrder))
         {
             var schedule = GetSchedule(workshop.Number);
             if (schedule != null && schedule.Orders.Any())
             {
-                <div class="col-md-4 mb-3">
-                    <div class="card text-white bg-@workshop.ColorClass">
-                        <div class="card-body">
-                            <h5 class="card-title"><i class="bi bi-building"></i> @workshop.Name</h5>
-                            <p class="card-text mb-0">
-                                <strong>Замовлень:</strong> @schedule.Orders.Count<br />
-                                <strong>Об'єм:</strong> @schedule.Orders.Sum(o => o.SquareMeters).ToString("N0") м²<br />
-                                <strong>Днів виробництва:</strong> @schedule.Orders.Sum(o => o.ProductionDuration).ToString("F1")
-                            </p>
+                <div class="col-md-6 col-lg-4">
+                    <div class="stat-card @(workshop.ColorClass == "warning" ? "warning" : workshop.ColorClass == "success" ? "success" : workshop.ColorClass == "danger" ? "danger" : "info")">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <p class="mb-1 opacity-75">@workshop.Name</p>
+                                <h3>@schedule.Orders.Count замовлень</h3>
+                                <small class="opacity-75">
+                                    @schedule.Orders.Sum(o => o.SquareMeters).ToString("N0") м² | 
+                                    @schedule.Orders.Sum(o => o.ProductionDuration).ToString("F1") днів
+                                </small>
+                            </div>
+                            <i class="bi bi-building fs-1 opacity-50"></i>
                         </div>
                     </div>
                 </div>
             }
         }
+    </div>
+}
+
+<!-- Фільтр -->
+@if (hasSchedules)
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-funnel"></i> Фільтр замовлень
+                    </label>
+                    <select class="form-select" @bind="orderFilter">
+                        <option value="all">Усі замовлення (@GetTotalOrdersCount())</option>
+                        <option value="in-production">В роботі (@GetInProductionCount())</option>
+                        <option value="not-started">Очікують (@GetNotStartedCount())</option>
+                        <option value="completed">Завершено (@GetCompletedCount())</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-calendar"></i> Дата статусу
+                    </label>
+                    <input type="date" class="form-control" @bind="filterDate" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-calendar-range"></i> Початок планування
+                    </label>
+                    <InputDate @bind-Value="workshopData.StartDate" class="form-control" />
+                </div>
+            </div>
+        </div>
     </div>
 }
 
 <!-- Діаграми Ганта -->
 @if (hasSchedules)
 {
-    <div class="mb-4">
-        <h3 class="mb-3"><i class="bi bi-bar-chart-fill"></i> Діаграми завантаження цехів</h3>
-        
-        @foreach (var workshop in workshops.OrderBy(w => w.SortOrder))
+    @foreach (var workshop in workshops.OrderBy(w => w.SortOrder))
+    {
+        var schedule = GetSchedule(workshop.Number);
+        if (schedule != null && schedule.Orders.Any())
         {
-            var schedule = GetSchedule(workshop.Number);
-            if (schedule != null && schedule.Orders.Any())
+            var filteredOrders = FilterOrders(schedule.Orders).ToList();
+            if (filteredOrders.Any())
             {
-                var filteredOrders = FilterOrders(schedule.Orders).ToList();
-                if (filteredOrders.Any())
-                {
-                    <div class="card mb-4">
-                        <div class="card-header bg-@workshop.ColorClass @(workshop.ColorClass == "warning" ? "text-dark" : "text-white")">
-                            <h5 class="mb-0">
-                                @workshop.Name
-                                <span class="badge bg-light text-dark ms-2">@filteredOrders.Count замовлень</span>
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <GanttChart 
-                                @key="@($"gantt-{workshop.Number}-{ganttChartKey}")"
-                                WorkshopNumber="@workshop.Number" 
-                                Orders="@filteredOrders" 
-                                StartDate="@workshopData.StartDate"
-                                DailyCapacity="@workshopData.GetCapacity(workshop.Number)" />
-                        </div>
+                <div class="card mb-4">
+                    <div class="card-header bg-@workshop.ColorClass @(workshop.ColorClass == "warning" ? "text-dark" : "text-white") d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-building"></i> @workshop.Name
+                            <span class="badge bg-light text-dark ms-2">@filteredOrders.Count</span>
+                        </h5>
+                        <a href="/orders" class="btn btn-sm btn-light">
+                            <i class="bi bi-table"></i> Детальна таблиця
+                        </a>
                     </div>
-                }
-                else if (orderFilter != "all")
-                {
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle-fill"></i>
-                        <strong>@workshop.Name:</strong> Немає замовлень з обраним фільтром "@GetFilterName()".
+                    <div class="card-body">
+                        <GanttChart 
+                            @key="@($"gantt-{workshop.Number}-{ganttChartKey}")"
+                            WorkshopNumber="@workshop.Number" 
+                            Orders="@filteredOrders" 
+                            StartDate="@workshopData.StartDate"
+                            DailyCapacity="@workshopData.GetCapacity(workshop.Number)" />
                     </div>
-                }
+                </div>
+            }
+            else if (orderFilter != "all")
+            {
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>@workshop.Name:</strong> Немає замовлень за фільтром "@GetFilterName()".
+                </div>
             }
         }
-    </div>
+    }
 }
 else if (workshopData.WorkshopOrders.Any())
 {
     <div class="alert alert-warning">
-        <i class="bi bi-exclamation-triangle-fill"></i>
+        <i class="bi bi-exclamation-triangle"></i>
         <strong>Є необроблені замовлення!</strong> Натисніть "Розрахувати графіки" для перегляду.
     </div>
 }
 else
 {
     <div class="alert alert-info">
-        <i class="bi bi-info-circle-fill"></i>
-        <strong>Замовлень поки немає.</strong> <a href="/bulk-order-entry" class="alert-link">Додайте замовлення</a>.
-    </div>
-}
-
-<!-- Фільтри та таблиці замовлень -->
-@if (hasSchedules)
-{
-    <div class="mb-4">
-        <h3 class="mb-3"><i class="bi bi-table"></i> Деталі замовлень</h3>
-        
-        <!-- Фільтр замовлень -->
-        <div class="card mb-4">
-            <div class="card-header bg-light">
-                <div class="row align-items-center">
-                    <div class="col-md-6">
-                        <h6 class="mb-0"><i class="bi bi-funnel-fill"></i> Фільтр замовлень</h6>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="input-group input-group-sm">
-                            <span class="input-group-text"><i class="bi bi-calendar3"></i> Дата:</span>
-                            <input type="date" class="form-control" 
-                                   value="@filterDate.ToString("yyyy-MM-dd")"
-                                   @onchange="@(e => { filterDate = DateTime.Parse(e.Value?.ToString() ?? DateTime.Today.ToString()); StateHasChanged(); })" />
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="btn-group w-100 flex-wrap" role="group">
-                    <input type="radio" class="btn-check" name="orderFilter" id="filterAll" 
-                           checked="@(orderFilter == "all")" 
-                           @onchange="@(() => { orderFilter = "all"; StateHasChanged(); })" />
-                    <label class="btn btn-outline-secondary" for="filterAll">
-                        <i class="bi bi-list-ul"></i> Усі <span class="badge bg-secondary ms-1">@GetTotalOrdersCount()</span>
-                    </label>
-
-                    <input type="radio" class="btn-check" name="orderFilter" id="filterInProduction" 
-                           checked="@(orderFilter == "in-production")" 
-                           @onchange="@(() => { orderFilter = "in-production"; StateHasChanged(); })" />
-                    <label class="btn btn-outline-success" for="filterInProduction">
-                        <i class="bi bi-gear-fill"></i> В роботі <span class="badge bg-success ms-1">@GetInProductionCount()</span>
-                    </label>
-
-                    <input type="radio" class="btn-check" name="orderFilter" id="filterNotStarted" 
-                           checked="@(orderFilter == "not-started")" 
-                           @onchange="@(() => { orderFilter = "not-started"; StateHasChanged(); })" />
-                    <label class="btn btn-outline-warning" for="filterNotStarted">
-                        <i class="bi bi-hourglass-split"></i> Очікують <span class="badge bg-warning ms-1">@GetNotStartedCount()</span>
-                    </label>
-
-                    <input type="radio" class="btn-check" name="orderFilter" id="filterCompleted" 
-                           checked="@(orderFilter == "completed")" 
-                           @onchange="@(() => { orderFilter = "completed"; StateHasChanged(); })" />
-                    <label class="btn btn-outline-primary" for="filterCompleted">
-                        <i class="bi bi-check-circle-fill"></i> Завершено <span class="badge bg-primary ms-1">@GetCompletedCount()</span>
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        <!-- Таблиці для кожного цеху -->
-        @foreach (var workshop in workshops.OrderBy(w => w.SortOrder))
-        {
-            var schedule = GetSchedule(workshop.Number);
-            if (schedule != null && schedule.Orders.Any())
-            {
-                var filteredOrders = FilterOrders(schedule.Orders).ToList();
-                if (filteredOrders.Any())
-                {
-                    <div class="card mb-4">
-                        <div class="card-header bg-@workshop.ColorClass @(workshop.ColorClass == "warning" ? "text-dark" : "text-white") d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0">
-                                Замовлення для @workshop.Name
-                                <span class="badge bg-light text-dark ms-2">@filteredOrders.Count</span>
-                            </h5>
-                            @if (dragDropEnabled)
-                            {
-                                <span class="badge bg-light text-dark">
-                                    <i class="bi bi-grip-vertical"></i> Drag & Drop увімкнено
-                                </span>
-                            }
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-striped table-hover table-sm">
-                                    <thead>
-                                        <tr>
-                                            <th style="width: 40px;"></th>
-                                            <th>№</th>
-                                            <th>Назва</th>
-                                            <th>Статус</th>
-                                            <th>Замовлення</th>
-                                            <th>Площа</th>
-                                            <th>Старт</th>
-                                            <th>Фініш</th>
-                                            <th>Відвантаж.</th>
-                                            <th>Днів</th>
-                                            <th class="text-center">Дії</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="orders-table-@workshop.Number" data-workshop="@workshop.Number">
-                                        @foreach (var order in filteredOrders)
-                                        {
-                                            var isEditing = editingOrder?.Day == order.Day && editingOrder?.WorkshopNumber == workshop.Number;
-                                            var status = order.GetStatus(filterDate);
-                                            var statusClass = status switch {
-                                                "В роботі" => "badge bg-success",
-                                                "Очікує" => "badge bg-warning",
-                                                "Завершено" => "badge bg-primary",
-                                                _ => "badge bg-secondary"
-                                            };
-                                            <tr class="draggable-row @(isEditing ? "table-warning" : "")" data-order-day="@order.Day">
-                                                <td class="drag-handle text-center" title="Перетягніть для зміни порядку">
-                                                    <i class="bi bi-grip-vertical text-muted"></i>
-                                                </td>
-                                                <td><strong>№@order.Day</strong></td>
-                                                <td>
-                                                    @if (isEditing)
-                                                    {
-                                                        <input type="text" @bind="editOrderName" class="form-control form-control-sm no-drag" placeholder="Назва..." />
-                                                    }
-                                                    else
-                                                    {
-                                                        @(string.IsNullOrWhiteSpace(order.OrderName) ? "(без назви)" : order.OrderName)
-                                                    }
-                                                </td>
-                                                <td><span class="@statusClass">@status</span></td>
-                                                <td>
-                                                    @if (isEditing)
-                                                    {
-                                                        <input type="date" value="@EditOrderDateValue" @onchange="@(e => EditOrderDateValue = e.Value?.ToString() ?? string.Empty)" class="form-control form-control-sm no-drag" />
-                                                    }
-                                                    else
-                                                    {
-                                                        @order.StartDate.ToString("dd.MM.yy")
-                                                    }
-                                                </td>
-                                                <td>@order.SquareMeters.ToString("N0")</td>
-                                                <td>
-                                                    @if (isEditing)
-                                                    {
-                                                        <input type="date" value="@EditProductionStartValue" @onchange="@(e => EditProductionStartValue = e.Value?.ToString() ?? string.Empty)" class="form-control form-control-sm no-drag" />
-                                                    }
-                                                    else
-                                                    {
-                                                        @order.ProductionStartDate.ToString("dd.MM.yy")
-                                                    }
-                                                </td>
-                                                <td>
-                                                    @if (isEditing)
-                                                    {
-                                                        <input type="date" value="@EditProductionEndValue" @onchange="@(e => EditProductionEndValue = e.Value?.ToString() ?? string.Empty)" class="form-control form-control-sm no-drag" />
-                                                    }
-                                                    else
-                                                    {
-                                                        @order.ProductionEndDate.ToString("dd.MM.yy")
-                                                    }
-                                                </td>
-                                                <td>
-                                                    @if (isEditing)
-                                                    {
-                                                        <input type="date" value="@EditCompletionDateValue" @onchange="@(e => EditCompletionDateValue = e.Value?.ToString() ?? string.Empty)" class="form-control form-control-sm no-drag" />
-                                                    }
-                                                    else
-                                                    {
-                                                        @order.CompletionDate.ToString("dd.MM.yy")
-                                                    }
-                                                </td>
-                                                <td>@order.ProductionDuration.ToString("F1")</td>
-                                                <td class="text-center no-drag">
-                                                    @if (isEditing)
-                                                    {
-                                                        <div class="btn-group btn-group-sm">
-                                                            <button class="btn btn-success btn-sm" @onclick="() => SaveOrderEdit(workshop.Number, order)" title="Зберегти">
-                                                                <i class="bi bi-check-lg"></i>
-                                                            </button>
-                                                            <button class="btn btn-secondary btn-sm" @onclick="CancelOrderEdit" title="Скасувати">
-                                                                <i class="bi bi-x-lg"></i>
-                                                            </button>
-                                                        </div>
-                                                    }
-                                                    else
-                                                    {
-                                                        <div class="btn-group btn-group-sm">
-                                                            <button class="btn btn-primary btn-sm" @onclick="() => StartOrderEdit(workshop.Number, order)" title="Редагувати">
-                                                                <i class="bi bi-pencil"></i>
-                                                            </button>
-                                                            <button class="btn btn-danger btn-sm" @onclick="() => DeleteOrder(workshop.Number, order.Day)" title="Видалити">
-                                                                <i class="bi bi-trash"></i>
-                                                            </button>
-                                                        </div>
-                                                    }
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                }
-            }
-        }
+        <i class="bi bi-info-circle"></i>
+        <strong>Замовлень поки немає.</strong> 
+        <a href="/bulk-order-entry" class="alert-link">Додайте замовлення</a> або 
+        <a href="/orders" class="alert-link">перегляньте таблицю</a>.
     </div>
 }
