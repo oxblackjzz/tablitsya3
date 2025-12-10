@@ -133,7 +133,7 @@ public partial class ProductionPlanning : ComponentBase, IAsyncDisposable
                 {
                     var elementId = $"orders-table-{workshop.Number}";
                     var result = await JSRuntime.InvokeAsync<bool>(
-                        "DragonDropInterop.initSortable",
+                        "DragDropInterop.initSortable",
                         elementId,
                         dotNetHelper,
                         workshop.Number
