@@ -91,6 +91,20 @@ namespace Tablitsya3.Data
        entity.HasIndex(e => e.WorkshopNumber);
      });
 
+            // WorkshopProductionLeadTimeEntity (НОВА!)
+            modelBuilder.Entity<WorkshopProductionLeadTimeEntity>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.WorkshopNumber);
+            });
+
+            // WorkshopDaysBeforeProductionEntity (НОВА!)
+            modelBuilder.Entity<WorkshopDaysBeforeProductionEntity>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.WorkshopNumber);
+            });
+
             // CustomCompletionDateEntity
       modelBuilder.Entity<CustomCompletionDateEntity>(entity =>
     {
