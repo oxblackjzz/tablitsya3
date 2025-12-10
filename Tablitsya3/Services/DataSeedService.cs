@@ -53,15 +53,26 @@ namespace Tablitsya3.Services
   var workshopData = new WorkshopData
       {
    // ✅ UTC ДАТА
-   StartDate = DateTime.SpecifyKind(new DateTime(2025, 1, 1), DateTimeKind.Utc),
-        ProductionLeadTime = 5,
+   StartDate = DateTime.SpecifyKind(new DateTime(2025, 1, 1), DateTimeKind.Utc)
+#pragma warning disable CS0618
+        ,ProductionLeadTime = 5,
              DaysBeforeProduction = 3
+#pragma warning restore CS0618
        };
 
       // Initialize capacities
        workshopData.WorkshopCapacities[1] = 1000;
       workshopData.WorkshopCapacities[3] = 1000;
       workshopData.WorkshopCapacities[6] = 1000;
+
+      // Initialize per-workshop planning parameters
+      workshopData.WorkshopProductionLeadTimes[1] = 5;
+      workshopData.WorkshopProductionLeadTimes[3] = 5;
+      workshopData.WorkshopProductionLeadTimes[6] = 5;
+      
+      workshopData.WorkshopDaysBeforeProduction[1] = 16;
+      workshopData.WorkshopDaysBeforeProduction[3] = 16;
+      workshopData.WorkshopDaysBeforeProduction[6] = 16;
 
           // Initialize order collections for Workshop 1
  workshopData.WorkshopOrders[1] = new List<double>();

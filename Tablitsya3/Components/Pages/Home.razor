@@ -1,45 +1,319 @@
 ﻿@page "/"
+@using Tablitsya3.Models
+@using Tablitsya3.Services
+@inject UnifiedStorageService StorageService
+@inject WorkshopConfigService WorkshopConfigService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
 
-<PageTitle>Головна</PageTitle>
+<PageTitle>Головна - Tablitsya3</PageTitle>
 
-<h1>Система планування виробництва меблів ЛДСП</h1>
+<div class="container-fluid">
+    <!-- Заголовок -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-5">
+                <i class="bi bi-house-door-fill text-primary"></i> 
+                Система планування виробництва
+            </h1>
+            <p class="lead text-muted">Меблі з ЛДСП - управління замовленнями та виробництвом</p>
+        </div>
+    </div>
 
-<div class="alert alert-info mt-4" role="alert">
-    <h4 class="alert-heading">Ласкаво просимо!</h4>
-    <p>Це система для планування виробництва меблів з ЛДСП.</p>
-    <hr>
-    <p class="mb-0">
-        Перейдіть до розділу <a href="/production-planning" class="alert-link">Планування виробництва</a> 
-        для перегляду таблиці замовлень та графіків завантаженості.
-    </p>
+    <!-- KPI картки -->
+    <div class="row g-4 mb-4">
+        <!-- Загальна кількість замовлень -->
+        <div class="col-md-3">
+            <div class="card border-primary h-100">
+                <div class="card-body text-center">
+                    <div class="display-4 text-primary mb-2">
+                        <i class="bi bi-clipboard-data"></i>
+                    </div>
+                    <h2 class="display-5 fw-bold text-primary">@totalOrders</h2>
+                    <p class="text-muted mb-0">Всього замовлень</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Активні цехи -->
+        <div class="col-md-3">
+            <div class="card border-success h-100">
+                <div class="card-body text-center">
+                    <div class="display-4 text-success mb-2">
+                        <i class="bi bi-building"></i>
+                    </div>
+                    <h2 class="display-5 fw-bold text-success">@workshops.Count</h2>
+                    <p class="text-muted mb-0">Активних цехів</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Загальний обсяг -->
+        <div class="col-md-3">
+            <div class="card border-warning h-100">
+                <div class="card-body text-center">
+                    <div class="display-4 text-warning mb-2">
+                        <i class="bi bi-rulers"></i>
+                    </div>
+                    <h2 class="display-5 fw-bold text-warning">@totalSquareMeters.ToString("N0")</h2>
+                    <p class="text-muted mb-0">м² в роботі</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Сховище -->
+        <div class="col-md-3">
+            <div class="card border-info h-100">
+                <div class="card-body text-center">
+                    <div class="display-4 text-info mb-2">
+                        <i class="bi bi-database-fill"></i>
+                    </div>
+                    <h2 class="h4 fw-bold text-info">@storageType</h2>
+                    <p class="text-muted mb-0">Тип сховища</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Статистика по цехах -->
+    @if (workshopStats.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="bi bi-bar-chart-fill"></i> Статистика по цехах</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            @foreach (var stat in workshopStats)
+                            {
+                                <div class="col-md-4">
+                                    <div class="card bg-light h-100">
+                                        <div class="card-body">
+                                            <h6 class="card-title text-@stat.ColorClass">
+                                                <i class="bi bi-building"></i> @stat.Name
+                                            </h6>
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span>Замовлень:</span>
+                                                <span class="badge bg-@stat.ColorClass">@stat.OrderCount</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                                <span>Обсяг:</span>
+                                                <span class="fw-bold">@stat.TotalSquareMeters.ToString("N0") м²</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                                <span>Потужність:</span>
+                                                <span class="text-muted">@stat.Capacity м²/день</span>
+                                            </div>
+                                            <!-- Прогрес бар завантаженості -->
+                                            @{
+                                                var loadPercentage = stat.Capacity > 0 
+                                                    ? Math.Min(100, (stat.TotalSquareMeters / stat.Capacity) * 100 / 30) 
+                                                    : 0;
+                                                var progressColor = loadPercentage > 80 ? "danger" : loadPercentage > 50 ? "warning" : "success";
+                                            }
+                                            <div class="progress mt-2" style="height: 8px;">
+                                                <div class="progress-bar bg-@progressColor" 
+                                                     style="width: @loadPercentage.ToString("F0")%"
+                                                     title="Завантаженість на 30 днів: @loadPercentage.ToString("F0")%">
+                                                </div>
+                                            </div>
+                                            <small class="text-muted">Завантаження: @loadPercentage.ToString("F0")%</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Швидкі дії -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-lightning-fill"></i> Швидкі дії</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <a href="/bulk-order-entry" class="btn btn-success btn-lg w-100 py-3">
+                                <i class="bi bi-plus-circle-fill d-block fs-1 mb-2"></i>
+                                Додати замовлення
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="/production-planning" class="btn btn-primary btn-lg w-100 py-3">
+                                <i class="bi bi-calendar-check-fill d-block fs-1 mb-2"></i>
+                                Планування
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="/workshop-settings" class="btn btn-warning btn-lg w-100 py-3">
+                                <i class="bi bi-gear-fill d-block fs-1 mb-2"></i>
+                                Налаштування
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="/cache-stats" class="btn btn-info btn-lg w-100 py-3">
+                                <i class="bi bi-speedometer2 d-block fs-1 mb-2"></i>
+                                Моніторинг
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Інформаційні картки -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="bg-primary bg-opacity-10 p-3 rounded-3 me-3">
+                            <i class="bi bi-graph-up text-primary fs-3"></i>
+                        </div>
+                        <h5 class="card-title mb-0">Планування</h5>
+                    </div>
+                    <p class="card-text text-muted">
+                        Розрахунок термінів виробництва на основі потужності цехів з урахуванням завантаженості.
+                    </p>
+                    <a href="/production-planning" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-right"></i> Відкрити
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="bg-success bg-opacity-10 p-3 rounded-3 me-3">
+                            <i class="bi bi-bar-chart-line text-success fs-3"></i>
+                        </div>
+                        <h5 class="card-title mb-0">Діаграми Ганта</h5>
+                    </div>
+                    <p class="card-text text-muted">
+                        Візуалізація завантаженості виробництва та термінів виконання замовлень.
+                    </p>
+                    <a href="/production-planning" class="btn btn-outline-success">
+                        <i class="bi bi-arrow-right"></i> Переглянути
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="bg-warning bg-opacity-10 p-3 rounded-3 me-3">
+                            <i class="bi bi-sliders text-warning fs-3"></i>
+                        </div>
+                        <h5 class="card-title mb-0">Налаштування</h5>
+                    </div>
+                    <p class="card-text text-muted">
+                        Керування цехами, потужностями та параметрами планування виробництва.
+                    </p>
+                    <a href="/workshop-settings" class="btn btn-outline-warning">
+                        <i class="bi bi-arrow-right"></i> Налаштувати
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Останні оновлення -->
+    @if (lastUpdated != DateTime.MinValue)
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="alert alert-light border d-flex align-items-center justify-content-between">
+                    <span>
+                        <i class="bi bi-clock-history"></i>
+                        Останнє оновлення даних: <strong>@lastUpdated.ToString("dd.MM.yyyy HH:mm")</strong>
+                    </span>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshData">
+                        <i class="bi bi-arrow-clockwise"></i> Оновити
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
-<div class="row mt-4">
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">📊 Планування</h5>
-                <p class="card-text">Розрахунок термінів виробництва на основі потужності цеху.</p>
-                <a href="/production-planning" class="btn btn-primary">Відкрити</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">📈 Графіки</h5>
-                <p class="card-text">Візуалізація завантаженості виробництва по днях.</p>
-                <a href="/production-planning" class="btn btn-primary">Переглянути</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">📋 Звіти</h5>
-                <p class="card-text">Детальна інформація про завантаженість та терміни.</p>
-                <a href="/production-planning" class="btn btn-primary">Деталі</a>
-            </div>
-        </div>
-    </div>
-</div>
+@code {
+    private List<WorkshopConfig> workshops = new();
+    private WorkshopData? workshopData;
+    private List<WorkshopStat> workshopStats = new();
+    
+    private int totalOrders = 0;
+    private double totalSquareMeters = 0;
+    private string storageType = "Завантаження...";
+    private DateTime lastUpdated = DateTime.MinValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+    }
+
+    private async Task LoadDashboardData()
+    {
+        try
+        {
+            // Завантажуємо дані
+            workshops = await WorkshopConfigService.GetActiveWorkshopsAsync();
+            workshopData = await StorageService.LoadWorkshopDataAsync();
+            storageType = StorageService.GetStorageType();
+
+            if (workshopData != null)
+            {
+                lastUpdated = workshopData.LastUpdated;
+                
+                // Рахуємо статистику
+                workshopStats.Clear();
+                foreach (var workshop in workshops)
+                {
+                    var orders = workshopData.WorkshopOrders.GetValueOrDefault(workshop.Number) ?? new List<double>();
+                    var stat = new WorkshopStat
+                    {
+                        Name = workshop.Name,
+                        ColorClass = workshop.ColorClass,
+                        OrderCount = orders.Count,
+                        TotalSquareMeters = orders.Sum(),
+                        Capacity = workshopData.GetCapacity(workshop.Number)
+                    };
+                    workshopStats.Add(stat);
+                }
+
+                totalOrders = workshopStats.Sum(s => s.OrderCount);
+                totalSquareMeters = workshopStats.Sum(s => s.TotalSquareMeters);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dashboard: {ex.Message}");
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        StorageService.InvalidateCache();
+        await LoadDashboardData();
+        StateHasChanged();
+    }
+
+    private class WorkshopStat
+    {
+        public string Name { get; set; } = string.Empty;
+        public string ColorClass { get; set; } = "primary";
+        public int OrderCount { get; set; }
+        public double TotalSquareMeters { get; set; }
+        public int Capacity { get; set; }
+    }
+}

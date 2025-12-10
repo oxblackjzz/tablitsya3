@@ -1,488 +1,417 @@
 ﻿@page "/bulk-order-entry"
 @using Tablitsya3.Models
+@using Tablitsya3.Models.Validation
 @using Tablitsya3.Services
 @inject ProductionPlanningService PlanningService
 @inject UnifiedStorageService StorageService
+@inject WorkshopConfigService WorkshopConfigService
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
 
 <PageTitle>Масове введення замовлень</PageTitle>
 
-<h1 class="mb-4">Масове введення замовлень для всіх цехів</h1>
+<h1 class="mb-4">
+    <i class="bi bi-calendar-plus"></i> Масове введення замовлень
+</h1>
 
 <div class="row mb-4">
-  <div class="col-12">
+    <div class="col-12">
         <div class="alert alert-info">
-     <i class="bi bi-info-circle"></i>
-     <strong>ЗАМОВЛЕННЯ:</strong> На цій сторінці додайте замовлення відразу для всіх трьох цехів (№1, №3, №6) на одну дату.
-       Введіть дані замовлення та натисніть кнопку "Зберегти".
+            <i class="bi bi-info-circle"></i>
+            <strong>ЗАМОВЛЕННЯ:</strong> На цій сторінці додайте замовлення для всіх активних цехів на одну дату.
+            Введіть дані замовлення та натисніть кнопку "Зберегти".
         </div>
     </div>
 </div>
 
+@if (!string.IsNullOrEmpty(statusMessage))
+{
+    <div class="alert @(statusMessage.Contains("❌") ? "alert-danger" : "alert-success") alert-dismissible fade show">
+        @statusMessage
+        <button type="button" class="btn-close" @onclick="() => statusMessage = string.Empty"></button>
+    </div>
+}
+
+@if (validationErrors.Any())
+{
+    <div class="alert alert-danger alert-dismissible fade show">
+        <h6><i class="bi bi-exclamation-triangle-fill"></i> Помилки валідації:</h6>
+        <ul class="mb-0">
+            @foreach (var error in validationErrors)
+            {
+                <li>@error.Message</li>
+            }
+        </ul>
+        <button type="button" class="btn-close" @onclick="ClearValidationErrors"></button>
+    </div>
+}
+
 <div class="card">
-<div class="card-header bg-primary text-white">
+    <div class="card-header bg-primary text-white">
         <h5 class="mb-0">
             <i class="bi bi-calendar-plus"></i> Додати замовлення для всіх цехів
         </h5>
     </div>
     <div class="card-body">
-        <EditForm Model="@bulkOrder" OnValidSubmit="AddBulkOrder">
-            <DataAnnotationsValidator />
-      
-            <!-- Дата замовлення -->
-     <div class="row mb-4">
-        <div class="col-md-4">
-            <label class="form-label fw-bold">Дата замовлення</label>
-         <InputDate @bind-Value="bulkOrder.OrderDate" class="form-control" />
- <ValidationMessage For="@(() => bulkOrder.OrderDate)" />
-      </div>
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Дата замовлення <span class="text-danger">*</span></label>
+                <input type="date" 
+                       class="form-control @(HasFieldError("OrderDate") ? "is-invalid" : "")" 
+                       @bind="orderDate" 
+                       min="@DateTime.Today.AddYears(-1).ToString("yyyy-MM-dd")"
+                       max="@DateTime.Today.AddYears(2).ToString("yyyy-MM-dd")" />
+                @if (HasFieldError("OrderDate"))
+                {
+                    <div class="invalid-feedback">@GetFieldError("OrderDate")</div>
+                }
+                <small class="text-muted">Допустимий діапазон: рік назад - 2 роки вперед</small>
             </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Кількість замовлень на цех</label>
+                <select class="form-select" @bind="ordersPerWorkshop">
+                    <option value="1">1 замовлення</option>
+                    <option value="2">2 замовлення</option>
+                    <option value="3">3 замовлення</option>
+                    <option value="5">5 замовлень</option>
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <span class="text-muted">
+                    <i class="bi bi-building"></i> Активних цехів: <strong>@workshops.Count</strong>
+                </span>
+            </div>
+        </div>
 
+        <hr />
+
+        @foreach (var workshop in workshops.OrderBy(w => w.SortOrder))
+        {
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h5 class="text-@workshop.ColorClass @(workshop.ColorClass == "warning" ? "text-dark" : "")">
+                        <i class="bi bi-building"></i> @workshop.Name
+                        <small class="text-muted ms-2">(@workshopData.GetCapacity(workshop.Number) м²/день)</small>
+                    </h5>
+                </div>
+                
+                @for (int i = 0; i < ordersPerWorkshop; i++)
+                {
+                    var orderIndex = i;
+                    var fieldKey = $"Workshop{workshop.Number}.Order{orderIndex}";
+                    var hasError = HasFieldError(fieldKey);
+                    
+                    <div class="col-md-@(12 / Math.Min(ordersPerWorkshop, 4)) mb-3">
+                        <label class="form-label">Замовлення @(orderIndex + 1)</label>
+                        <input type="text" 
+                               class="form-control form-control-sm mb-1" 
+                               placeholder="Назва замовлення..."
+                               maxlength="500"
+                               value="@GetOrderName(workshop.Number, orderIndex)"
+                               @onchange="@(e => SetOrderName(workshop.Number, orderIndex, e.Value?.ToString() ?? string.Empty))" />
+                        <input type="number" 
+                               class="form-control @(hasError ? "is-invalid" : "")" 
+                               placeholder="0 (м²)"
+                               min="0"
+                               max="100000"
+                               step="1"
+                               value="@GetOrderValue(workshop.Number, orderIndex)"
+                               @onchange="@(e => SetOrderValue(workshop.Number, orderIndex, e.Value?.ToString() ?? "0"))" />
+                        @if (hasError)
+                        {
+                            <div class="invalid-feedback">@GetFieldError(fieldKey)</div>
+                        }
+                        @{
+                            var orderValue = GetOrderValue(workshop.Number, orderIndex);
+                            var capacity = workshopData.GetCapacity(workshop.Number);
+                            if (orderValue > 0)
+                            {
+                                var duration = orderValue / capacity;
+                                var durationClass = duration > 10 ? "text-danger" : duration > 5 ? "text-warning" : "text-success";
+                                <small class="@durationClass">
+                                    <i class="bi bi-clock"></i> Тривалість: @duration.ToString("F2") днів
+                                    @if (orderValue > 10000)
+                                    {
+                                        <span class="badge bg-warning ms-1">Велике замовлення</span>
+                                    }
+                                </small>
+                            }
+                        }
+                    </div>
+                }
+            </div>
             <hr />
-
-         <!-- Цех №1 -->
-            <div class="row mb-3">
-      <div class="col-12">
-<h5 class="text-primary">
-               <i class="bi bi-building"></i> Цех №1
- </h5>
-   </div>
-     <div class="col-md-4">
-         <label class="form-label">Замовлення 1</label>
-          <input type="text" @bind="bulkOrder.Workshop1_Order1_Name" class="form-control form-control-sm mb-1" placeholder="Назва замовлення..." />
-         <InputNumber @bind-Value="bulkOrder.Workshop1_Order1" class="form-control" placeholder="0 (м²)" />
-    @if (bulkOrder.Workshop1_Order1 > 0)
-    {
-       <small class="text-muted">
-         Тривалість: @((bulkOrder.Workshop1_Order1 / dailyCapacity).ToString("F2")) днів
-            </small>
         }
+
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="btn btn-primary btn-lg" @onclick="AddBulkOrder" disabled="@isSaving">
+                        <i class="bi bi-check-circle"></i> @(isSaving ? "Зберігаємо..." : "Зберегти та продовжити")
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-lg" @onclick="ClearForm">
+                        <i class="bi bi-x-circle"></i> Очистити
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-lg" @onclick="GoToPlanning">
+                        <i class="bi bi-arrow-left"></i> До планування
+                    </button>
+                </div>
             </div>
-                <div class="col-md-4">
-   <label class="form-label">Замовлення 2</label>
-           <input type="text" @bind="bulkOrder.Workshop1_Order2_Name" class="form-control form-control-sm mb-1" placeholder="Назва замовлення..." />
-          <InputNumber @bind-Value="bulkOrder.Workshop1_Order2" class="form-control" placeholder="0 (м²)" />
-              @if (bulkOrder.Workshop1_Order2 > 0)
-   {
- <small class="text-muted">
-    Тривалість: @((bulkOrder.Workshop1_Order2 / dailyCapacity).ToString("F2")) днів
-     </small>
-            }
-    </div>
-        <div class="col-md-4">
-      <label class="form-label">Замовлення 3</label>
- <input type="text" @bind="bulkOrder.Workshop1_Order3_Name" class="form-control form-control-sm mb-1" placeholder="Назва замовлення..." />
-   <InputNumber @bind-Value="bulkOrder.Workshop1_Order3" class="form-control" placeholder="0 (м²)" />
-     @if (bulkOrder.Workshop1_Order3 > 0)
-   {
-            <small class="text-muted">
-  Тривалість: @((bulkOrder.Workshop1_Order3 / dailyCapacity).ToString("F2")) днів
-          </small>
-   }
-      </div>
-            </div>
-
-   <hr />
-
-    <!-- Цех №3 -->
-         <div class="row mb-3">
-   <div class="col-12">
-                <h5 class="text-success">
-  <i class="bi bi-building"></i> Цех №3
-           </h5>
-  </div>
-   <div class="col-md-4">
-         <label class="form-label">Замовлення 1</label>
-   <input type="text" @bind="bulkOrder.Workshop3_Order1_Name" class="form-control form-control-sm mb-1" placeholder="Назва замовлення..." />
-             <InputNumber @bind-Value="bulkOrder.Workshop3_Order1" class="form-control" placeholder="0 (м²)" />
-     @if (bulkOrder.Workshop3_Order1 > 0)
-  {
-  <small class="text-muted">
-    Тривалість: @((bulkOrder.Workshop3_Order1 / dailyCapacity).ToString("F2")) днів
-       </small>
-}
-            </div>
-<div class="col-md-4">
-      <label class="form-label">Замовлення 2</label>
-         <input type="text" @bind="bulkOrder.Workshop3_Order2_Name" class="form-control form-control-sm mb-1" placeholder="Назва замовлення..." />
-    <InputNumber @bind-Value="bulkOrder.Workshop3_Order2" class="form-control" placeholder="0 (м²)" />
-       @if (bulkOrder.Workshop3_Order2 > 0)
-  {
-             <small class="text-muted">
-        Тривалість: @((bulkOrder.Workshop3_Order2 / dailyCapacity).ToString("F2")) днів
-        </small>
-           }
-  </div>
-             <div class="col-md-4">
-             <label class="form-label">Замовлення 3</label>
-          <input type="text" @bind="bulkOrder.Workshop3_Order3_Name" class="form-control form-control-sm mb-1" placeholder="Назва замовлення..." />
-             <InputNumber @bind-Value="bulkOrder.Workshop3_Order3" class="form-control" placeholder="0 (м²)" />
-         @if (bulkOrder.Workshop3_Order3 > 0)
-      {
-         <small class="text-muted">
-      Тривалість: @((bulkOrder.Workshop3_Order3 / dailyCapacity).ToString("F2")) днів
-                </small>
-      }
-     </div>
-    </div>
-
- <hr />
-
-         <!-- Цех №6 -->
-  <div class="row mb-3">
-          <div class="col-12">
-          <h5 class="text-warning">
-      <i class="bi bi-building"></i> Цех №6
-       </h5>
- </div>
-    <div class="col-md-4">
-        <label class="form-label">Замовлення 1</label>
-               <input type="text" @bind="bulkOrder.Workshop6_Order1_Name" class="form-control form-control-sm mb-1" placeholder="Назва замовлення..." />
-          <InputNumber @bind-Value="bulkOrder.Workshop6_Order1" class="form-control" placeholder="0 (м²)" />
-      @if (bulkOrder.Workshop6_Order1 > 0)
-{
-            <small class="text-muted">
-        Тривалість: @((bulkOrder.Workshop6_Order1 / dailyCapacity).ToString("F2")) днів
-          </small>
-       }
-  </div>
-      <div class="col-md-4">
-        <label class="form-label">Замовлення 2</label>
-               <input type="text" @bind="bulkOrder.Workshop6_Order2_Name" class="form-control form-control-sm mb-1" placeholder="Назва замовлення..." />
-           <InputNumber @bind-Value="bulkOrder.Workshop6_Order2" class="form-control" placeholder="0 (м²)" />
-             @if (bulkOrder.Workshop6_Order2 > 0)
-       {
-             <small class="text-muted">
-                 Тривалість: @((bulkOrder.Workshop6_Order2 / dailyCapacity).ToString("F2")) днів
-          </small>
-           }
- </div>
-       <div class="col-md-4">
-        <label class="form-label">Замовлення 3</label>
-             <input type="text" @bind="bulkOrder.Workshop6_Order3_Name" class="form-control form-control-sm mb-1" placeholder="Назва замовлення..." />
-        <InputNumber @bind-Value="bulkOrder.Workshop6_Order3" class="form-control" placeholder="0 (м²)" />
- @if (bulkOrder.Workshop6_Order3 > 0)
-      {
-             <small class="text-muted">
-         Тривалість: @((bulkOrder.Workshop6_Order3 / dailyCapacity).ToString("F2")) днів
-            </small>
-            }
-            </div>
-    </div>
-
- <hr />
-
-        <!-- Кнопки -->
-            <div class="row">
-     <div class="col-12">
-     <button type="submit" class="btn btn-primary btn-lg" disabled="@isSaving">
-        <i class="bi bi-check-circle"></i> @(isSaving ? "Зберігаємо..." : "Зберегти та продовжити")
-         </button>
-        <button type="button" class="btn btn-secondary btn-lg ms-2" @onclick="ClearForm">
-       <i class="bi bi-x-circle"></i> Очистити
-               </button>
- <button type="button" class="btn btn-outline-primary btn-lg ms-2" @onclick="GoToPlanning">
-     <i class="bi bi-arrow-left"></i> До планування
-      </button>
-           </div>
-          </div>
-
-            @if (!string.IsNullOrEmpty(statusMessage))
-    {
-        <div class="alert alert-success mt-3">
-         <i class="bi bi-check-circle"></i> @statusMessage
-   </div>
-            }
-   </EditForm>
+        </div>
     </div>
 </div>
 
-<!-- Попередній перегляд -->
 @if (HasAnyOrders())
 {
     <div class="card mt-4">
-      <div class="card-header bg-light">
-          <h5 class="mb-0">Попередній перегляд</h5>
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="bi bi-eye"></i> Попередній перегляд</h5>
         </div>
-      <div class="card-body">
-     <div class="table-responsive">
-         <table class="table table-striped">
- <thead class="table-dark">
-                <tr>
-     <th>Цех</th>
-   <th>Дата</th>
-         <th>Замовлення 1</th>
-   <th>Замовлення 2</th>
-   <th>Замовлення 3</th>
-           <th>Загалом</th>
-               </tr>
-           </thead>
-            <tbody>
-          @if (bulkOrder.Workshop1_Order1 > 0 || bulkOrder.Workshop1_Order2 > 0 || bulkOrder.Workshop1_Order3 > 0)
-        {
-       <tr>
-      <td><strong>Цех №1</strong></td>
- <td>@bulkOrder.OrderDate.ToString("dd.MM.yyyy")</td>
-       <td>@bulkOrder.Workshop1_Order1.ToString("N0") м²</td>
-        <td>@bulkOrder.Workshop1_Order2.ToString("N0") м²</td>
-  <td>@bulkOrder.Workshop1_Order3.ToString("N0") м²</td>
-               <td><strong>@((bulkOrder.Workshop1_Order1 + bulkOrder.Workshop1_Order2 + bulkOrder.Workshop1_Order3).ToString("N0")) м²</strong></td>
-   </tr>
-          }
-      @if (bulkOrder.Workshop3_Order1 > 0 || bulkOrder.Workshop3_Order2 > 0 || bulkOrder.Workshop3_Order3 > 0)
-        {
-             <tr>
-         <td><strong>Цех №3</strong></td>
-    <td>@bulkOrder.OrderDate.ToString("dd.MM.yyyy")</td>
-         <td>@bulkOrder.Workshop3_Order1.ToString("N0") м²</td>
-         <td>@bulkOrder.Workshop3_Order2.ToString("N0") м²</td>
-          <td>@bulkOrder.Workshop3_Order3.ToString("N0") м²</td>
- <td><strong>@((bulkOrder.Workshop3_Order1 + bulkOrder.Workshop3_Order2 + bulkOrder.Workshop3_Order3).ToString("N0")) м²</strong></td>
-           </tr>
-                }
-     @if (bulkOrder.Workshop6_Order1 > 0 || bulkOrder.Workshop6_Order2 > 0 || bulkOrder.Workshop6_Order3 > 0)
-            {
-      <tr>
-   <td><strong>Цех №6</strong></td>
-       <td>@bulkOrder.OrderDate.ToString("dd.MM.yyyy")</td>
-         <td>@bulkOrder.Workshop6_Order1.ToString("N0") м²</td>
-  <td>@bulkOrder.Workshop6_Order2.ToString("N0") м²</td>
-         <td>@bulkOrder.Workshop6_Order3.ToString("N0") м²</td>
-          <td><strong>@((bulkOrder.Workshop6_Order1 + bulkOrder.Workshop6_Order2 + bulkOrder.Workshop6_Order3).ToString("N0")) м²</strong></td>
-                </tr>
-            }
-     </tbody>
-       </table>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Цех</th>
+                            <th>Дата</th>
+                            @for (int i = 0; i < ordersPerWorkshop; i++)
+                            {
+                                <th>Замовлення @(i + 1)</th>
+                            }
+                            <th>Загалом</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var workshop in workshops.OrderBy(w => w.SortOrder))
+                        {
+                            var total = GetWorkshopTotal(workshop.Number);
+                            if (total > 0)
+                            {
+                                <tr>
+                                    <td><strong>@workshop.Name</strong></td>
+                                    <td>@orderDate.ToString("dd.MM.yyyy")</td>
+                                    @for (int i = 0; i < ordersPerWorkshop; i++)
+                                    {
+                                        var value = GetOrderValue(workshop.Number, i);
+                                        var name = GetOrderName(workshop.Number, i);
+                                        <td>
+                                            @if (value > 0)
+                                            {
+                                                <span>@value.ToString("N0") м²</span>
+                                                @if (!string.IsNullOrWhiteSpace(name))
+                                                {
+                                                    <br/><small class="text-muted">@name</small>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                    }
+                                    <td><strong>@total.ToString("N0") м²</strong></td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <td colspan="@(ordersPerWorkshop + 2)" class="text-end"><strong>Всього:</strong></td>
+                            <td><strong>@GetGrandTotal().ToString("N0") м²</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
-      </div>
+        </div>
     </div>
 }
 
 @code {
-    private BulkOrderModel bulkOrder = new();
-    private int dailyCapacity = 1000;
+    private List<WorkshopConfig> workshops = new();
+    private WorkshopData workshopData = new();
+    private DateTime orderDate = DateTime.Today;
+    private int ordersPerWorkshop = 3;
     private string statusMessage = string.Empty;
     private bool isSaving = false;
+    private List<ValidationError> validationErrors = new();
+    private Dictionary<int, List<(string Name, double Value)>> orderInputs = new();
+    private readonly OrderValidator _orderValidator = new();
 
- [SupplyParameterFromQuery(Name = "date")]
+    [SupplyParameterFromQuery(Name = "date")]
     public string? InitialDate { get; set; }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        // Ініціалізуємо початкову дату
- if (!string.IsNullOrEmpty(InitialDate) && DateTime.TryParse(InitialDate, out var date))
+        workshops = await WorkshopConfigService.GetActiveWorkshopsAsync();
+        workshopData = await StorageService.LoadWorkshopDataAsync() ?? new WorkshopData();
+
+        foreach (var workshop in workshops)
         {
-            bulkOrder.OrderDate = date;
-      }
-        else
-    {
-         bulkOrder.OrderDate = DateTime.Today;
-     }
+            orderInputs[workshop.Number] = new List<(string Name, double Value)>();
+            for (int i = 0; i < 10; i++)
+            {
+                orderInputs[workshop.Number].Add((string.Empty, 0));
+            }
+        }
+
+        if (!string.IsNullOrEmpty(InitialDate) && DateTime.TryParse(InitialDate, out var date))
+        {
+            orderDate = date;
+        }
     }
 
-    private bool HasAnyOrders()
+    private double GetOrderValue(int workshopNumber, int orderIndex)
     {
-        return bulkOrder.Workshop1_Order1 > 0 || bulkOrder.Workshop1_Order2 > 0 || bulkOrder.Workshop1_Order3 > 0 ||
-               bulkOrder.Workshop3_Order1 > 0 || bulkOrder.Workshop3_Order2 > 0 || bulkOrder.Workshop3_Order3 > 0 ||
-               bulkOrder.Workshop6_Order1 > 0 || bulkOrder.Workshop6_Order2 > 0 || bulkOrder.Workshop6_Order3 > 0;
+        if (!orderInputs.ContainsKey(workshopNumber)) return 0;
+        if (orderIndex >= orderInputs[workshopNumber].Count) return 0;
+        return orderInputs[workshopNumber][orderIndex].Value;
+    }
+
+    private string GetOrderName(int workshopNumber, int orderIndex)
+    {
+        if (!orderInputs.ContainsKey(workshopNumber)) return string.Empty;
+        if (orderIndex >= orderInputs[workshopNumber].Count) return string.Empty;
+        return orderInputs[workshopNumber][orderIndex].Name;
+    }
+
+    private void SetOrderValue(int workshopNumber, int orderIndex, string valueStr)
+    {
+        if (!orderInputs.ContainsKey(workshopNumber)) return;
+        if (orderIndex >= orderInputs[workshopNumber].Count) return;
+
+        double.TryParse(valueStr, out var value);
+        var current = orderInputs[workshopNumber][orderIndex];
+        orderInputs[workshopNumber][orderIndex] = (current.Name, value);
+        validationErrors.RemoveAll(e => e.Field.Contains($"Workshop{workshopNumber}.Order{orderIndex}"));
+    }
+
+    private void SetOrderName(int workshopNumber, int orderIndex, string name)
+    {
+        if (!orderInputs.ContainsKey(workshopNumber)) return;
+        if (orderIndex >= orderInputs[workshopNumber].Count) return;
+
+        var current = orderInputs[workshopNumber][orderIndex];
+        orderInputs[workshopNumber][orderIndex] = (name, current.Value);
+    }
+
+    private double GetWorkshopTotal(int workshopNumber)
+    {
+        if (!orderInputs.ContainsKey(workshopNumber)) return 0;
+        return orderInputs[workshopNumber].Take(ordersPerWorkshop).Sum(o => o.Value);
+    }
+
+    private double GetGrandTotal() => workshops.Sum(w => GetWorkshopTotal(w.Number));
+    private bool HasAnyOrders() => workshops.Any(w => GetWorkshopTotal(w.Number) > 0);
+    private bool HasFieldError(string fieldName) => validationErrors.Any(e => e.Field.Contains(fieldName));
+    private string GetFieldError(string fieldName) => validationErrors.FirstOrDefault(e => e.Field.Contains(fieldName))?.Message ?? string.Empty;
+    private void ClearValidationErrors() => validationErrors.Clear();
+
+    private bool ValidateInput()
+    {
+        validationErrors.Clear();
+
+        if (orderDate < DateTime.Today.AddYears(-1))
+            validationErrors.Add(new ValidationError("OrderDate", "Дата не може бути більше року в минулому"));
+        else if (orderDate > DateTime.Today.AddYears(2))
+            validationErrors.Add(new ValidationError("OrderDate", "Дата не може бути більше 2 років у майбутньому"));
+
+        foreach (var workshop in workshops)
+        {
+            for (int i = 0; i < ordersPerWorkshop; i++)
+            {
+                var value = GetOrderValue(workshop.Number, i);
+                var name = GetOrderName(workshop.Number, i);
+
+                if (value > 0)
+                {
+                    var result = _orderValidator.Validate(value, orderDate, name);
+                    foreach (var error in result.Errors)
+                    {
+                        validationErrors.Add(new ValidationError(
+                            $"Workshop{workshop.Number}.Order{i}.{error.Field}", 
+                            $"{workshop.Name}, Замовлення {i + 1}: {error.Message}"));
+                    }
+                }
+            }
+        }
+
+        return !validationErrors.Any();
     }
 
     private async Task AddBulkOrder()
     {
         if (!HasAnyOrders())
         {
-            statusMessage = "Будь ласка, введіть хоча б одне замовлення!";
+            statusMessage = "❌ Будь ласка, введіть хоча б одне замовлення!";
+            return;
+        }
+
+        if (!ValidateInput())
+        {
+            statusMessage = "❌ Виправте помилки валідації";
             return;
         }
 
         isSaving = true;
         statusMessage = string.Empty;
-        
+
         try
         {
-            // Завантажуємо поточні дані
             var data = await StorageService.LoadWorkshopDataAsync() ?? new WorkshopData();
-       
- // ✅ КОНВЕРТУЄМО ДАТУ В UTC ОДРАЗУ
-  var utcOrderDate = DateTime.SpecifyKind(bulkOrder.OrderDate.Date, DateTimeKind.Utc);
+            var utcOrderDate = DateTime.SpecifyKind(orderDate.Date, DateTimeKind.Utc);
 
-        // Ініціалізуємо колекції дат якщо потрібно
-  if (data.WorkshopOrderDates == null || !data.WorkshopOrderDates.Any())
-        {
-      data.WorkshopOrderDates = new()
-        {
-      { 1, new List<DateTime>() },
-         { 3, new List<DateTime>() },
-   { 6, new List<DateTime>() }
-            };
- }
+            int totalOrders = 0;
 
-        // Лічильник нових замовлень
-        int totalOrders = 0;
-      
-   // Цех №1
-  if (bulkOrder.Workshop1_Order1 > 0)
-        {
-     if (!data.WorkshopOrders.ContainsKey(1)) data.WorkshopOrders[1] = new List<double>();
-     if (!data.WorkshopOrderDates.ContainsKey(1)) data.WorkshopOrderDates[1] = new List<DateTime>();
-        if (!data.WorkshopOrderNames.ContainsKey(1)) data.WorkshopOrderNames[1] = new List<string>();
-      
-  data.WorkshopOrders[1].Add(bulkOrder.Workshop1_Order1);
-            data.WorkshopOrderDates[1].Add(utcOrderDate); // ✅ UTC дата
-     data.WorkshopOrderNames[1].Add(bulkOrder.Workshop1_Order1_Name);
-totalOrders++;
-        }
-   if (bulkOrder.Workshop1_Order2 > 0)
-    {
-    if (!data.WorkshopOrders.ContainsKey(1)) data.WorkshopOrders[1] = new List<double>();
-if (!data.WorkshopOrderDates.ContainsKey(1)) data.WorkshopOrderDates[1] = new List<DateTime>();
-        if (!data.WorkshopOrderNames.ContainsKey(1)) data.WorkshopOrderNames[1] = new List<string>();
-      
-      data.WorkshopOrders[1].Add(bulkOrder.Workshop1_Order2);
-          data.WorkshopOrderDates[1].Add(utcOrderDate); // ✅ UTC дата
-  data.WorkshopOrderNames[1].Add(bulkOrder.Workshop1_Order2_Name);
-    totalOrders++;
-        }
-   if (bulkOrder.Workshop1_Order3 > 0)
-  {
-      if (!data.WorkshopOrders.ContainsKey(1)) data.WorkshopOrders[1] = new List<double>();
-      if (!data.WorkshopOrderDates.ContainsKey(1)) data.WorkshopOrderDates[1] = new List<DateTime>();
-            if (!data.WorkshopOrderNames.ContainsKey(1)) data.WorkshopOrderNames[1] = new List<string>();
-     
-            data.WorkshopOrders[1].Add(bulkOrder.Workshop1_Order3);
- data.WorkshopOrderDates[1].Add(utcOrderDate); // ✅ UTC дата
- data.WorkshopOrderNames[1].Add(bulkOrder.Workshop1_Order3_Name);
-    totalOrders++;
-  }
-     
-      // Цех №3
- if (bulkOrder.Workshop3_Order1 > 0)
-        {
-if (!data.WorkshopOrders.ContainsKey(3)) data.WorkshopOrders[3] = new List<double>();
-    if (!data.WorkshopOrderDates.ContainsKey(3)) data.WorkshopOrderDates[3] = new List<DateTime>();
- if (!data.WorkshopOrderNames.ContainsKey(3)) data.WorkshopOrderNames[3] = new List<string>();
-     
-    data.WorkshopOrders[3].Add(bulkOrder.Workshop3_Order1);
-      data.WorkshopOrderDates[3].Add(utcOrderDate); // ✅ UTC дата
-      data.WorkshopOrderNames[3].Add(bulkOrder.Workshop3_Order1_Name);
-totalOrders++;
-}
-        if (bulkOrder.Workshop3_Order2 > 0)
-        {
-        if (!data.WorkshopOrders.ContainsKey(3)) data.WorkshopOrders[3] = new List<double>();
- if (!data.WorkshopOrderDates.ContainsKey(3)) data.WorkshopOrderDates[3] = new List<DateTime>();
-    if (!data.WorkshopOrderNames.ContainsKey(3)) data.WorkshopOrderNames[3] = new List<string>();
-   
-            data.WorkshopOrders[3].Add(bulkOrder.Workshop3_Order2);
-      data.WorkshopOrderDates[3].Add(utcOrderDate); // ✅ UTC дата
-      data.WorkshopOrderNames[3].Add(bulkOrder.Workshop3_Order2_Name);
-  totalOrders++;
-        }
-        if (bulkOrder.Workshop3_Order3 > 0)
-    {
-if (!data.WorkshopOrders.ContainsKey(3)) data.WorkshopOrders[3] = new List<double>();
- if (!data.WorkshopOrderDates.ContainsKey(3)) data.WorkshopOrderDates[3] = new List<DateTime>();
-  if (!data.WorkshopOrderNames.ContainsKey(3)) data.WorkshopOrderNames[3] = new List<string>();
-        
-     data.WorkshopOrders[3].Add(bulkOrder.Workshop3_Order3);
-data.WorkshopOrderDates[3].Add(utcOrderDate); // ✅ UTC дата
-     data.WorkshopOrderNames[3].Add(bulkOrder.Workshop3_Order3_Name);
-totalOrders++;
-    }
-  
-        // Цех №6
-      if (bulkOrder.Workshop6_Order1 > 0)
-   {
-       if (!data.WorkshopOrders.ContainsKey(6)) data.WorkshopOrders[6] = new List<double>();
-    if (!data.WorkshopOrderDates.ContainsKey(6)) data.WorkshopOrderDates[6] = new List<DateTime>();
-      if (!data.WorkshopOrderNames.ContainsKey(6)) data.WorkshopOrderNames[6] = new List<string>();
-     
-data.WorkshopOrders[6].Add(bulkOrder.Workshop6_Order1);
-            data.WorkshopOrderDates[6].Add(utcOrderDate); // ✅ UTC дата
-      data.WorkshopOrderNames[6].Add(bulkOrder.Workshop6_Order1_Name);
-totalOrders++;
-  }
-  if (bulkOrder.Workshop6_Order2 > 0)
-  {
-if (!data.WorkshopOrders.ContainsKey(6)) data.WorkshopOrders[6] = new List<double>();
-          if (!data.WorkshopOrderDates.ContainsKey(6)) data.WorkshopOrderDates[6] = new List<DateTime>();
-            if (!data.WorkshopOrderNames.ContainsKey(6)) data.WorkshopOrderNames[6] = new List<string>();
-        
-  data.WorkshopOrders[6].Add(bulkOrder.Workshop6_Order2);
-            data.WorkshopOrderDates[6].Add(utcOrderDate); // ✅ UTC дата
-     data.WorkshopOrderNames[6].Add(bulkOrder.Workshop6_Order2_Name);
-    totalOrders++;
-   }
-    if (bulkOrder.Workshop6_Order3 > 0)
-        {
-      if (!data.WorkshopOrders.ContainsKey(6)) data.WorkshopOrders[6] = new List<double>();
-      if (!data.WorkshopOrderDates.ContainsKey(6)) data.WorkshopOrderDates[6] = new List<DateTime>();
-if (!data.WorkshopOrderNames.ContainsKey(6)) data.WorkshopOrderNames[6] = new List<string>();
-    
-        data.WorkshopOrders[6].Add(bulkOrder.Workshop6_Order3);
-      data.WorkshopOrderDates[6].Add(utcOrderDate); // ✅ UTC дата
-data.WorkshopOrderNames[6].Add(bulkOrder.Workshop6_Order3_Name);
-totalOrders++;
-     }
+            foreach (var workshop in workshops)
+            {
+                data.EnsureWorkshopExists(workshop.Number);
 
-    // Зберігаємо дані
-        await StorageService.SaveWorkshopDataAsync(data);
-   
- statusMessage = $"✅ Успішно додано {totalOrders} замовлень на дату {bulkOrder.OrderDate:dd.MM.yyyy} до планування!";
-  
-   // Очищаємо форму після успішного додавання
-await Task.Delay(2000);
-        ClearForm();
+                for (int i = 0; i < ordersPerWorkshop; i++)
+                {
+                    var order = orderInputs[workshop.Number][i];
+                    if (order.Value > 0)
+                    {
+                        data.WorkshopOrders[workshop.Number].Add(order.Value);
+                        data.WorkshopOrderDates[workshop.Number].Add(utcOrderDate);
+                        data.WorkshopOrderNames[workshop.Number].Add(order.Name);
+                        totalOrders++;
+                    }
+                }
+            }
+
+            await StorageService.SaveWorkshopDataAsync(data);
+            statusMessage = $"✅ Успішно додано {totalOrders} замовлень на дату {orderDate:dd.MM.yyyy}!";
+
+            await Task.Delay(1500);
+            ClearForm();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Помилка збереження: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
- catch (Exception ex)
-    {
-  statusMessage = $"❌ Помилка збереження: {ex.Message}";
-    }
-    finally
-    {
-  isSaving = false;
-    }
-}
 
     private void ClearForm()
     {
-        bulkOrder = new BulkOrderModel { OrderDate = DateTime.Today };
+        orderDate = DateTime.Today;
         statusMessage = string.Empty;
+        validationErrors.Clear();
+
+        foreach (var workshop in workshops)
+        {
+            if (orderInputs.ContainsKey(workshop.Number))
+            {
+                for (int i = 0; i < orderInputs[workshop.Number].Count; i++)
+                {
+                    orderInputs[workshop.Number][i] = (string.Empty, 0);
+                }
+            }
+        }
     }
 
-    private void GoToPlanning()
-    {
-  Navigation.NavigateTo("/production-planning");
-    }
-
-    // Модель для масового введення
-    public class BulkOrderModel
-    {
-      public DateTime OrderDate { get; set; } = DateTime.Today;
-        
-        // Цех №1
-        public string Workshop1_Order1_Name { get; set; } = string.Empty;
-        public double Workshop1_Order1 { get; set; }
-        public string Workshop1_Order2_Name { get; set; } = string.Empty;
-        public double Workshop1_Order2 { get; set; }
-     public string Workshop1_Order3_Name { get; set; } = string.Empty;
-        public double Workshop1_Order3 { get; set; }
-        
-      // Цех №3
-        public string Workshop3_Order1_Name { get; set; } = string.Empty;
-   public double Workshop3_Order1 { get; set; }
-        public string Workshop3_Order2_Name { get; set; } = string.Empty;
-        public double Workshop3_Order2 { get; set; }
-        public string Workshop3_Order3_Name { get; set; } = string.Empty;
-        public double Workshop3_Order3 { get; set; }
-     
-        // Цех №6
-        public string Workshop6_Order1_Name { get; set; } = string.Empty;
-        public double Workshop6_Order1 { get; set; }
-   public string Workshop6_Order2_Name { get; set; } = string.Empty;
-        public double Workshop6_Order2 { get; set; }
-   public string Workshop6_Order3_Name { get; set; } = string.Empty;
-        public double Workshop6_Order3 { get; set; }
-    }
+    private void GoToPlanning() => Navigation.NavigateTo("/production-planning");
 }

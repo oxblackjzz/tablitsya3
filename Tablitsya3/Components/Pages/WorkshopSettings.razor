@@ -2,7 +2,9 @@
 @using Tablitsya3.Models
 @using Tablitsya3.Services
 @inject UnifiedStorageService StorageService
+@inject WorkshopConfigService WorkshopConfigService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
 <PageTitle>Налаштування цехів</PageTitle>
@@ -13,91 +15,98 @@
 
 <div class="row mb-4">
     <div class="col-12">
-     <div class="alert alert-info">
-     <i class="bi bi-info-circle-fill"></i>
-            <strong>Інструкція:</strong> Встановіть продуктивність (од/день) для кожного цеху та загальні параметри планування.
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle-fill"></i>
+            <strong>Інструкція:</strong> Налаштуйте параметри для кожного цеху. Ви можете додавати нові цехи та видаляти існуючі.
         </div>
     </div>
 </div>
 
 @if (!string.IsNullOrEmpty(statusMessage))
 {
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
+    <div class="alert @(statusMessage.Contains("❌") ? "alert-danger" : "alert-success") alert-dismissible fade show" role="alert">
         @statusMessage
-      <button type="button" class="btn-close" @onclick="() => statusMessage = string.Empty"></button>
+        <button type="button" class="btn-close" @onclick="() => statusMessage = string.Empty"></button>
     </div>
 }
 
-<div class="row g-4 mb-4">
-    <!-- Цех №1 -->
-    <div class="col-md-4">
-    <div class="card h-100 @(IsActiveWorkshop(1) ? "border-success" : "")">
-        <div class="card-header bg-primary text-white">
-       <h5 class="mb-0"><i class="bi bi-building"></i> Цех №1</h5>
-     </div>
-       <div class="card-body">
-         <label class="form-label fw-bold">Продуктивність (од/день):</label>
-   <input type="number" class="form-control form-control-lg" @bind="workshop1Capacity" min="100" max="10000" step="100" />
-          <small class="text-muted">Рекомендовано: 800-1200 од/день</small>
-   </div>
-        </div>
+<!-- Кнопка додавання цеху -->
+<div class="row mb-4">
+    <div class="col-12">
+        <button class="btn btn-success btn-lg" @onclick="ShowAddWorkshopModal">
+            <i class="bi bi-plus-circle-fill"></i> Додати новий цех
+        </button>
     </div>
-
-    <!-- Цех №3 -->
-    <div class="col-md-4">
-   <div class="card h-100 @(IsActiveWorkshop(3) ? "border-success" : "")">
-         <div class="card-header bg-success text-white">
-              <h5 class="mb-0"><i class="bi bi-building"></i> Цех №3</h5>
-   </div>
- <div class="card-body">
-        <label class="form-label fw-bold">Продуктивність (од/день):</label>
-           <input type="number" class="form-control form-control-lg" @bind="workshop3Capacity" min="100" max="10000" step="100" />
-    <small class="text-muted">Рекомендовано: 800-1200 од/день</small>
-        </div>
-     </div>
-    </div>
-
-    <!-- Цех №6 -->
-    <div class="col-md-4">
-        <div class="card h-100 @(IsActiveWorkshop(6) ? "border-success" : "")">
-            <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0"><i class="bi bi-building"></i> Цех №6</h5>
-          </div>
-       <div class="card-body">
-                <label class="form-label fw-bold">Продуктивність (од/день):</label>
-             <input type="number" class="form-control form-control-lg" @bind="workshop6Capacity" min="100" max="10000" step="100" />
-           <small class="text-muted">Рекомендовано: 800-1200 од/день</small>
 </div>
+
+<!-- Динамічний список цехів -->
+<div class="row g-4 mb-4">
+    @foreach (var workshop in workshops.OrderBy(w => w.Number))
+    {
+        <div class="col-md-4">
+            <div class="card h-100 border-@workshop.ColorClass">
+                <div class="card-header bg-@workshop.ColorClass @(workshop.ColorClass == "warning" ? "text-dark" : "text-white") d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-building"></i> @workshop.Name</h5>
+                    <button class="btn btn-sm btn-outline-light" @onclick="() => ConfirmDeleteWorkshop(workshop.Number)" title="Видалити цех">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Продуктивність (м²/день):</label>
+                        <input type="number" class="form-control form-control-lg" 
+                               value="@workshop.Capacity" 
+                               @onchange="@(e => UpdateWorkshopCapacity(workshop.Number, e))"
+                               min="100" max="10000" step="100" />
+                        <small class="text-muted">Рекомендовано: 800-1200 м²/день</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Тривалість виробництва (днів):</label>
+                        <input type="number" class="form-control" 
+                               value="@workshop.ProductionLeadTime"
+                               @onchange="@(e => UpdateWorkshopLeadTime(workshop.Number, e))"
+                               min="1" max="60" />
+                        <small class="text-muted">Скільки днів потрібно на виготовлення</small>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label fw-bold">Днів до початку виробництва:</label>
+                        <input type="number" class="form-control" 
+                               value="@workshop.DaysBeforeProduction"
+                               @onchange="@(e => UpdateWorkshopDaysBefore(workshop.Number, e))"
+                               min="0" max="60" />
+                        <small class="text-muted">Підготовка перед виробництвом</small>
+                    </div>
+                </div>
+                <div class="card-footer text-muted small">
+                    <i class="bi bi-info-circle"></i> Замовлень: @GetOrdersCount(workshop.Number)
+                </div>
+            </div>
         </div>
-    </div>
+    }
 </div>
 
 <!-- Загальні налаштування -->
 <div class="row mb-4">
     <div class="col-12">
         <div class="card border-info">
-     <div class="card-header bg-info text-white">
-      <h5 class="mb-0"><i class="bi bi-sliders"></i> Загальні параметри планування</h5>
-        </div>
-    <div class="card-body">
-          <div class="row g-3">
- <div class="col-md-4">
-                  <label class="form-label fw-bold">Тривалість виробництва (днів):</label>
-       <input type="number" class="form-control" @bind="productionLeadTime" min="1" max="30" />
-    <small class="text-muted">Скільки днів потрібно на виготовлення партії</small>
-    </div>
-  <div class="col-md-4">
-        <label class="form-label fw-bold">Днів до початку виробництва:</label>
-         <input type="number" class="form-control" @bind="daysBeforeProduction" min="0" max="10" />
-               <small class="text-muted">Підготовка перед початком виробництва</small>
-     </div>
-     <div class="col-md-4">
-          <label class="form-label fw-bold">Дата початку планування:</label>
-      <input type="date" class="form-control" @bind="startDate" />
-       <small class="text-muted">Від якої дати починати розрахунки</small>
-  </div>
-      </div>
-     </div>
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-sliders"></i> Загальні параметри планування</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Дата початку планування:</label>
+                        <input type="date" class="form-control" @bind="startDate" />
+                        <small class="text-muted">Від якої дати починати розрахунки</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Активних цехів:</label>
+                        <div class="form-control-plaintext fs-4">
+                            <span class="badge bg-primary">@workshops.Count</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -105,55 +114,155 @@
 <!-- Кнопки управління -->
 <div class="row mb-4">
     <div class="col-12">
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
             <button class="btn btn-primary btn-lg" @onclick="SaveSettings" disabled="@isSaving">
-    <i class="bi bi-save-fill"></i> @(isSaving ? "Збереження..." : "Зберегти налаштування")
-   </button>
+                <i class="bi bi-save-fill"></i> @(isSaving ? "Збереження..." : "Зберегти налаштування")
+            </button>
             <button class="btn btn-secondary btn-lg" @onclick="LoadSettings">
-<i class="bi bi-arrow-clockwise"></i> Скинути зміни
-       </button>
-      <button class="btn btn-outline-primary btn-lg" @onclick="GoToPlanning">
-     <i class="bi bi-calendar-check-fill"></i> До планування
-       </button>
-      </div>
+                <i class="bi bi-arrow-clockwise"></i> Скинути зміни
+            </button>
+            <button class="btn btn-outline-primary btn-lg" @onclick="GoToPlanning">
+                <i class="bi bi-calendar-check-fill"></i> До планування
+            </button>
+        </div>
     </div>
 </div>
 
+<!-- Модальне вікно додавання цеху -->
+@if (showAddModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Додати новий цех</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="HideAddWorkshopModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Номер цеху:</label>
+                        <input type="number" class="form-control form-control-lg" @bind="newWorkshopNumber" min="1" max="99" />
+                        <small class="text-muted">Введіть унікальний номер цеху (1-99)</small>
+                        @if (workshopNumberError != null)
+                        {
+                            <div class="text-danger mt-1">@workshopNumberError</div>
+                        }
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Назва цеху (необов'язково):</label>
+                        <input type="text" class="form-control" @bind="newWorkshopName" placeholder="Цех №..." />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="HideAddWorkshopModal">Скасувати</button>
+                    <button type="button" class="btn btn-success" @onclick="AddWorkshop" disabled="@isAdding">
+                        <i class="bi bi-plus-circle"></i> @(isAdding ? "Додавання..." : "Додати цех")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
-    private int workshop1Capacity = 1000;
-    private int workshop3Capacity = 1000;
-    private int workshop6Capacity = 1000;
-    private int productionLeadTime = 5;
-    private int daysBeforeProduction = 1;
+    private List<WorkshopConfig> workshops = new();
+    private WorkshopData? workshopData;
     private DateTime startDate = new DateTime(2025, 1, 1);
-  private bool isSaving = false;
- private string statusMessage = string.Empty;
+    private bool isSaving = false;
+    private bool isAdding = false;
+    private string statusMessage = string.Empty;
+    
+    // Модальне вікно
+    private bool showAddModal = false;
+    private int newWorkshopNumber = 1;
+    private string newWorkshopName = string.Empty;
+    private string? workshopNumberError = null;
 
     protected override async Task OnInitializedAsync()
     {
-     await LoadSettings();
+        await LoadSettings();
     }
 
     private async Task LoadSettings()
     {
         try
         {
-        var data = await StorageService.LoadWorkshopDataAsync();
-      if (data != null)
-    {
-    workshop1Capacity = data.WorkshopCapacities.ContainsKey(1) ? data.WorkshopCapacities[1] : 1000;
-      workshop3Capacity = data.WorkshopCapacities.ContainsKey(3) ? data.WorkshopCapacities[3] : 1000;
-          workshop6Capacity = data.WorkshopCapacities.ContainsKey(6) ? data.WorkshopCapacities[6] : 1000;
-       productionLeadTime = data.ProductionLeadTime;
-             daysBeforeProduction = data.DaysBeforeProduction;
-             startDate = data.StartDate;
-  }
+            workshopData = await StorageService.LoadWorkshopDataAsync() ?? new WorkshopData();
+            workshops = await WorkshopConfigService.GetAllWorkshopsAsync();
+            
+            // Якщо немає цехів, ініціалізуємо дефолтні
+            if (!workshops.Any())
+            {
+                workshopData.EnsureDefaultWorkshops();
+                await StorageService.SaveWorkshopDataAsync(workshopData);
+                workshops = await WorkshopConfigService.GetAllWorkshopsAsync();
+            }
+            
+            startDate = workshopData.StartDate;
+            
+            // Знаходимо наступний вільний номер для нового цеху
+            newWorkshopNumber = GetNextAvailableWorkshopNumber();
         }
-     catch (Exception ex)
+        catch (Exception ex)
         {
             statusMessage = $"❌ Помилка завантаження: {ex.Message}";
         }
- }
+    }
+
+    private int GetNextAvailableWorkshopNumber()
+    {
+        if (!workshops.Any()) return 1;
+        
+        var existingNumbers = workshops.Select(w => w.Number).ToHashSet();
+        for (int i = 1; i <= 99; i++)
+        {
+            if (!existingNumbers.Contains(i))
+                return i;
+        }
+        return workshops.Max(w => w.Number) + 1;
+    }
+
+    private void UpdateWorkshopCapacity(int number, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var value))
+        {
+            var workshop = workshops.FirstOrDefault(w => w.Number == number);
+            if (workshop != null)
+            {
+                workshop.Capacity = Math.Max(100, value);
+            }
+        }
+    }
+
+    private void UpdateWorkshopLeadTime(int number, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var value))
+        {
+            var workshop = workshops.FirstOrDefault(w => w.Number == number);
+            if (workshop != null)
+            {
+                workshop.ProductionLeadTime = Math.Max(1, value);
+            }
+        }
+    }
+
+    private void UpdateWorkshopDaysBefore(int number, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var value))
+        {
+            var workshop = workshops.FirstOrDefault(w => w.Number == number);
+            if (workshop != null)
+            {
+                workshop.DaysBeforeProduction = Math.Max(0, value);
+            }
+        }
+    }
+
+    private int GetOrdersCount(int workshopNumber)
+    {
+        if (workshopData == null) return 0;
+        return workshopData.WorkshopOrders.GetValueOrDefault(workshopNumber)?.Count ?? 0;
+    }
 
     private async Task SaveSettings()
     {
@@ -162,39 +271,115 @@
 
         try
         {
-       var data = await StorageService.LoadWorkshopDataAsync() ?? new WorkshopData();
+            if (workshopData == null)
+            {
+                workshopData = new WorkshopData();
+            }
 
-   data.WorkshopCapacities[1] = workshop1Capacity;
-    data.WorkshopCapacities[3] = workshop3Capacity;
-  data.WorkshopCapacities[6] = workshop6Capacity;
-          data.ProductionLeadTime = productionLeadTime;
-        data.DaysBeforeProduction = daysBeforeProduction;
-        data.StartDate = startDate;
+            // Зберігаємо параметри всіх цехів
+            foreach (var workshop in workshops)
+            {
+                workshopData.WorkshopCapacities[workshop.Number] = workshop.Capacity;
+                workshopData.WorkshopProductionLeadTimes[workshop.Number] = workshop.ProductionLeadTime;
+                workshopData.WorkshopDaysBeforeProduction[workshop.Number] = workshop.DaysBeforeProduction;
+            }
+            
+            workshopData.StartDate = startDate;
 
-  await StorageService.SaveWorkshopDataAsync(data);
+            await StorageService.SaveWorkshopDataAsync(workshopData);
+            WorkshopConfigService.InvalidateCache();
 
-   statusMessage = "✅ Налаштування успішно збережено!";
-      }
+            statusMessage = "✅ Налаштування успішно збережено!";
+        }
         catch (Exception ex)
         {
-  statusMessage = $"❌ Помилка збереження: {ex.Message}";
+            statusMessage = $"❌ Помилка збереження: {ex.Message}";
         }
-   finally
-      {
- isSaving = false;
+        finally
+        {
+            isSaving = false;
         }
     }
 
-  private bool IsActiveWorkshop(int workshopNumber)
+    private void ShowAddWorkshopModal()
     {
-     return workshopNumber switch
+        newWorkshopNumber = GetNextAvailableWorkshopNumber();
+        newWorkshopName = string.Empty;
+        workshopNumberError = null;
+        showAddModal = true;
+    }
+
+    private void HideAddWorkshopModal()
+    {
+        showAddModal = false;
+        workshopNumberError = null;
+    }
+
+    private async Task AddWorkshop()
+    {
+        workshopNumberError = null;
+
+        // Валідація
+        if (newWorkshopNumber < 1 || newWorkshopNumber > 99)
         {
-            1 => workshop1Capacity > 0,
-        3 => workshop3Capacity > 0,
-            6 => workshop6Capacity > 0,
-          _ => false
-        };
-  }
+            workshopNumberError = "Номер цеху повинен бути від 1 до 99";
+            return;
+        }
+
+        if (workshops.Any(w => w.Number == newWorkshopNumber))
+        {
+            workshopNumberError = $"Цех №{newWorkshopNumber} вже існує";
+            return;
+        }
+
+        isAdding = true;
+
+        try
+        {
+            var newWorkshop = await WorkshopConfigService.AddWorkshopAsync(
+                newWorkshopNumber, 
+                string.IsNullOrWhiteSpace(newWorkshopName) ? null : newWorkshopName
+            );
+
+            workshops.Add(newWorkshop);
+            workshopData = await StorageService.LoadWorkshopDataAsync();
+            
+            statusMessage = $"✅ Цех №{newWorkshopNumber} успішно додано!";
+            HideAddWorkshopModal();
+        }
+        catch (Exception ex)
+        {
+            workshopNumberError = ex.Message;
+        }
+        finally
+        {
+            isAdding = false;
+        }
+    }
+
+    private async Task ConfirmDeleteWorkshop(int workshopNumber)
+    {
+        var ordersCount = GetOrdersCount(workshopNumber);
+        var message = ordersCount > 0 
+            ? $"Видалити цех №{workshopNumber}? У ньому {ordersCount} замовлень, які також будуть видалені!"
+            : $"Видалити цех №{workshopNumber}?";
+
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", message))
+            return;
+
+        try
+        {
+            await WorkshopConfigService.RemoveWorkshopAsync(workshopNumber);
+            workshops.RemoveAll(w => w.Number == workshopNumber);
+            workshopData = await StorageService.LoadWorkshopDataAsync();
+            
+            statusMessage = $"✅ Цех №{workshopNumber} видалено!";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Помилка видалення: {ex.Message}";
+        }
+    }
 
     private void GoToPlanning()
     {

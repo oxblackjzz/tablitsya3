@@ -16,6 +16,8 @@ namespace Tablitsya3.Data
   public DbSet<WorkshopDataEntity> WorkshopData { get; set; }
    public DbSet<OrderEntity> Orders { get; set; }
   public DbSet<WorkshopCapacityEntity> WorkshopCapacities { get; set; }
+  public DbSet<WorkshopProductionLeadTimeEntity> WorkshopProductionLeadTimes { get; set; }
+  public DbSet<WorkshopDaysBeforeProductionEntity> WorkshopDaysBeforeProduction { get; set; }
      public DbSet<CustomCompletionDateEntity> CustomCompletionDates { get; set; }
 
         // ✅ АВТОМАТИЧНА КОНВЕРТАЦІЯ В UTC тільки при збереженні

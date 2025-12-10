@@ -117,6 +117,10 @@ Console.WriteLine("✅ Memory cache configured");
 // ✅ ДОДАЄМО СЕРВІС МІГРАЦІЇ
 builder.Services.AddSingleton<DatabaseMigrationService>();
 
+// ✅ ДОДАЄМО СЕРВІС КОНФІГУРАЦІЇ ЦЕХІВ
+builder.Services.AddScoped<WorkshopConfigService>();
+Console.WriteLine("✅ WorkshopConfigService registered");
+
 // ✅ ГЛОБАЛЬНА ОБРОБКА ПОМИЛОК
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();

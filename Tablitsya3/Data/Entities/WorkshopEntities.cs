@@ -17,14 +17,13 @@ namespace Tablitsya3.Data.Entities
         [Column("start_date")]
         public DateTime StartDate { get; set; }
 
+        [Obsolete("Використовуйте WorkshopProductionLeadTimeEntity")]
         [Column("production_lead_time")]
         public int ProductionLeadTime { get; set; }
 
+        [Obsolete("Використовуйте WorkshopDaysBeforeProductionEntity")]
         [Column("days_before_production")]
         public int DaysBeforeProduction { get; set; }
-
-        // ❌ ВИДАЛЕНО Navigation properties - таблиці незалежні
-        // Не потрібні для нашої схеми БД без foreign keys
     }
 
     [Table("orders")]
@@ -60,6 +59,34 @@ namespace Tablitsya3.Data.Entities
 
         [Column("capacity")]
         public int Capacity { get; set; }
+    }
+
+    [Table("workshop_production_lead_times")]
+    public class WorkshopProductionLeadTimeEntity
+    {
+        [Key]
+        [Column("id")]
+        public int Id { get; set; }
+
+        [Column("workshop_number")]
+        public int WorkshopNumber { get; set; }
+
+        [Column("production_lead_time")]
+        public int ProductionLeadTime { get; set; }
+    }
+
+    [Table("workshop_days_before_production")]
+    public class WorkshopDaysBeforeProductionEntity
+    {
+        [Key]
+        [Column("id")]
+        public int Id { get; set; }
+
+        [Column("workshop_number")]
+        public int WorkshopNumber { get; set; }
+
+        [Column("days_before_production")]
+        public int DaysBeforeProduction { get; set; }
     }
 
     [Table("custom_completion_dates")]

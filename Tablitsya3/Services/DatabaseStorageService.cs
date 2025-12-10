@@ -62,15 +62,19 @@ namespace Tablitsya3.Services
      // ✅ КОНВЕРТУЄМО ВСІ ДАТИ В UTC
              entity.LastUpdated = DateTime.SpecifyKind(data.LastUpdated, DateTimeKind.Utc);
               entity.StartDate = DateTime.SpecifyKind(data.StartDate.Date, DateTimeKind.Utc);
+#pragma warning disable CS0618
       entity.ProductionLeadTime = data.ProductionLeadTime;
       entity.DaysBeforeProduction = data.DaysBeforeProduction;
+#pragma warning restore CS0618
 
           // ✅ ВИДАЛЯЄМО ВСЕ ЧЕРЕЗ RAW SQL - таблиці незалежні, немає FK
           await _context.Database.ExecuteSqlRawAsync("DELETE FROM orders");
          await _context.Database.ExecuteSqlRawAsync("DELETE FROM workshop_capacities");
-             await _context.Database.ExecuteSqlRawAsync("DELETE FROM custom_completion_dates");
-                
-  _logger.LogInformation("✅ Deleted all old data via SQL");
+         await _context.Database.ExecuteSqlRawAsync("DELETE FROM workshop_production_lead_times");
+         await _context.Database.ExecuteSqlRawAsync("DELETE FROM workshop_days_before_production");
+              await _context.Database.ExecuteSqlRawAsync("DELETE FROM custom_completion_dates");
+
+          _logger.LogInformation("✅ Deleted all old data via SQL");
 
       // Додаємо нові замовлення
         var newOrders = new List<OrderEntity>();
@@ -120,6 +124,34 @@ if (newCapacities.Any())
               {
          await _context.WorkshopCapacities.AddRangeAsync(newCapacities);
    }
+
+        // Додаємо нові параметри тривалості виробництва
+        var newProductionLeadTimes = data.WorkshopProductionLeadTimes
+            .Select(plt => new WorkshopProductionLeadTimeEntity
+            {
+                WorkshopNumber = plt.Key,
+                ProductionLeadTime = plt.Value
+            })
+            .ToList();
+            
+        if (newProductionLeadTimes.Any())
+        {
+            await _context.WorkshopProductionLeadTimes.AddRangeAsync(newProductionLeadTimes);
+        }
+
+        // Додаємо нові параметри днів до початку виробництва
+        var newDaysBeforeProduction = data.WorkshopDaysBeforeProduction
+            .Select(dbp => new WorkshopDaysBeforeProductionEntity
+            {
+                WorkshopNumber = dbp.Key,
+                DaysBeforeProduction = dbp.Value
+            })
+            .ToList();
+            
+        if (newDaysBeforeProduction.Any())
+        {
+            await _context.WorkshopDaysBeforeProduction.AddRangeAsync(newDaysBeforeProduction);
+        }
 
        // Додаємо нові кастомні дати
                 var newCustomDates = data.CustomCompletionDates
@@ -174,9 +206,11 @@ catch (Exception ex)
       var data = new WorkshopData
        {
            LastUpdated = entity.LastUpdated.ToLocalTime(),
-  StartDate = entity.StartDate.ToLocalTime().Date,
-      ProductionLeadTime = entity.ProductionLeadTime,
+  StartDate = entity.StartDate.ToLocalTime().Date
+#pragma warning disable CS0618
+          ,ProductionLeadTime = entity.ProductionLeadTime,
      DaysBeforeProduction = entity.DaysBeforeProduction
+#pragma warning restore CS0618
              };
 
   // Завантажуємо всі замовлення
@@ -207,6 +241,20 @@ catch (Exception ex)
    {
            data.WorkshopCapacities[capacity.WorkshopNumber] = capacity.Capacity;
                 }
+
+      // Завантажуємо параметри тривалості виробництва
+      var allProductionLeadTimes = await _context.WorkshopProductionLeadTimes.ToListAsync();
+      foreach (var plt in allProductionLeadTimes)
+      {
+          data.WorkshopProductionLeadTimes[plt.WorkshopNumber] = plt.ProductionLeadTime;
+      }
+
+      // Завантажуємо параметри днів до початку виробництва
+      var allDaysBeforeProduction = await _context.WorkshopDaysBeforeProduction.ToListAsync();
+      foreach (var dbp in allDaysBeforeProduction)
+      {
+          data.WorkshopDaysBeforeProduction[dbp.WorkshopNumber] = dbp.DaysBeforeProduction;
+      }
 
       // Завантажуємо всі кастомні дати
            var allCustomDates = await _context.CustomCompletionDates.ToListAsync();

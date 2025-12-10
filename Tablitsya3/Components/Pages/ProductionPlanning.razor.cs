@@ -7,72 +7,75 @@ namespace Tablitsya3.Components.Pages;
 
 public partial class ProductionPlanning : ComponentBase
 {
- [Inject] private ProductionPlanningService PlanningService { get; set; } = default!;
-[Inject] private UnifiedStorageService StorageService { get; set; } = default!;
+    [Inject] private ProductionPlanningService PlanningService { get; set; } = default!;
+    [Inject] private UnifiedStorageService StorageService { get; set; } = default!;
+    [Inject] private WorkshopConfigService WorkshopConfigService { get; set; } = default!;
     [Inject] private WorkingDaysService WorkingDaysService { get; set; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
     [Inject] private LoggingService Logger { get; set; } = default!;
 
-    // ���
+    // Дані
     private WorkshopData workshopData = new();
-    private ProductionSchedule? schedule1;
-    private ProductionSchedule? schedule3;
-    private ProductionSchedule? schedule6;
-    private bool hasSchedules = false;
- private string statusMessage = string.Empty;
     
-    // ?? ���� ��� ����������� ��������� ������ �����
+    // Динамічні графіки для всіх цехів (замість окремих schedule1, schedule3, schedule6)
+    private Dictionary<int, ProductionSchedule> schedules = new();
+    private List<WorkshopConfig> workshops = new();
+    
+    private bool hasSchedules = false;
+    private string statusMessage = string.Empty;
+    
+    // Ключ для оновлення діаграми Ганта
     private int ganttChartKey = 0;
 
-    // Գ���� ��������� (��������������� � ��� ������, � ��� �������)
-    private string orderFilter = "all"; // "all", "in-production", "not-started", "completed"
+    // Фільтрація (працює для всіх цехів)
+    private string orderFilter = "all";
     private DateTime filterDate = DateTime.Today;
 
-    // ��� �����������
-  private Order? editingOrder;
+    // Редагування
+    private Order? editingOrder;
     private string editOrderName = string.Empty;
     private DateTime editOrderDate = DateTime.Today;
     private DateTime editProductionStart = DateTime.Today;
     private DateTime editProductionEnd = DateTime.Today;
- private DateTime editCompletionDate = DateTime.Today;
+    private DateTime editCompletionDate = DateTime.Today;
 
-    // ���������� ��� ���� ������ � ������
+    // Властивості для binding дат
     private string EditOrderDateValue
     {
         get => editOrderDate.ToString("yyyy-MM-dd");
- set
+        set
         {
-    if (DateTime.TryParse(value, out var date))
-      {
-    editOrderDate = date;
-          Logger.LogInfo($"���� ���������� ������ ��: {date:dd.MM.yyyy}", "ProductionPlanning");
+            if (DateTime.TryParse(value, out var date))
+            {
+                editOrderDate = date;
+                Logger.LogInfo($"Змінено дату замовлення: {date:dd.MM.yyyy}", "ProductionPlanning");
             }
         }
     }
 
     private string EditProductionStartValue
     {
-   get => editProductionStart.ToString("yyyy-MM-dd");
+        get => editProductionStart.ToString("yyyy-MM-dd");
         set
         {
-     if (DateTime.TryParse(value, out var date))
+            if (DateTime.TryParse(value, out var date))
             {
-            editProductionStart = date;
-     Logger.LogInfo($"���� ������� ����������� ������ ��: {date:dd.MM.yyyy}", "ProductionPlanning");
+                editProductionStart = date;
+                Logger.LogInfo($"Змінено дату початку виробництва: {date:dd.MM.yyyy}", "ProductionPlanning");
             }
-}
+        }
     }
 
     private string EditProductionEndValue
     {
- get => editProductionEnd.ToString("yyyy-MM-dd");
-      set
+        get => editProductionEnd.ToString("yyyy-MM-dd");
+        set
         {
-   if (DateTime.TryParse(value, out var date))
+            if (DateTime.TryParse(value, out var date))
             {
-       editProductionEnd = date;
-     Logger.LogInfo($"���� ��������� ����������� ������ ��: {date:dd.MM.yyyy}", "ProductionPlanning");
+                editProductionEnd = date;
+                Logger.LogInfo($"Змінено дату кінця виробництва: {date:dd.MM.yyyy}", "ProductionPlanning");
             }
         }
     }
@@ -82,21 +85,18 @@ public partial class ProductionPlanning : ComponentBase
         get => editCompletionDate.ToString("yyyy-MM-dd");
         set
         {
-            Logger.LogInfo($"?? EditCompletionDateValue.set ���������:", "ProductionPlanning");
-    Logger.LogInfo($"  � ������ �������� (value): '{value}'", "ProductionPlanning");
-
-        if (DateTime.TryParse(value, out var date))
+            if (DateTime.TryParse(value, out var date))
             {
-       Logger.LogInfo($"  � TryParse ��ϲ���: {date:dd.MM.yyyy HH:mm:ss}", "ProductionPlanning");
-           editCompletionDate = date;
-                Logger.LogInfo($"  � editCompletionDate ����������� ��: {editCompletionDate:dd.MM.yyyy HH:mm:ss}", "ProductionPlanning");
-         }
-   else
-        {
-         Logger.LogWarning($"  � TryParse ���������� ��� �������� '{value}'", "ProductionPlanning");
+                editCompletionDate = date;
+                Logger.LogInfo($"Змінено дату завершення: {date:dd.MM.yyyy}", "ProductionPlanning");
             }
+        }
     }
-    }
+
+    // Backward compatibility - отримати графік для конкретного цеху
+    private ProductionSchedule? schedule1 => schedules.GetValueOrDefault(1);
+    private ProductionSchedule? schedule3 => schedules.GetValueOrDefault(3);
+    private ProductionSchedule? schedule6 => schedules.GetValueOrDefault(6);
 
     protected override async Task OnInitializedAsync()
     {
@@ -110,201 +110,196 @@ public partial class ProductionPlanning : ComponentBase
 
     private async Task ForceRecalculate()
     {
-  if (!await JSRuntime.InvokeAsync<bool>("confirm", "�� �������� �� ������� ���� ���������� �� �������� ������ � ����. ����������?"))
-     return;
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", "Це скине всі ручні зміни дат завершення. Продовжити?"))
+            return;
 
         try
         {
-            Logger.LogInfo("?? ���������� �����������: �������� ��������� ���", "ProductionPlanning");
+            Logger.LogInfo("Примусовий перерахунок: очищення кастомних дат", "ProductionPlanning");
 
- // ������� �� ������� ���� ����������
-  var customDatesCount = workshopData.CustomCompletionDates.Count;
-        workshopData.CustomCompletionDates.Clear();
+            var customDatesCount = workshopData.CustomCompletionDates.Count;
+            workshopData.CustomCompletionDates.Clear();
 
-     Logger.LogInfo($"? �������� {customDatesCount} ��������� ���", "ProductionPlanning");
+            Logger.LogInfo($"Очищено {customDatesCount} кастомних дат", "ProductionPlanning");
 
-            // ����������� ������ � ����
-   CalculateAllSchedules();
-
- // ����������� ��������
+            CalculateAllSchedules();
             await SaveAllData();
 
-     statusMessage = $"? ���������� ����������� ��������! ������� {customDatesCount} ��������� ���.";
-   Logger.LogInfo("? ���������� ����������� ��������� ������", "ProductionPlanning");
+            statusMessage = $"✅ Графіки перераховано! Очищено {customDatesCount} кастомних дат.";
+            Logger.LogInfo("Примусовий перерахунок завершено", "ProductionPlanning");
         }
         catch (Exception ex)
         {
-       statusMessage = $"? ������� ����������� �����������: {ex.Message}";
-            Logger.LogError("������� ����������� �����������", ex, "ProductionPlanning");
+            statusMessage = $"❌ Помилка перерахунку: {ex.Message}";
+            Logger.LogError("Помилка примусового перерахунку", ex, "ProductionPlanning");
         }
     }
 
     private async Task LoadData()
     {
         try
-  {
-     Logger.LogInfo("������� ������������ �����", "ProductionPlanning");
+        {
+            Logger.LogInfo("Завантаження даних", "ProductionPlanning");
 
-   var loadedData = await StorageService.LoadWorkshopDataAsync();
+            // Завантажуємо конфігурацію цехів
+            workshops = await WorkshopConfigService.GetActiveWorkshopsAsync();
+            Logger.LogInfo($"Завантажено {workshops.Count} цехів", "ProductionPlanning");
+
+            var loadedData = await StorageService.LoadWorkshopDataAsync();
             if (loadedData != null)
-          {
-  workshopData = loadedData;
+            {
+                workshopData = loadedData;
 
-    // ������������ �� � ��������� ��� ��� �����
-      if (!workshopData.WorkshopCapacities.ContainsKey(1))
-         workshopData.WorkshopCapacities[1] = 1000;
-     if (!workshopData.WorkshopCapacities.ContainsKey(3))
-    workshopData.WorkshopCapacities[3] = 1000;
-           if (!workshopData.WorkshopCapacities.ContainsKey(6))
-   workshopData.WorkshopCapacities[6] = 1000;
+                // Ініціалізуємо цехи якщо потрібно
+                foreach (var workshop in workshops)
+                {
+                    workshopData.EnsureWorkshopExists(workshop.Number);
+                }
 
-     var totalOrders = workshopData.WorkshopOrders.Sum(x => x.Value.Count);
-   Logger.LogInfo($"����������� {totalOrders} ��������� � {workshopData.WorkshopOrders.Count} �����", "ProductionPlanning");
+                var totalOrders = workshopData.WorkshopOrders.Sum(x => x.Value.Count);
+                Logger.LogInfo($"Завантажено {totalOrders} замовлень для {workshopData.WorkshopOrders.Count} цехів", "ProductionPlanning");
 
-// ����������� ����������� ������ ���� � ����������
-     if (workshopData.WorkshopOrders.Any())
-       {
-         CalculateAllSchedules();
-    }
+                if (workshopData.WorkshopOrders.Any())
+                {
+                    CalculateAllSchedules();
+                }
             }
             else
-       {
-     Logger.LogWarning("��� �� ��������, �������� ���", "ProductionPlanning");
-     }
+            {
+                Logger.LogWarning("Даних немає, ініціалізація", "ProductionPlanning");
+                workshopData.EnsureDefaultWorkshops();
+            }
 
-    StateHasChanged();
+            StateHasChanged();
         }
-  catch (Exception ex)
+        catch (Exception ex)
         {
-   Logger.LogError("������� ������������ �����", ex, "ProductionPlanning");
-         statusMessage = $"������� ������������: {ex.Message}";
-            Console.WriteLine($"Error loading data: {ex}");
+            Logger.LogError("Помилка завантаження даних", ex, "ProductionPlanning");
+            statusMessage = $"❌ Помилка завантаження: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Розрахувати графік для одного цеху (усунення дублювання)
+    /// </summary>
+    private ProductionSchedule? CalculateScheduleForWorkshop(int workshopNumber)
+    {
+        if (!workshopData.WorkshopOrders.ContainsKey(workshopNumber) || 
+            !workshopData.WorkshopOrders[workshopNumber].Any())
+        {
+            return null;
+        }
+
+        var orders = workshopData.WorkshopOrders[workshopNumber];
+        
+        var dates = workshopData.WorkshopOrderDates.ContainsKey(workshopNumber)
+            ? workshopData.WorkshopOrderDates[workshopNumber]
+            : orders.Select((_, i) => workshopData.StartDate.AddDays(i)).ToList();
+
+        var names = workshopData.WorkshopOrderNames.GetValueOrDefault(workshopNumber);
+
+        var capacity = workshopData.GetCapacity(workshopNumber);
+        var leadTime = workshopData.GetProductionLeadTime(workshopNumber);
+        var daysBefore = workshopData.GetDaysBeforeProduction(workshopNumber);
+
+        var schedule = PlanningService.CalculateSchedule(
+            orders,
+            workshopData.StartDate,
+            capacity,
+            leadTime,
+            dates,
+            names,
+            workshopData.CustomCompletionDates,
+            workshopNumber,
+            daysBefore
+        );
+
+        // Встановлюємо номер цеху для всіх замовлень
+        foreach (var order in schedule.Orders)
+        {
+            order.WorkshopNumber = workshopNumber;
+        }
+
+        return schedule;
     }
 
     private void CalculateAllSchedules()
     {
         try
-    {
-     Logger.LogInfo("������� ���������� ������ ��� ��� �����", "ProductionPlanning");
-       var startTime = DateTime.Now;
+        {
+            Logger.LogInfo("Розрахунок графіків для всіх цехів", "ProductionPlanning");
+            var startTime = DateTime.Now;
 
-     // ����������� ����� ��� ���� �1
-            if (workshopData.WorkshopOrders.ContainsKey(1) && workshopData.WorkshopOrders[1].Any())
-   {
-    var dates1 = workshopData.WorkshopOrderDates.ContainsKey(1)
-       ? workshopData.WorkshopOrderDates[1]
-         : workshopData.WorkshopOrders[1].Select((_, i) => workshopData.StartDate.AddDays(i)).ToList();
+            schedules.Clear();
 
-      var names1 = workshopData.WorkshopOrderNames.ContainsKey(1)
- ? workshopData.WorkshopOrderNames[1]
-         : null;
-
-     schedule1 = PlanningService.CalculateSchedule(
-          workshopData.WorkshopOrders[1],
-      workshopData.StartDate,
-       workshopData.WorkshopCapacities[1],
-     workshopData.ProductionLeadTime,
-           dates1,
-        names1,
-        workshopData.CustomCompletionDates,
-      1,
-         workshopData.DaysBeforeProduction
-  );
-
-          // ������ ����� ���� �� ������� ����������
-     foreach (var order in schedule1.Orders)
-      {
-           order.WorkshopNumber = 1;
-     }
-       }
-
-     // ����������� ����� ��� ���� �3
-            if (workshopData.WorkshopOrders.ContainsKey(3) && workshopData.WorkshopOrders[3].Any())
-    {
-        var dates3 = workshopData.WorkshopOrderDates.ContainsKey(3)
-         ? workshopData.WorkshopOrderDates[3]
-       : workshopData.WorkshopOrders[3].Select((_, i) => workshopData.StartDate.AddDays(i)).ToList();
-
-     var names3 = workshopData.WorkshopOrderNames.ContainsKey(3)
-         ? workshopData.WorkshopOrderNames[3]
-          : null;
-
-          schedule3 = PlanningService.CalculateSchedule(
-        workshopData.WorkshopOrders[3],
-      workshopData.StartDate,
-       workshopData.WorkshopCapacities[3],
-    workshopData.ProductionLeadTime,
-      dates3,
-            names3,
-   workshopData.CustomCompletionDates,
-      3,
-        workshopData.DaysBeforeProduction
-           );
-
-          foreach (var order in schedule3.Orders)
-   {
-        order.WorkshopNumber = 3;
-  }
-    }
-
- // ����������� ����� ��� ���� �6
-            if (workshopData.WorkshopOrders.ContainsKey(6) && workshopData.WorkshopOrders[6].Any())
+            // Розраховуємо для всіх активних цехів
+            foreach (var workshop in workshops)
             {
-    var dates6 = workshopData.WorkshopOrderDates.ContainsKey(6)
-     ? workshopData.WorkshopOrderDates[6]
-          : workshopData.WorkshopOrders[6].Select((_, i) => workshopData.StartDate.AddDays(i)).ToList();
-
-   var names6 = workshopData.WorkshopOrderNames.ContainsKey(6)
-      ? workshopData.WorkshopOrderNames[6]
-        : null;
-
-          schedule6 = PlanningService.CalculateSchedule(
-           workshopData.WorkshopOrders[6],
-    workshopData.StartDate,
-       workshopData.WorkshopCapacities[6],
-        workshopData.ProductionLeadTime,
- dates6,
-       names6,
-          workshopData.CustomCompletionDates,
-   6,
-   workshopData.DaysBeforeProduction
-        );
-
-           foreach (var order in schedule6.Orders)
-     {
-          order.WorkshopNumber = 6;
-        }
+                var schedule = CalculateScheduleForWorkshop(workshop.Number);
+                if (schedule != null)
+                {
+                    schedules[workshop.Number] = schedule;
+                }
             }
 
-            hasSchedules = (schedule1?.Orders.Any() ?? false) ||
-            (schedule3?.Orders.Any() ?? false) ||
-              (schedule6?.Orders.Any() ?? false);
+            // Також розраховуємо для цехів з даними, які не в конфігурації
+            foreach (var workshopNumber in workshopData.GetAllWorkshopNumbers())
+            {
+                if (!schedules.ContainsKey(workshopNumber))
+                {
+                    var schedule = CalculateScheduleForWorkshop(workshopNumber);
+                    if (schedule != null)
+                    {
+                        schedules[workshopNumber] = schedule;
+                    }
+                }
+            }
+
+            hasSchedules = schedules.Values.Any(s => s.Orders.Any());
 
             if (hasSchedules)
-      {
-       var elapsed = DateTime.Now - startTime;
-       var totalOrders = (schedule1?.Orders.Count ?? 0) + (schedule3?.Orders.Count ?? 0) + (schedule6?.Orders.Count ?? 0);
-       Logger.LogInfo($"����� ������ ������������: {totalOrders} ��������� �� {elapsed.TotalMilliseconds:F0}ms", "ProductionPlanning");
+            {
+                var elapsed = DateTime.Now - startTime;
+                var totalOrders = schedules.Values.Sum(s => s.Orders.Count);
+                Logger.LogInfo($"Розраховано графіки: {totalOrders} замовлень за {elapsed.TotalMilliseconds:F0}ms", "ProductionPlanning");
 
-           statusMessage = "? ������ ������ ���������� ��� ��� �����!";
-    
-     // ?? �������� ���� ��� ��������� ������
-            ganttChartKey++;
-       }
-   else
-         {
-    Logger.LogWarning("���� ��������� ��� ���������� ������", "ProductionPlanning");
-statusMessage = "?? ���� ��������� ��� ����������.";
-    }
+                statusMessage = "✅ Графіки розраховано успішно!";
+                ganttChartKey++;
+            }
+            else
+            {
+                Logger.LogWarning("Немає замовлень для розрахунку", "ProductionPlanning");
+                statusMessage = "⚠️ Немає замовлень для розрахунку.";
+            }
 
-       StateHasChanged();
+            StateHasChanged();
         }
         catch (Exception ex)
         {
- Logger.LogError("������� ���������� ������", ex, "ProductionPlanning");
- statusMessage = $"������� ����������: {ex.Message}";
-            Console.WriteLine($"Error calculating schedules: {ex}");
+            Logger.LogError("Помилка розрахунку графіків", ex, "ProductionPlanning");
+            statusMessage = $"❌ Помилка розрахунку: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Отримати графік для цеху (універсальний метод)
+    /// </summary>
+    public ProductionSchedule? GetSchedule(int workshopNumber)
+    {
+        return schedules.GetValueOrDefault(workshopNumber);
+    }
+
+    /// <summary>
+    /// Отримати всі цехи з графіками
+    /// </summary>
+    public IEnumerable<(WorkshopConfig Config, ProductionSchedule Schedule)> GetWorkshopsWithSchedules()
+    {
+        foreach (var workshop in workshops.OrderBy(w => w.SortOrder))
+        {
+            if (schedules.TryGetValue(workshop.Number, out var schedule) && schedule.Orders.Any())
+            {
+                yield return (workshop, schedule);
+            }
         }
     }
 
@@ -312,328 +307,263 @@ statusMessage = "?? ���� ��������� ��� ���
     {
         try
         {
-         Logger.LogInfo("���������� �����", "ProductionPlanning");
+            Logger.LogInfo("Збереження даних", "ProductionPlanning");
 
             await StorageService.SaveWorkshopDataAsync(workshopData);
 
-  var totalOrders = workshopData.WorkshopOrders.Sum(x => x.Value.Count);
-       Logger.LogInfo($"��� ������ ���������: {totalOrders} ���������", "ProductionPlanning");
+            var totalOrders = workshopData.WorkshopOrders.Sum(x => x.Value.Count);
+            Logger.LogInfo($"Дані збережено: {totalOrders} замовлень", "ProductionPlanning");
 
-   statusMessage = "? ��� ������ ���������!";
+            statusMessage = "✅ Дані збережено!";
             StateHasChanged();
         }
         catch (Exception ex)
         {
-   Logger.LogError("������� ���������� �����", ex, "ProductionPlanning");
-      statusMessage = $"������� ����������: {ex.Message}";
-     Console.WriteLine($"Error saving data: {ex}");
-   }
+            Logger.LogError("Помилка збереження даних", ex, "ProductionPlanning");
+            statusMessage = $"❌ Помилка збереження: {ex.Message}";
+        }
     }
 
     private async Task ClearAllData()
     {
-if (!await JSRuntime.InvokeAsync<bool>("confirm", "�� �������, �� ������ �������� �� ���? �� �� ��������� ���������."))
-   return;
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", "Видалити всі дані? Цю дію неможливо відмінити."))
+            return;
 
-  try
+        try
         {
-    await StorageService.ClearAllDataAsync();
-         workshopData = new WorkshopData();
-      schedule1 = null;
- schedule3 = null;
-    schedule6 = null;
+            await StorageService.ClearAllDataAsync();
+            workshopData = new WorkshopData();
+            schedules.Clear();
             hasSchedules = false;
-         statusMessage = "? �� ��� �������!";
-         StateHasChanged();
+            statusMessage = "✅ Дані очищено!";
+            StateHasChanged();
         }
-      catch (Exception ex)
+        catch (Exception ex)
         {
-     statusMessage = $"������� ��������: {ex.Message}";
-            Console.WriteLine($"Error clearing data: {ex}");
-   }
+            statusMessage = $"❌ Помилка очищення: {ex.Message}";
+        }
     }
 
     private void StartOrderEdit(int workshopNumber, Order order)
     {
         editingOrder = order;
-     editingOrder.WorkshopNumber = workshopNumber;
+        editingOrder.WorkshopNumber = workshopNumber;
         editOrderName = order.OrderName ?? string.Empty;
         editOrderDate = order.StartDate;
         editProductionStart = order.ProductionStartDate;
-      editProductionEnd = order.ProductionEndDate;
+        editProductionEnd = order.ProductionEndDate;
         editCompletionDate = order.CompletionDate;
 
-        Logger.LogInfo($"?? ����������� ���������� �{order.Day} (��� �{workshopNumber})", "ProductionPlanning");
-        Logger.LogInfo($"?? ���� ����������: {editOrderDate:dd.MM.yyyy}", "ProductionPlanning");
-        Logger.LogInfo($"?? ������� �����������: {editProductionStart:dd.MM.yyyy}", "ProductionPlanning");
-        Logger.LogInfo($"?? ʳ���� �����������: {editProductionEnd:dd.MM.yyyy}", "ProductionPlanning");
-        Logger.LogInfo($"?? ���� ����������: {editCompletionDate:dd.MM.yyyy}", "ProductionPlanning");
-        Logger.LogInfo($"?? �����: '{editOrderName}'", "ProductionPlanning");
-
+        Logger.LogInfo($"Редагування замовлення {order.Day} (цех {workshopNumber})", "ProductionPlanning");
         StateHasChanged();
     }
 
     private bool ValidateOrderEdit()
     {
-        Logger.LogInfo($"? ��������: �������Ͳ ����-�ʲ ����", "ProductionPlanning");
-        Logger.LogInfo($"  � ���� ����������: {editCompletionDate:dd.MM.yyyy}", "ProductionPlanning");
-        Logger.LogInfo($"? �������� �������� (��� ��������)", "ProductionPlanning");
-
         return true;
     }
 
     private async Task SaveOrderEdit(int workshopNumber, Order order)
     {
         try
-  {
-            Logger.LogInfo($"?? === ������� ���������� ===", "ProductionPlanning");
-     Logger.LogInfo($"?? ���������� �{order.Day}, ��� �{workshopNumber}", "ProductionPlanning");
-    Logger.LogInfo($"?? ���� ����������: {editOrderDate:dd.MM.yyyy}", "ProductionPlanning");
-        Logger.LogInfo($"?? ������� �����������: {editProductionStart:dd.MM.yyyy}", "ProductionPlanning");
-       Logger.LogInfo($"?? ʳ���� �����������: {editProductionEnd:dd.MM.yyyy}", "ProductionPlanning");
-       Logger.LogInfo($"?? ���� ����������: {editCompletionDate:dd.MM.yyyy}", "ProductionPlanning");
-            Logger.LogInfo($"?? �����: '{editOrderName}'", "ProductionPlanning");
+        {
+            Logger.LogInfo($"Збереження змін замовлення {order.Day}, цех {workshopNumber}", "ProductionPlanning");
 
-if (!ValidateOrderEdit())
+            if (!ValidateOrderEdit())
             {
-    Logger.LogWarning($"? �������� �� ��������", "ProductionPlanning");
+                Logger.LogWarning("Валідація не пройдена", "ProductionPlanning");
                 return;
             }
 
-            var schedule = workshopNumber switch
-     {
-                1 => schedule1,
-   3 => schedule3,
-     6 => schedule6,
-    _ => null
-            };
+            var schedule = GetSchedule(workshopNumber);
 
-       if (schedule == null || !schedule.Orders.Any())
-   {
-      statusMessage = "? �������: ����� �� ��������";
-      Logger.LogError($"����� �� �������� ��� ���� �{workshopNumber}", null, "ProductionPlanning");
-    return;
-     }
-
-    var orderToEdit = schedule.Orders.FirstOrDefault(o => o.Day == order.Day);
-    if (orderToEdit == null)
+            if (schedule == null || !schedule.Orders.Any())
             {
-       statusMessage = $"? �������: ���������� �{order.Day} �� ��������";
-      Logger.LogError($"���������� �{order.Day} �� �������� � ������", null, "ProductionPlanning");
-return;
+                statusMessage = "❌ Помилка: графік не знайдено";
+                Logger.LogError($"Графік не знайдено для цеху {workshopNumber}", null, "ProductionPlanning");
+                return;
             }
 
-       var scheduleIndex = schedule.Orders.IndexOf(orderToEdit);
-          Logger.LogInfo($"?? �������� ���������� �� ������ {scheduleIndex}", "ProductionPlanning");
-
-       // ��������� �����
-if (!string.IsNullOrWhiteSpace(editOrderName))
+            var orderToEdit = schedule.Orders.FirstOrDefault(o => o.Day == order.Day);
+            if (orderToEdit == null)
             {
-       var oldName = orderToEdit.OrderName;
-     orderToEdit.OrderName = editOrderName;
-    Logger.LogInfo($"?? ����� ������: '{oldName}' ? '{editOrderName}'", "ProductionPlanning");
+                statusMessage = $"❌ Помилка: замовлення {order.Day} не знайдено";
+                return;
+            }
 
-        if (!workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
+            var scheduleIndex = schedule.Orders.IndexOf(orderToEdit);
+
+            // Оновлення назви
+            if (!string.IsNullOrWhiteSpace(editOrderName))
+            {
+                orderToEdit.OrderName = editOrderName;
+
+                if (!workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
                 {
-              workshopData.WorkshopOrderNames[workshopNumber] = new List<string>();
-    }
-
-    while (workshopData.WorkshopOrderNames[workshopNumber].Count <= scheduleIndex)
-       {
-         workshopData.WorkshopOrderNames[workshopNumber].Add(string.Empty);
+                    workshopData.WorkshopOrderNames[workshopNumber] = new List<string>();
                 }
 
-           workshopData.WorkshopOrderNames[workshopNumber][scheduleIndex] = editOrderName;
+                while (workshopData.WorkshopOrderNames[workshopNumber].Count <= scheduleIndex)
+                {
+                    workshopData.WorkshopOrderNames[workshopNumber].Add(string.Empty);
+                }
+
+                workshopData.WorkshopOrderNames[workshopNumber][scheduleIndex] = editOrderName;
             }
 
-   // ��������� ���� ����������
+            // Оновлення дати замовлення
             if (editOrderDate != order.StartDate)
             {
-     orderToEdit.StartDate = editOrderDate;
-     Logger.LogInfo($"?? ���� ���������� ������: {order.StartDate:dd.MM.yyyy} ? {editOrderDate:dd.MM.yyyy}", "ProductionPlanning");
+                orderToEdit.StartDate = editOrderDate;
 
-  if (!workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
-  {
-           workshopData.WorkshopOrderDates[workshopNumber] = new List<DateTime>();
-          }
+                if (!workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
+                {
+                    workshopData.WorkshopOrderDates[workshopNumber] = new List<DateTime>();
+                }
 
-        while (workshopData.WorkshopOrderDates[workshopNumber].Count <= scheduleIndex)
-    {
-      workshopData.WorkshopOrderDates[workshopNumber].Add(DateTime.Today);
-     }
+                while (workshopData.WorkshopOrderDates[workshopNumber].Count <= scheduleIndex)
+                {
+                    workshopData.WorkshopOrderDates[workshopNumber].Add(DateTime.Today);
+                }
 
-      workshopData.WorkshopOrderDates[workshopNumber][scheduleIndex] = editOrderDate;
-      }
+                workshopData.WorkshopOrderDates[workshopNumber][scheduleIndex] = editOrderDate;
+            }
 
- if (editProductionStart != order.ProductionStartDate)
-   {
-          Logger.LogInfo($"?? ���� ������� ����������� ������: {order.ProductionStartDate:dd.MM.yyyy} ? {editProductionStart:dd.MM.yyyy}", "ProductionPlanning");
-}
-
- if (editProductionEnd != order.ProductionEndDate)
-            {
-   Logger.LogInfo($"?? ���� ��������� ����������� ������: {order.ProductionEndDate:dd.MM.yyyy} ? {editProductionEnd:dd.MM.yyyy}", "ProductionPlanning");
-    }
-
-            // �������� ���� ����������
-       var key = $"{workshopNumber}_{order.Day}";
+            // Збереження кастомної дати завершення
+            var key = $"{workshopNumber}_{order.Day}";
             workshopData.CustomCompletionDates[key] = editCompletionDate;
-  Logger.LogInfo($"?? ���� ���������� ���������: {editCompletionDate:dd.MM.yyyy} (����: {key})", "ProductionPlanning");
 
-      editingOrder = null;
-   StateHasChanged();
+            editingOrder = null;
+            StateHasChanged();
 
- Logger.LogInfo("?? ����������� ������ � ����� ����� ����������...", "ProductionPlanning");
-   CalculateAllSchedules();
-
-            Logger.LogInfo("?? ���������� ����� � ����...", "ProductionPlanning");
+            CalculateAllSchedules();
             await SaveAllData();
 
- statusMessage = $"? ���������� �{order.Day} ������ ������������!";
-     Logger.LogInfo($"? ���������� �{order.Day} ������ ������������", "ProductionPlanning");
-
+            statusMessage = $"✅ Замовлення {order.Day} оновлено!";
             StateHasChanged();
         }
         catch (Exception ex)
-    {
-  statusMessage = $"? ������� ����������: {ex.Message}";
-     Logger.LogError($"������� ���������� ����������� ���������� �{order.Day}", ex, "ProductionPlanning");
-       Console.WriteLine($"Error saving order edit: {ex}");
- }
+        {
+            statusMessage = $"❌ Помилка збереження: {ex.Message}";
+            Logger.LogError($"Помилка збереження замовлення {order.Day}", ex, "ProductionPlanning");
+        }
     }
 
     private void CancelOrderEdit()
     {
-    editingOrder = null;
-      StateHasChanged();
+        editingOrder = null;
+        StateHasChanged();
     }
 
     private async Task DeleteOrder(int workshopNumber, int orderDay)
     {
-        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"�������� ���������� �{orderDay} � ���� �{workshopNumber}?"))
-          return;
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"Видалити замовлення {orderDay} цеху {workshopNumber}?"))
+            return;
 
         try
-{
-         Logger.LogInfo($"��������� ���������� �{orderDay} � ���� �{workshopNumber}", "ProductionPlanning");
+        {
+            Logger.LogInfo($"Видалення замовлення {orderDay} цеху {workshopNumber}", "ProductionPlanning");
 
-       var schedule = workshopNumber switch
-  {
-       1 => schedule1,
-        3 => schedule3,
-              6 => schedule6,
-           _ => null
-            };
+            var schedule = GetSchedule(workshopNumber);
 
             if (schedule == null || !schedule.Orders.Any())
-   {
-            statusMessage = "�������: ����� �� ��������";
-     return;
+            {
+                statusMessage = "❌ Помилка: графік не знайдено";
+                return;
             }
 
             var orderToDelete = schedule.Orders.FirstOrDefault(o => o.Day == orderDay);
             if (orderToDelete == null)
-  {
-  statusMessage = $"�������: ���������� �{orderDay} �� ��������";
-     return;
+            {
+                statusMessage = $"❌ Помилка: замовлення {orderDay} не знайдено";
+                return;
             }
 
             var scheduleIndex = schedule.Orders.IndexOf(orderToDelete);
 
-if (workshopData.WorkshopOrders.ContainsKey(workshopNumber))
+            if (workshopData.WorkshopOrders.ContainsKey(workshopNumber))
             {
-      var orders = workshopData.WorkshopOrders[workshopNumber];
+                var orders = workshopData.WorkshopOrders[workshopNumber];
 
-        if (scheduleIndex >= 0 && scheduleIndex < orders.Count)
-          {
-    orders.RemoveAt(scheduleIndex);
+                if (scheduleIndex >= 0 && scheduleIndex < orders.Count)
+                {
+                    orders.RemoveAt(scheduleIndex);
 
-     if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber) &&
-          scheduleIndex < workshopData.WorkshopOrderDates[workshopNumber].Count)
-       {
-         workshopData.WorkshopOrderDates[workshopNumber].RemoveAt(scheduleIndex);
-    }
+                    if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber) &&
+                        scheduleIndex < workshopData.WorkshopOrderDates[workshopNumber].Count)
+                    {
+                        workshopData.WorkshopOrderDates[workshopNumber].RemoveAt(scheduleIndex);
+                    }
 
-          if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber) &&
-   scheduleIndex < workshopData.WorkshopOrderNames[workshopNumber].Count)
-    {
-   workshopData.WorkshopOrderNames[workshopNumber].RemoveAt(scheduleIndex);
-               }
+                    if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber) &&
+                        scheduleIndex < workshopData.WorkshopOrderNames[workshopNumber].Count)
+                    {
+                        workshopData.WorkshopOrderNames[workshopNumber].RemoveAt(scheduleIndex);
+                    }
 
-               var customKey = $"{workshopNumber}_{orderDay}";
-   if (workshopData.CustomCompletionDates.ContainsKey(customKey))
-           {
-               workshopData.CustomCompletionDates.Remove(customKey);
-        }
-      }
+                    var customKey = $"{workshopNumber}_{orderDay}";
+                    workshopData.CustomCompletionDates.Remove(customKey);
+                }
             }
 
             CalculateAllSchedules();
             await SaveAllData();
 
-            Logger.LogInfo($"���������� �{orderDay} ������ �������� � ���� �{workshopNumber}", "ProductionPlanning");
-       statusMessage = $"? ���������� �{orderDay} �������� � ���� �{workshopNumber}";
-     StateHasChanged();
+            Logger.LogInfo($"Замовлення {orderDay} видалено з цеху {workshopNumber}", "ProductionPlanning");
+            statusMessage = $"✅ Замовлення {orderDay} видалено!";
+            StateHasChanged();
         }
-    catch (Exception ex)
+        catch (Exception ex)
         {
-            statusMessage = $"������� ���������: {ex.Message}";
-     Logger.LogError($"������� ��������� ���������� �{orderDay}", ex, "ProductionPlanning");
+            statusMessage = $"❌ Помилка видалення: {ex.Message}";
+            Logger.LogError($"Помилка видалення замовлення {orderDay}", ex, "ProductionPlanning");
         }
     }
 
-    // ����� ��� ��������� ���������
+    // Методи фільтрації
     private IEnumerable<Order> FilterOrders(IEnumerable<Order> orders)
- {
+    {
         if (orders == null || !orders.Any())
-    return Enumerable.Empty<Order>();
+            return Enumerable.Empty<Order>();
 
-    return orderFilter switch
- {
-      "in-production" => orders.Where(o => o.IsInProduction(filterDate)).OrderBy(o => o.ProductionStartDate),
-  "not-started" => orders.Where(o => o.IsNotStarted(filterDate)).OrderBy(o => o.StartDate),
-       "completed" => orders.Where(o => o.IsCompleted(filterDate)).OrderBy(o => o.CompletionDate),
-      _ => orders.OrderBy(o => o.StartDate) // "all"
+        return orderFilter switch
+        {
+            "in-production" => orders.Where(o => o.IsInProduction(filterDate)).OrderBy(o => o.ProductionStartDate),
+            "not-started" => orders.Where(o => o.IsNotStarted(filterDate)).OrderBy(o => o.StartDate),
+            "completed" => orders.Where(o => o.IsCompleted(filterDate)).OrderBy(o => o.CompletionDate),
+            _ => orders.OrderBy(o => o.StartDate)
         };
     }
 
-    // ������ ��� ��������� ���������
+    // Методи статистики
     private int GetTotalOrdersCount()
     {
-        return (schedule1?.Orders.Count ?? 0) +
-  (schedule3?.Orders.Count ?? 0) +
-      (schedule6?.Orders.Count ?? 0);
+        return schedules.Values.Sum(s => s.Orders.Count);
     }
 
-  private int GetInProductionCount()
-  {
-        return (schedule1?.Orders.Count(o => o.IsInProduction(filterDate)) ?? 0) +
-  (schedule3?.Orders.Count(o => o.IsInProduction(filterDate)) ?? 0) +
-           (schedule6?.Orders.Count(o => o.IsInProduction(filterDate)) ?? 0);
+    private int GetInProductionCount()
+    {
+        return schedules.Values.Sum(s => s.Orders.Count(o => o.IsInProduction(filterDate)));
     }
 
     private int GetNotStartedCount()
     {
-        return (schedule1?.Orders.Count(o => o.IsNotStarted(filterDate)) ?? 0) +
-          (schedule3?.Orders.Count(o => o.IsNotStarted(filterDate)) ?? 0) +
-   (schedule6?.Orders.Count(o => o.IsNotStarted(filterDate)) ?? 0);
+        return schedules.Values.Sum(s => s.Orders.Count(o => o.IsNotStarted(filterDate)));
     }
 
     private int GetCompletedCount()
     {
-        return (schedule1?.Orders.Count(o => o.IsCompleted(filterDate)) ?? 0) +
-       (schedule3?.Orders.Count(o => o.IsCompleted(filterDate)) ?? 0) +
-    (schedule6?.Orders.Count(o => o.IsCompleted(filterDate)) ?? 0);
+        return schedules.Values.Sum(s => s.Orders.Count(o => o.IsCompleted(filterDate)));
     }
 
     private string GetFilterName()
     {
-    return orderFilter switch
+        return orderFilter switch
         {
-      "in-production" => "� �����",
-   "not-started" => "��������",
-"completed" => "���������",
-_ => "�� ����������"
-   };
-  }
+            "in-production" => "В роботі",
+            "not-started" => "Очікують",
+            "completed" => "Завершено",
+            _ => "Усі замовлення"
+        };
+    }
 }
