@@ -8,7 +8,7 @@ window.DragDropInterop = {
     initSortable: function (elementId, dotNetHelper, workshopNumber) {
         const el = document.getElementById(elementId);
         if (!el) {
-            console.error('Element not found:', elementId);
+            console.warn('Element not found:', elementId);
             return false;
         }
 
@@ -23,33 +23,38 @@ window.DragDropInterop = {
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
                 dragClass: 'sortable-drag',
-                handle: '.drag-handle',
-                filter: '.no-drag',
+                handle: '.drag-handle', // Тільки за іконку можна тягнути
+                filter: '.no-drag, input, button, select',
                 preventOnFilter: true,
+                forceFallback: true, // Краще працює з Blazor
                 
                 onStart: function (evt) {
-                    // Додаємо клас до body для стилізації
                     document.body.classList.add('is-dragging');
+                    console.log('Drag started:', evt.oldIndex);
                 },
                 
                 onEnd: function (evt) {
                     document.body.classList.remove('is-dragging');
+                    console.log('Drag ended:', evt.oldIndex, '->', evt.newIndex);
                     
                     if (evt.oldIndex !== evt.newIndex) {
-                        // Викликаємо метод C# для обробки зміни порядку
                         dotNetHelper.invokeMethodAsync('OnOrderReordered', 
                             workshopNumber,
                             evt.oldIndex, 
                             evt.newIndex
-                        ).catch(err => console.error('Error calling OnOrderReordered:', err));
+                        ).then(() => {
+                            console.log('OnOrderReordered called successfully');
+                        }).catch(err => {
+                            console.error('Error calling OnOrderReordered:', err);
+                        });
                     }
                 }
             });
             
-            console.log('Sortable initialized for:', elementId);
+            console.log('✅ Sortable initialized for:', elementId, 'workshop:', workshopNumber);
             return true;
         } catch (err) {
-            console.error('Error initializing Sortable:', err);
+            console.error('❌ Error initializing Sortable:', err);
             return false;
         }
     },
@@ -61,64 +66,6 @@ window.DragDropInterop = {
             delete this.sortableInstances[elementId];
             console.log('Sortable destroyed for:', elementId);
         }
-    },
-
-    // Ініціалізує drag & drop між цехами
-    initCrossWorkshopDrag: function (containerIds, dotNetHelper) {
-        const containers = containerIds.map(id => document.getElementById(id)).filter(el => el);
-        
-        if (containers.length === 0) {
-            console.error('No containers found for cross-workshop drag');
-            return false;
-        }
-
-        containers.forEach((container, index) => {
-            const elementId = containerIds[index];
-            
-            if (this.sortableInstances[elementId]) {
-                this.sortableInstances[elementId].destroy();
-            }
-
-            this.sortableInstances[elementId] = new Sortable(container, {
-                group: 'workshops', // Дозволяє перетягування між групами
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                chosenClass: 'sortable-chosen',
-                handle: '.drag-handle',
-                
-                onAdd: function (evt) {
-                    // Елемент перенесено в інший цех
-                    const fromWorkshop = parseInt(evt.from.dataset.workshop);
-                    const toWorkshop = parseInt(evt.to.dataset.workshop);
-                    const oldIndex = evt.oldIndex;
-                    const newIndex = evt.newIndex;
-                    
-                    dotNetHelper.invokeMethodAsync('OnOrderMovedBetweenWorkshops',
-                        fromWorkshop,
-                        toWorkshop,
-                        oldIndex,
-                        newIndex
-                    ).catch(err => console.error('Error calling OnOrderMovedBetweenWorkshops:', err));
-                },
-                
-                onEnd: function (evt) {
-                    document.body.classList.remove('is-dragging');
-                    
-                    // Якщо перетягування в межах одного цеху
-                    if (evt.from === evt.to && evt.oldIndex !== evt.newIndex) {
-                        const workshopNumber = parseInt(evt.to.dataset.workshop);
-                        dotNetHelper.invokeMethodAsync('OnOrderReordered',
-                            workshopNumber,
-                            evt.oldIndex,
-                            evt.newIndex
-                        ).catch(err => console.error('Error calling OnOrderReordered:', err));
-                    }
-                }
-            });
-        });
-        
-        console.log('Cross-workshop drag initialized for:', containerIds);
-        return true;
     },
 
     // Показує toast повідомлення
@@ -171,3 +118,6 @@ window.DragDropInterop = {
         return confirm(message);
     }
 };
+
+// Автоматична ініціалізація при завантаженні Blazor
+console.log('✅ DragDropInterop loaded');

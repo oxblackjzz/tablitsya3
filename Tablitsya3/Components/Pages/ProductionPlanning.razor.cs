@@ -110,8 +110,10 @@ public partial class ProductionPlanning : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && dragDropEnabled)
+        if (dragDropEnabled && hasSchedules)
         {
+            // Невелика затримка щоб DOM встиг оновитися
+            await Task.Delay(100);
             await InitializeDragDropAsync();
         }
     }
@@ -123,20 +125,26 @@ public partial class ProductionPlanning : ComponentBase, IAsyncDisposable
     {
         try
         {
-            dotNetHelper = DotNetObjectReference.Create(this);
+            dotNetHelper ??= DotNetObjectReference.Create(this);
             
             foreach (var workshop in workshops)
             {
-                var elementId = $"orders-table-{workshop.Number}";
-                await JSRuntime.InvokeVoidAsync(
-                    "DragDropInterop.initSortable",
-                    elementId,
-                    dotNetHelper,
-                    workshop.Number
-                );
+                if (schedules.ContainsKey(workshop.Number) && schedules[workshop.Number].Orders.Any())
+                {
+                    var elementId = $"orders-table-{workshop.Number}";
+                    var result = await JSRuntime.InvokeAsync<bool>(
+                        "DragDropInterop.initSortable",
+                        elementId,
+                        dotNetHelper,
+                        workshop.Number
+                    );
+                    
+                    if (result)
+                    {
+                        Logger.LogInfo($"Drag & Drop ініціалізовано для цеху {workshop.Number}", "ProductionPlanning");
+                    }
+                }
             }
-            
-            Logger.LogInfo("Drag & Drop ініціалізовано", "ProductionPlanning");
         }
         catch (Exception ex)
         {
