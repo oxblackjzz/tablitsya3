@@ -133,7 +133,7 @@ public partial class ProductionPlanning : ComponentBase, IAsyncDisposable
                 {
                     var elementId = $"orders-table-{workshop.Number}";
                     var result = await JSRuntime.InvokeAsync<bool>(
-                        "DragDropInterop.initSortable",
+                        "DragonDropInterop.initSortable",
                         elementId,
                         dotNetHelper,
                         workshop.Number
@@ -165,47 +165,100 @@ public partial class ProductionPlanning : ComponentBase, IAsyncDisposable
             // Створюємо бекап перед зміною
             await BackupService.CreateBackupAsync($"Перед зміною порядку в цеху №{workshopNumber}");
 
-            // Переміщуємо елементи
+            // Отримуємо відфільтровані замовлення (як їх бачить користувач)
+            var schedule = GetSchedule(workshopNumber);
+            if (schedule == null)
+            {
+                Logger.LogWarning($"Графік для цеху {workshopNumber} не знайдено", "ProductionPlanning");
+                return;
+            }
+
+            var filteredOrders = FilterOrders(schedule.Orders).ToList();
+            
+            if (oldIndex < 0 || oldIndex >= filteredOrders.Count || 
+                newIndex < 0 || newIndex >= filteredOrders.Count)
+            {
+                Logger.LogWarning($"Невірні індекси: old={oldIndex}, new={newIndex}, count={filteredOrders.Count}", "ProductionPlanning");
+                return;
+            }
+
+            // Отримуємо Day замовлень, які переміщуються
+            var movedOrderDay = filteredOrders[oldIndex].Day;
+            var targetOrderDay = filteredOrders[newIndex].Day;
+
+            Logger.LogInfo($"Переміщення замовлення Day={movedOrderDay} на позицію Day={targetOrderDay}", "ProductionPlanning");
+
+            // Знаходимо реальні індекси в оригінальних списках
             if (workshopData.WorkshopOrders.ContainsKey(workshopNumber))
             {
                 var orders = workshopData.WorkshopOrders[workshopNumber];
-                if (oldIndex >= 0 && oldIndex < orders.Count && newIndex >= 0 && newIndex < orders.Count)
-                {
-                    var item = orders[oldIndex];
-                    orders.RemoveAt(oldIndex);
-                    orders.Insert(newIndex, item);
+                
+                // Знаходимо індекси в оригінальному списку за допомогою schedule.Orders
+                var originalOldIndex = schedule.Orders.FindIndex(o => o.Day == movedOrderDay);
+                var originalNewIndex = schedule.Orders.FindIndex(o => o.Day == targetOrderDay);
 
-                    // Переміщуємо також дати та назви
+                if (originalOldIndex == -1 || originalNewIndex == -1)
+                {
+                    Logger.LogWarning($"Не знайдено оригінальні індекси", "ProductionPlanning");
+                    return;
+                }
+
+                // Коригуємо індекси для вставки
+                if (originalOldIndex < originalNewIndex)
+                {
+                    // Якщо переміщуємо вниз, потрібно врахувати що елемент видаляється
+                }
+
+                Logger.LogInfo($"Оригінальні індекси: {originalOldIndex} -> {originalNewIndex}", "ProductionPlanning");
+
+                if (originalOldIndex >= 0 && originalOldIndex < orders.Count && 
+                    originalNewIndex >= 0 && originalNewIndex < orders.Count)
+                {
+                    // Переміщуємо площу
+                    var item = orders[originalOldIndex];
+                    orders.RemoveAt(originalOldIndex);
+                    orders.Insert(originalNewIndex, item);
+
+                    // Переміщуємо дати
                     if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
                     {
                         var dates = workshopData.WorkshopOrderDates[workshopNumber];
-                        if (oldIndex < dates.Count && newIndex < dates.Count)
+                        if (originalOldIndex < dates.Count)
                         {
-                            var dateItem = dates[oldIndex];
-                            dates.RemoveAt(oldIndex);
-                            dates.Insert(newIndex, dateItem);
+                            var dateItem = dates[originalOldIndex];
+                            dates.RemoveAt(originalOldIndex);
+                            var insertIdx = Math.Min(originalNewIndex, dates.Count);
+                            dates.Insert(insertIdx, dateItem);
                         }
                     }
 
+                    // Переміщуємо назви
                     if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
                     {
                         var names = workshopData.WorkshopOrderNames[workshopNumber];
-                        if (oldIndex < names.Count && newIndex < names.Count)
+                        if (originalOldIndex < names.Count)
                         {
-                            var nameItem = names[oldIndex];
-                            names.RemoveAt(oldIndex);
-                            names.Insert(newIndex, nameItem);
+                            var nameItem = names[originalOldIndex];
+                            names.RemoveAt(originalOldIndex);
+                            var insertIdx = Math.Min(originalNewIndex, names.Count);
+                            names.Insert(insertIdx, nameItem);
                         }
                     }
+
+                    Logger.LogInfo($"Дані переміщено успішно", "ProductionPlanning");
                 }
             }
 
             // Перераховуємо графіки
             CalculateAllSchedules();
+            
+            // ВАЖЛИВО: Зберігаємо в БД
             await SaveAllData();
 
+            Logger.LogInfo($"Дані збережено в БД", "ProductionPlanning");
+
             // Показуємо повідомлення
-            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Порядок замовлень оновлено!", "success");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Порядок замовлень збережено!", "success");
             
             await InvokeAsync(StateHasChanged);
         }
