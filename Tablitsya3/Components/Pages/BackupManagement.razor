@@ -1,0 +1,267 @@
+﻿@page "/backup-management"
+@using Tablitsya3.Services
+@rendermode InteractiveServer
+@inject BackupService BackupService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+
+<PageTitle>Управління бекапами</PageTitle>
+
+<h1 class="mb-4">
+    <i class="bi bi-clock-history"></i> Управління бекапами
+</h1>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle-fill"></i>
+            <strong>Про бекапи:</strong>
+            <ul class="mb-0">
+                <li>Бекапи створюються автоматично при кожній зміні порядку замовлень (Drag & Drop)</li>
+                <li>Ви можете створити ручний бекап перед важливими змінами</li>
+                <li>Зберігається останні <strong>10 бекапів</strong></li>
+                <li>Бекапи зберігаються в пам'яті і зникнуть при перезапуску сервера</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Кнопки -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="btn-group" role="group">
+            <button class="btn btn-primary" @onclick="CreateBackup">
+                <i class="bi bi-plus-circle"></i> Створити бекап
+            </button>
+            <button class="btn btn-outline-secondary" @onclick="RefreshBackups">
+                <i class="bi bi-arrow-clockwise"></i> Оновити
+            </button>
+            <button class="btn btn-outline-info" @onclick="ExportCurrentData">
+                <i class="bi bi-download"></i> Експорт даних (JSON)
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(statusMessage))
+{
+    <div class="alert @(statusMessage.Contains("❌") ? "alert-danger" : "alert-success") alert-dismissible fade show">
+        @statusMessage
+        <button type="button" class="btn-close" @onclick="() => statusMessage = string.Empty"></button>
+    </div>
+}
+
+<!-- Список бекапів -->
+<div class="card">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-archive"></i> Збережені бекапи
+            <span class="badge bg-light text-dark ms-2">@backups.Count</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        @if (backups.Any())
+        {
+            <div class="list-group">
+                @foreach (var backup in backups)
+                {
+                    var isAutoBackup = backup.Reason.StartsWith("Перед") || backup.Reason.StartsWith("Auto");
+                    <div class="list-group-item backup-card @(isAutoBackup ? "auto-backup" : "manual-backup")">
+                        <div class="d-flex w-100 justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">
+                                    @if (isAutoBackup)
+                                    {
+                                        <span class="badge bg-secondary me-2">Авто</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-primary me-2">Ручний</span>
+                                    }
+                                    @backup.Reason
+                                </h6>
+                                <p class="mb-1 text-muted">
+                                    <i class="bi bi-calendar3"></i> @backup.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")
+                                    <span class="mx-2">|</span>
+                                    <i class="bi bi-box"></i> @backup.OrderCount замовлень
+                                </p>
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn btn-success btn-sm" @onclick="() => RestoreBackup(backup.Id)" title="Відновити">
+                                    <i class="bi bi-arrow-counterclockwise"></i> Відновити
+                                </button>
+                                <button class="btn btn-outline-info btn-sm" @onclick="() => ExportBackup(backup.Id)" title="Експорт">
+                                    <i class="bi bi-download"></i>
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteBackup(backup.Id)" title="Видалити">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-archive" style="font-size: 3rem;"></i>
+                <p class="mt-3">Бекапів поки немає</p>
+                <button class="btn btn-primary" @onclick="CreateBackup">
+                    <i class="bi bi-plus-circle"></i> Створити перший бекап
+                </button>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Імпорт даних з JSON</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Вставте JSON з даними:</label>
+                    <textarea class="form-control" rows="10" @bind="importJson"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                <button type="button" class="btn btn-primary" @onclick="ImportData">
+                    <i class="bi bi-upload"></i> Імпортувати
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<BackupEntry> backups = new();
+    private string statusMessage = string.Empty;
+    private string importJson = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        RefreshBackups();
+    }
+
+    private void RefreshBackups()
+    {
+        backups = BackupService.GetBackups();
+        StateHasChanged();
+    }
+
+    private async Task CreateBackup()
+    {
+        try
+        {
+            var backup = await BackupService.CreateBackupAsync("Ручний бекап");
+            statusMessage = $"✅ Бекап створено! ({backup.OrderCount} замовлень)";
+            RefreshBackups();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Помилка: {ex.Message}";
+        }
+    }
+
+    private async Task RestoreBackup(Guid backupId)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", "Відновити дані з цього бекапу? Поточні дані буде замінено."))
+            return;
+
+        try
+        {
+            var success = await BackupService.RestoreBackupAsync(backupId);
+            if (success)
+            {
+                statusMessage = "✅ Дані відновлено з бекапу!";
+                RefreshBackups();
+            }
+            else
+            {
+                statusMessage = "❌ Бекап не знайдено";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Помилка відновлення: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteBackup(Guid backupId)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", "Видалити цей бекап?"))
+            return;
+
+        if (BackupService.DeleteBackup(backupId))
+        {
+            statusMessage = "✅ Бекап видалено";
+            RefreshBackups();
+        }
+        else
+        {
+            statusMessage = "❌ Бекап не знайдено";
+        }
+    }
+
+    private async Task ExportBackup(Guid backupId)
+    {
+        try
+        {
+            var json = BackupService.ExportToJson(backupId);
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", json);
+            statusMessage = "✅ JSON скопійовано в буфер обміну!";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Помилка експорту: {ex.Message}";
+        }
+    }
+
+    private async Task ExportCurrentData()
+    {
+        try
+        {
+            var json = await BackupService.ExportCurrentDataToJsonAsync();
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", json);
+            statusMessage = "✅ Поточні дані скопійовано в буфер обміну (JSON)!";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Помилка експорту: {ex.Message}";
+        }
+    }
+
+    private async Task ImportData()
+    {
+        if (string.IsNullOrWhiteSpace(importJson))
+        {
+            statusMessage = "❌ Вставте JSON дані";
+            return;
+        }
+
+        try
+        {
+            var success = await BackupService.ImportFromJsonAsync(importJson);
+            if (success)
+            {
+                statusMessage = "✅ Дані імпортовано!";
+                importJson = string.Empty;
+                RefreshBackups();
+            }
+            else
+            {
+                statusMessage = "❌ Помилка імпорту - невірний формат JSON";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Помилка імпорту: {ex.Message}";
+        }
+    }
+}

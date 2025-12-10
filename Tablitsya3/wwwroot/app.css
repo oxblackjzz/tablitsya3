@@ -1,4 +1,4 @@
-﻿/* ============================================ */
+/* ============================================ */
 /* �������� �����-����� ������ */
 /* ============================================ */
 
@@ -751,4 +751,108 @@ background-color: var(--color-gray-600);
    box-shadow: none;
         border: 1px solid var(--color-gray-900);
     }
+}
+
+/* ============================================ */
+/* DRAG & DROP STYLES */
+/* ============================================ */
+
+/* Drag handle icon */
+.drag-handle {
+    cursor: grab;
+    color: var(--color-gray-500);
+    padding: 0.25rem 0.5rem;
+    margin-right: 0.5rem;
+    transition: color 0.2s;
+}
+
+.drag-handle:hover {
+    color: var(--color-black);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Sortable ghost - placeholder where item will be dropped */
+.sortable-ghost {
+    opacity: 0.4;
+    background-color: var(--color-gray-200) !important;
+    border: 2px dashed var(--color-gray-400) !important;
+}
+
+/* Sortable chosen - the item being dragged */
+.sortable-chosen {
+    background-color: var(--color-gray-100) !important;
+    box-shadow: var(--shadow-lg) !important;
+}
+
+/* Sortable drag - styling while dragging */
+.sortable-drag {
+    opacity: 1 !important;
+    background-color: var(--color-white) !important;
+    box-shadow: var(--shadow-lg) !important;
+    transform: rotate(2deg);
+}
+
+/* Body class when dragging */
+body.is-dragging {
+    cursor: grabbing !important;
+}
+
+body.is-dragging * {
+    cursor: grabbing !important;
+}
+
+/* Draggable row */
+tr.draggable-row {
+    transition: background-color 0.2s;
+}
+
+tr.draggable-row:hover {
+    background-color: var(--color-gray-100);
+}
+
+/* No drag class - elements that shouldn't be dragged */
+.no-drag {
+    cursor: default !important;
+}
+
+/* Drop zone highlight */
+.drop-zone-active {
+    border: 2px dashed var(--color-accent) !important;
+    background-color: rgba(255, 0, 0, 0.05) !important;
+}
+
+/* Toast container */
+.toast-container {
+    z-index: 9999;
+}
+
+.toast {
+    min-width: 250px;
+    box-shadow: var(--shadow-lg);
+}
+
+.toast-body {
+    font-size: 0.9rem;
+}
+
+/* Backup card styles */
+.backup-card {
+    transition: all 0.2s;
+    border-left: 4px solid var(--color-gray-400);
+}
+
+.backup-card:hover {
+    box-shadow: var(--shadow-md);
+    border-left-color: var(--color-accent);
+}
+
+.backup-card.auto-backup {
+    border-left-color: var(--color-gray-600);
+}
+
+.backup-card.manual-backup {
+    border-left-color: var(--color-black);
 }

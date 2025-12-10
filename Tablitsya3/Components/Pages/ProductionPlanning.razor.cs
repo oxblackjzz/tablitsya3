@@ -5,7 +5,7 @@ using Tablitsya3.Services;
 
 namespace Tablitsya3.Components.Pages;
 
-public partial class ProductionPlanning : ComponentBase
+public partial class ProductionPlanning : ComponentBase, IAsyncDisposable
 {
     [Inject] private ProductionPlanningService PlanningService { get; set; } = default!;
     [Inject] private UnifiedStorageService StorageService { get; set; } = default!;
@@ -14,11 +14,12 @@ public partial class ProductionPlanning : ComponentBase
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
     [Inject] private LoggingService Logger { get; set; } = default!;
+    [Inject] private BackupService BackupService { get; set; } = default!;
 
     // Дані
     private WorkshopData workshopData = new();
     
-    // Динамічні графіки для всіх цехів (замість окремих schedule1, schedule3, schedule6)
+    // Динамічні графіки для всіх цехів
     private Dictionary<int, ProductionSchedule> schedules = new();
     private List<WorkshopConfig> workshops = new();
     
@@ -28,7 +29,7 @@ public partial class ProductionPlanning : ComponentBase
     // Ключ для оновлення діаграми Ганта
     private int ganttChartKey = 0;
 
-    // Фільтрація (працює для всіх цехів)
+    // Фільтрація
     private string orderFilter = "all";
     private DateTime filterDate = DateTime.Today;
 
@@ -39,6 +40,10 @@ public partial class ProductionPlanning : ComponentBase
     private DateTime editProductionStart = DateTime.Today;
     private DateTime editProductionEnd = DateTime.Today;
     private DateTime editCompletionDate = DateTime.Today;
+
+    // Drag & Drop
+    private bool dragDropEnabled = true;
+    private DotNetObjectReference<ProductionPlanning>? dotNetHelper;
 
     // Властивості для binding дат
     private string EditOrderDateValue
@@ -103,6 +108,201 @@ public partial class ProductionPlanning : ComponentBase
         await LoadData();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && dragDropEnabled)
+        {
+            await InitializeDragDropAsync();
+        }
+    }
+
+    /// <summary>
+    /// Ініціалізує drag & drop для всіх таблиць
+    /// </summary>
+    private async Task InitializeDragDropAsync()
+    {
+        try
+        {
+            dotNetHelper = DotNetObjectReference.Create(this);
+            
+            foreach (var workshop in workshops)
+            {
+                var elementId = $"orders-table-{workshop.Number}";
+                await JSRuntime.InvokeVoidAsync(
+                    "DragDropInterop.initSortable",
+                    elementId,
+                    dotNetHelper,
+                    workshop.Number
+                );
+            }
+            
+            Logger.LogInfo("Drag & Drop ініціалізовано", "ProductionPlanning");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Не вдалось ініціалізувати Drag & Drop: {ex.Message}", "ProductionPlanning");
+        }
+    }
+
+    /// <summary>
+    /// Callback з JavaScript при зміні порядку замовлення
+    /// </summary>
+    [JSInvokable]
+    public async Task OnOrderReordered(int workshopNumber, int oldIndex, int newIndex)
+    {
+        try
+        {
+            Logger.LogInfo($"Зміна порядку в цеху {workshopNumber}: {oldIndex} -> {newIndex}", "ProductionPlanning");
+
+            // Створюємо бекап перед зміною
+            await BackupService.CreateBackupAsync($"Перед зміною порядку в цеху №{workshopNumber}");
+
+            // Переміщуємо елементи
+            if (workshopData.WorkshopOrders.ContainsKey(workshopNumber))
+            {
+                var orders = workshopData.WorkshopOrders[workshopNumber];
+                if (oldIndex >= 0 && oldIndex < orders.Count && newIndex >= 0 && newIndex < orders.Count)
+                {
+                    var item = orders[oldIndex];
+                    orders.RemoveAt(oldIndex);
+                    orders.Insert(newIndex, item);
+
+                    // Переміщуємо також дати та назви
+                    if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
+                    {
+                        var dates = workshopData.WorkshopOrderDates[workshopNumber];
+                        if (oldIndex < dates.Count && newIndex < dates.Count)
+                        {
+                            var dateItem = dates[oldIndex];
+                            dates.RemoveAt(oldIndex);
+                            dates.Insert(newIndex, dateItem);
+                        }
+                    }
+
+                    if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
+                    {
+                        var names = workshopData.WorkshopOrderNames[workshopNumber];
+                        if (oldIndex < names.Count && newIndex < names.Count)
+                        {
+                            var nameItem = names[oldIndex];
+                            names.RemoveAt(oldIndex);
+                            names.Insert(newIndex, nameItem);
+                        }
+                    }
+                }
+            }
+
+            // Перераховуємо графіки
+            CalculateAllSchedules();
+            await SaveAllData();
+
+            // Показуємо повідомлення
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Порядок замовлень оновлено!", "success");
+            
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка зміни порядку", ex, "ProductionPlanning");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
+        }
+    }
+
+    /// <summary>
+    /// Callback з JavaScript при переміщенні замовлення між цехами
+    /// </summary>
+    [JSInvokable]
+    public async Task OnOrderMovedBetweenWorkshops(int fromWorkshop, int toWorkshop, int oldIndex, int newIndex)
+    {
+        try
+        {
+            Logger.LogInfo($"Переміщення з цеху {fromWorkshop} в цех {toWorkshop}: {oldIndex} -> {newIndex}", "ProductionPlanning");
+
+            // Створюємо бекап перед зміною
+            await BackupService.CreateBackupAsync($"Перед переміщенням замовлення з цеху №{fromWorkshop} в цех №{toWorkshop}");
+
+            // Забираємо з старого цеху
+            if (workshopData.WorkshopOrders.ContainsKey(fromWorkshop))
+            {
+                var fromOrders = workshopData.WorkshopOrders[fromWorkshop];
+                if (oldIndex >= 0 && oldIndex < fromOrders.Count)
+                {
+                    var orderValue = fromOrders[oldIndex];
+                    fromOrders.RemoveAt(oldIndex);
+
+                    DateTime? orderDate = null;
+                    string? orderName = null;
+
+                    if (workshopData.WorkshopOrderDates.ContainsKey(fromWorkshop) && 
+                        oldIndex < workshopData.WorkshopOrderDates[fromWorkshop].Count)
+                    {
+                        orderDate = workshopData.WorkshopOrderDates[fromWorkshop][oldIndex];
+                        workshopData.WorkshopOrderDates[fromWorkshop].RemoveAt(oldIndex);
+                    }
+
+                    if (workshopData.WorkshopOrderNames.ContainsKey(fromWorkshop) && 
+                        oldIndex < workshopData.WorkshopOrderNames[fromWorkshop].Count)
+                    {
+                        orderName = workshopData.WorkshopOrderNames[fromWorkshop][oldIndex];
+                        workshopData.WorkshopOrderNames[fromWorkshop].RemoveAt(oldIndex);
+                    }
+
+                    // Додаємо в новий цех
+                    workshopData.EnsureWorkshopExists(toWorkshop);
+                    
+                    var toOrders = workshopData.WorkshopOrders[toWorkshop];
+                    var insertIndex = Math.Min(newIndex, toOrders.Count);
+                    toOrders.Insert(insertIndex, orderValue);
+
+                    if (orderDate.HasValue)
+                    {
+                        var toDates = workshopData.WorkshopOrderDates[toWorkshop];
+                        toDates.Insert(Math.Min(insertIndex, toDates.Count), orderDate.Value);
+                    }
+
+                    if (!string.IsNullOrEmpty(orderName))
+                    {
+                        var toNames = workshopData.WorkshopOrderNames[toWorkshop];
+                        toNames.Insert(Math.Min(insertIndex, toNames.Count), orderName);
+                    }
+                }
+            }
+
+            // Перераховуємо графіки
+            CalculateAllSchedules();
+            await SaveAllData();
+
+            // Показуємо повідомлення
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", 
+                $"Замовлення переміщено з цеху №{fromWorkshop} в цех №{toWorkshop}!", "success");
+            
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка переміщення між цехами", ex, "ProductionPlanning");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
+        }
+    }
+
+    /// <summary>
+    /// Створити бекап даних
+    /// </summary>
+    private async Task CreateBackup()
+    {
+        try
+        {
+            var backup = await BackupService.CreateBackupAsync("Ручний бекап");
+            statusMessage = $"✅ Бекап створено! ({backup.OrderCount} замовлень)";
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Бекап створено!", "success");
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Помилка створення бекапу: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
     private void GoToBulkOrderEntry()
     {
         Navigation.NavigateTo("/bulk-order-entry");
@@ -115,6 +315,9 @@ public partial class ProductionPlanning : ComponentBase
 
         try
         {
+            // Бекап перед перерахунком
+            await BackupService.CreateBackupAsync("Перед примусовим перерахунком");
+
             Logger.LogInfo("Примусовий перерахунок: очищення кастомних дат", "ProductionPlanning");
 
             var customDatesCount = workshopData.CustomCompletionDates.Count;
@@ -141,7 +344,6 @@ public partial class ProductionPlanning : ComponentBase
         {
             Logger.LogInfo("Завантаження даних", "ProductionPlanning");
 
-            // Завантажуємо конфігурацію цехів
             workshops = await WorkshopConfigService.GetActiveWorkshopsAsync();
             Logger.LogInfo($"Завантажено {workshops.Count} цехів", "ProductionPlanning");
 
@@ -150,7 +352,6 @@ public partial class ProductionPlanning : ComponentBase
             {
                 workshopData = loadedData;
 
-                // Ініціалізуємо цехи якщо потрібно
                 foreach (var workshop in workshops)
                 {
                     workshopData.EnsureWorkshopExists(workshop.Number);
@@ -179,9 +380,6 @@ public partial class ProductionPlanning : ComponentBase
         }
     }
 
-    /// <summary>
-    /// Розрахувати графік для одного цеху (усунення дублювання)
-    /// </summary>
     private ProductionSchedule? CalculateScheduleForWorkshop(int workshopNumber)
     {
         if (!workshopData.WorkshopOrders.ContainsKey(workshopNumber) || 
@@ -214,7 +412,6 @@ public partial class ProductionPlanning : ComponentBase
             daysBefore
         );
 
-        // Встановлюємо номер цеху для всіх замовлень
         foreach (var order in schedule.Orders)
         {
             order.WorkshopNumber = workshopNumber;
@@ -232,7 +429,6 @@ public partial class ProductionPlanning : ComponentBase
 
             schedules.Clear();
 
-            // Розраховуємо для всіх активних цехів
             foreach (var workshop in workshops)
             {
                 var schedule = CalculateScheduleForWorkshop(workshop.Number);
@@ -242,7 +438,6 @@ public partial class ProductionPlanning : ComponentBase
                 }
             }
 
-            // Також розраховуємо для цехів з даними, які не в конфігурації
             foreach (var workshopNumber in workshopData.GetAllWorkshopNumbers())
             {
                 if (!schedules.ContainsKey(workshopNumber))
@@ -331,6 +526,9 @@ public partial class ProductionPlanning : ComponentBase
 
         try
         {
+            // Бекап перед очищенням
+            await BackupService.CreateBackupAsync("Перед очищенням всіх даних");
+
             await StorageService.ClearAllDataAsync();
             workshopData = new WorkshopData();
             schedules.Clear();
@@ -393,7 +591,6 @@ public partial class ProductionPlanning : ComponentBase
 
             var scheduleIndex = schedule.Orders.IndexOf(orderToEdit);
 
-            // Оновлення назви
             if (!string.IsNullOrWhiteSpace(editOrderName))
             {
                 orderToEdit.OrderName = editOrderName;
@@ -411,7 +608,6 @@ public partial class ProductionPlanning : ComponentBase
                 workshopData.WorkshopOrderNames[workshopNumber][scheduleIndex] = editOrderName;
             }
 
-            // Оновлення дати замовлення
             if (editOrderDate != order.StartDate)
             {
                 orderToEdit.StartDate = editOrderDate;
@@ -429,7 +625,6 @@ public partial class ProductionPlanning : ComponentBase
                 workshopData.WorkshopOrderDates[workshopNumber][scheduleIndex] = editOrderDate;
             }
 
-            // Збереження кастомної дати завершення
             var key = $"{workshopNumber}_{order.Day}";
             workshopData.CustomCompletionDates[key] = editCompletionDate;
 
@@ -462,6 +657,9 @@ public partial class ProductionPlanning : ComponentBase
 
         try
         {
+            // Бекап перед видаленням
+            await BackupService.CreateBackupAsync($"Перед видаленням замовлення №{orderDay} цеху №{workshopNumber}");
+
             Logger.LogInfo($"Видалення замовлення {orderDay} цеху {workshopNumber}", "ProductionPlanning");
 
             var schedule = GetSchedule(workshopNumber);
@@ -565,5 +763,11 @@ public partial class ProductionPlanning : ComponentBase
             "completed" => "Завершено",
             _ => "Усі замовлення"
         };
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        dotNetHelper?.Dispose();
+        return ValueTask.CompletedTask;
     }
 }

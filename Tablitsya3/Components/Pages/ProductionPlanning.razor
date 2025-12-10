@@ -16,7 +16,7 @@
             <strong>Інструкція:</strong>
             <ul class="mb-0">
                 <li>Переглядайте графіки виробництва для всіх цехів</li>
-                <li>Редагуйте замовлення у таблицях нижче</li>
+                <li><strong>🖱️ Drag & Drop:</strong> Перетягуйте замовлення за іконку <i class="bi bi-grip-vertical"></i> для зміни порядку</li>
                 <li>Використовуйте фільтри для перегляду певного періоду</li>
             </ul>
         </div>
@@ -42,6 +42,12 @@
             <button class="btn btn-outline-secondary" @onclick="LoadData">
                 <i class="bi bi-arrow-clockwise"></i> Оновити дані
             </button>
+            <button class="btn btn-outline-info" @onclick="CreateBackup">
+                <i class="bi bi-cloud-arrow-up"></i> Бекап
+            </button>
+            <a href="/backup-management" class="btn btn-outline-secondary">
+                <i class="bi bi-clock-history"></i> Історія бекапів
+            </a>
             <button class="btn btn-outline-danger" @onclick="ClearAllData">
                 <i class="bi bi-trash-fill"></i> Очистити все
             </button>

@@ -121,6 +121,14 @@ builder.Services.AddSingleton<DatabaseMigrationService>();
 builder.Services.AddScoped<WorkshopConfigService>();
 Console.WriteLine("✅ WorkshopConfigService registered");
 
+// ✅ ДОДАЄМО СЕРВІС БЕКАПІВ
+builder.Services.AddSingleton<BackupService>();
+Console.WriteLine("✅ BackupService registered");
+
+// ✅ ДОДАЄМО DRAG & DROP INTEROP
+builder.Services.AddScoped<DragDropInterop>();
+Console.WriteLine("✅ DragDropInterop registered");
+
 // ✅ ГЛОБАЛЬНА ОБРОБКА ПОМИЛОК
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
