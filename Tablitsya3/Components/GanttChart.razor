@@ -269,7 +269,7 @@
      var statusClass = isCompleted ? "completed" : isInProgress ? "in-progress" : "pending";
       var statusLabel = isCompleted ? "Виробництво завершено" : isInProgress ? "Виробляється зараз" : "Очікує виробництва";
 
-      // Знаходимо найбільший сегмент для відображення назви
+      // ЗнаходимоlargestSegment522 найбільший сегмент для відображення назви
    var largestSegment = GetLargestSegment(segments);
 
   @foreach (var segment in segments)
@@ -363,7 +363,7 @@ data-left-percent="@leftPercent4Str"
 <div class="tooltip-body">
    <div class="tooltip-row">
       <span class="tooltip-label">Площа:</span>
-    <span class="tooltip-value">@order.SquareMeters.ToString("N0") м?</span>
+    <span class="tooltip-value">@order.SquareMeters.ToString("N0") м²</span>
    </div>
      <div class="tooltip-row">
     <span class="tooltip-label">Замовлення:</span>
@@ -371,11 +371,11 @@ data-left-percent="@leftPercent4Str"
    </div>
     <div class="tooltip-row">
         <span class="tooltip-label">Старт:</span>
-    <span class="tooltip-value">@position.ProductionStartDate.ToString("dd.MM.yyyy")</span>
+    <span class="tooltip-value">@order.ProductionStartDate.ToString("dd.MM.yyyy")</span>
 </div>
    <div class="tooltip-row">
          <span class="tooltip-label">Фініш:</span>
-     <span class="tooltip-value">@position.ProductionEndDate.ToString("dd.MM.yyyy")</span>
+     <span class="tooltip-value">@order.ProductionEndDate.ToString("dd.MM.yyyy")</span>
      </div>
     <div class="tooltip-row">
     <span class="tooltip-label">Відвантаж.:</span>
@@ -383,7 +383,7 @@ data-left-percent="@leftPercent4Str"
              </div>
          <div class="tooltip-row">
 <span class="tooltip-label">Днів:</span>
-  <span class="tooltip-value">@productionDays.ToString("F1")</span>
+  <span class="tooltip-value">@order.ProductionDuration.ToString("F1")</span>
         </div>
       <div class="tooltip-row">
    <span class="tooltip-label">Статус:</span>
