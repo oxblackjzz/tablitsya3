@@ -137,11 +137,13 @@ else
                                     var left = startIndex * dayWidth;
                                     var width = (endIndex - startIndex + 1) * dayWidth;
                                     
-                                    // Висота бара пропорційна площі відносно потужності
-                                    // Базова висота рядка = 60px, максимум бара = 50px
-                                    var daysNeeded = order.SquareMeters / capacity;
-                                    var heightPercent = Math.Min(daysNeeded / 3.0 * 100, 100); // 3 дні = 100% висоти
-                                    var barHeight = Math.Max(18, Math.Min(50, 18 + (heightPercent * 0.32)));
+                                    // Висота бара пропорційна площі відносно потужності цеху
+                                    // Формула: площа / потужність = кількість днів роботи
+                                    // Мін висота = 20px, Макс = 55px
+                                    var daysOfWork = (double)order.SquareMeters / capacity;
+                                    // Нормалізуємо: 0.5 дня = 20px, 3+ дні = 55px
+                                    var normalizedHeight = Math.Min(1.0, Math.Max(0.0, (daysOfWork - 0.3) / 2.7));
+                                    var barHeight = 20 + (normalizedHeight * 35); // від 20 до 55px
                                     
                                     var isCompleted = order.ProductionEndDate.Date < DateTime.Today;
                                     var isInProgress = order.ProductionStartDate.Date <= DateTime.Today && order.ProductionEndDate.Date >= DateTime.Today;
@@ -176,13 +178,21 @@ else
                                             <div class="tooltip-title">@orderName</div>
                                             <table class="tooltip-table">
                                                 <tr><td>Площа:</td><td><strong>@order.SquareMeters.ToString("N0") м²</strong></td></tr>
-                                                <tr><td>Потужність:</td><td>@capacity м²/день</td></tr>
-                                                <tr><td>Днів роботи:</td><td><strong>@order.ProductionDuration.ToString("F1")</strong></td></tr>
+                                                <tr><td>Потужність цеху:</td><td>@capacity м²/день</td></tr>
+                                                <tr><td>Завантаження:</td><td><strong>@daysOfWork.ToString("F2") дн.</strong></td></tr>
                                                 <tr class="divider"><td colspan="2"></td></tr>
                                                 <tr><td><i class="bi bi-play-fill text-success"></i> Старт:</td><td><strong>@order.ProductionStartDate.ToString("dd.MM.yyyy")</strong></td></tr>
                                                 <tr><td><i class="bi bi-stop-fill text-warning"></i> Фініш:</td><td><strong>@order.ProductionEndDate.ToString("dd.MM.yyyy")</strong></td></tr>
                                                 <tr><td><i class="bi bi-truck text-primary"></i> Відвантаж.:</td><td><strong>@order.CompletionDate.ToString("dd.MM.yyyy")</strong></td></tr>
                                             </table>
+                                            <!-- Візуальний індикатор завантаження -->
+                                            <div class="load-indicator">
+                                                <small>Завантаження цеху:</small>
+                                                <div class="load-bar">
+                                                    <div class="load-fill" style="width: @(Math.Min(100, daysOfWork * 33).ToString("F0"))%;"></div>
+                                                </div>
+                                                <small>@(daysOfWork * 100 / 3).ToString("F0")%</small>
+                                            </div>
                                         </div>
                                     </div>
                                     
@@ -192,7 +202,7 @@ else
                                         var shipLeft = (shipmentIndex + 0.5) * dayWidth;
                                         <div class="shipment-line" 
                                              style="left: @shipLeft.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)%;"
-                                             title="Відвантаження №@order.Day: @order.CompletionDate.ToString("dd.MM.yyyy")">
+                                             title="Відвантаження №@order.Day: @order.CompletionDate.ToString("dd.ММ.yyyy")">
                                         </div>
                                     }
                                 }
@@ -496,6 +506,31 @@ else
         border-bottom: 1px dashed var(--border-color, #dee2e6);
     }
     
+    /* Індикатор завантаження */
+    .load-indicator {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border-color, #dee2e6);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    .load-bar {
+        flex: 1;
+        height: 8px;
+        background: var(--bg-secondary, #e9ecef);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .load-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #27ae60, #f39c12, #e74c3c);
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    
     /* Легенда */
     .legend-bar {
         display: inline-block;
@@ -546,6 +581,29 @@ else
     [data-theme="dark"] .bar-tooltip {
         background: var(--bg-card);
         border-color: var(--border-color);
+    }
+    
+    .load-indicator {
+        margin-top: 6px;
+        width: 100%;
+    }
+    
+    .load-bar {
+        position: relative;
+        height: 4px;
+        background: rgba(13, 110, 253, 0.2);
+        border-radius: 2px;
+        overflow: hidden;
+    }
+    
+    .load-fill {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        background: linear-gradient(90deg, #0d6efd, #198754);
+        border-radius: 2px;
+        transition: width 0.3s ease;
     }
 </style>
 
