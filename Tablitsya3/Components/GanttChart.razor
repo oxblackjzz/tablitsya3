@@ -140,7 +140,7 @@
    var ganttWidth = Math.Max(minWidthPx, 100);
 
     <div class="alert alert-info mb-3">
-           <strong>Цех №@WorkshopNumber:</strong> 
+           <strong>Ц цех №@WorkshopNumber:</strong> 
                 Замовлень: @ordersToDisplay.Count @(currentViewMode != ViewMode.All ? "(відфільтровано з " + Orders.Count + ")" : "") | 
  Виробничі дні: @totalProductionDays.ToString("F1") |
     Робочих днів: @totalWorkingDays |
@@ -429,68 +429,32 @@ data-left-percent="@leftPercent4Str"
   </div>
     }
 
+    <!-- Спрощена легенда -->
     <div class="gantt-legend mt-3">
-    <div class="alert alert-light border">
-  <h6 class="mb-3"><i class="bi bi-info-circle"></i> Легенда статусів замовлень</h6>
-      <div class="d-flex gap-3 flex-wrap">
-   <div class="legend-status-item">
-    <div class="legend-status-box pending"></div>
-      <span>Очікує виробництва</span>
-       </div>
-    <div class="legend-status-item">
-      <div class="legend-status-box in-progress"></div>
-   <span>Виконується зараз</span>
-    </div>
-     <div class="legend-status-item">
-      <div class="legend-status-box completed"></div>
-      <span>Виробництво завершено</span>
-   </div>
- </div>
- 
-   <hr class="my-3"/>
- 
-      <h6 class="mb-3"><i class="bi bi-calendar-check"></i> Позначення дат</h6>
-  <div class="d-flex gap-3 flex-wrap align-items-center">
-      <div class="legend-status-item">
- <span class="end-flag" style="font-size: 20px;"></span>
-     <span>Закінчення виробництва</span>
-          </div>
-
-  <div class="legend-status-item">
-      <div style="display: flex; align-items: center; gap: 4px;">
-      <div style="width: 3px; height: 20px; background: #3498db;"></div>
-  <div style="width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 6px solid #3498db;"></div>
-    </div>
-   <span>Стрілка дати відвантаження</span>
+        <div class="alert alert-light border">
+            <div class="d-flex gap-4 flex-wrap align-items-center">
+                <div class="legend-status-item">
+                    <div class="legend-status-box pending"></div>
+                    <span>Очікує</span>
+                </div>
+                <div class="legend-status-item">
+                    <div class="legend-status-box in-progress"></div>
+                    <span>В роботі</span>
+                </div>
+                <div class="legend-status-item">
+                    <div class="legend-status-box completed"></div>
+                    <span>Завершено</span>
+                </div>
+                <div class="legend-status-item">
+                    <div class="legend-status-box weekend-pattern"></div>
+                    <span>Вихідні</span>
+                </div>
+                <small class="text-muted ms-auto">
+                    <i class="bi bi-mouse"></i> Наведіть на замовлення для деталей
+                </small>
             </div>
-        <div class="legend-status-item">
-<div style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: white; border: 2px solid #3498db; border-radius: 8px;">
-    <strong style="font-size: 11px;">13.10.2025</strong>
-  </div>
-   <span>Дата готовності відвантаження</span>
-     </div>
         </div>
-   
-        <hr class="my-3"/>
-        
-     <h6 class="mb-3"><i class="bi bi-calendar-x"></i> Робочі дні</h6>
-        <div class="d-flex gap-3 flex-wrap">
-       <div class="legend-status-item">
-    <div class="legend-status-box weekend-pattern"></div>
-  <span>Вихідні (Сб, Нд)</span>
- </div>
- <div class="legend-status-item">
-         <div class="legend-status-box holiday-pattern"></div>
-    <span>Святкові виходи</span>
-        </div>
-        </div>
-
-     <small class="text-muted mt-2 d-block">
-     <i class="bi bi-lightbulb"></i> <strong>Підказка:</strong> Наведіть курсор на блоки для перегляду деталей про замовлення. 
-        Відвантаження розраховане на основу дати з урахуванням п required термінів виробництва.
-      </small>
- </div>
-</div>
+    </div>
       }
     }
 </div>
