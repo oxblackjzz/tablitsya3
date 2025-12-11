@@ -24,8 +24,8 @@ window.DragDropInterop = {
                 chosenClass: 'sortable-chosen',
                 dragClass: 'sortable-drag',
                 handle: '.drag-handle', // Тільки за іконку можна тягнути
-                filter: '.no-drag, input, button, select',
-                preventOnFilter: true,
+                filter: '.no-drag, input, button, select, a, .btn',
+                preventOnFilter: false, // Дозволяємо click на фільтрованих елементах
                 forceFallback: true, // Краще працює з Blazor
                 
                 onStart: function (evt) {
