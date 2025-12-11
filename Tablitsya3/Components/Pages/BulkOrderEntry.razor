@@ -47,10 +47,21 @@
 }
 
 <div class="card">
-    <div class="card-header bg-primary text-white">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
             <i class="bi bi-calendar-plus"></i> Додати замовлення для всіх цехів
         </h5>
+        <!-- Переключення режиму відображення -->
+        <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn @(viewMode == "rows" ? "btn-light" : "btn-outline-light")" 
+                    @onclick="@(() => viewMode = "rows")" title="Цехи в рядках">
+                <i class="bi bi-list"></i> Рядки
+            </button>
+            <button type="button" class="btn @(viewMode == "columns" ? "btn-light" : "btn-outline-light")" 
+                    @onclick="@(() => viewMode = "columns")" title="Цехи в колонках">
+                <i class="bi bi-layout-three-columns"></i> Колонки
+            </button>
+        </div>
     </div>
     <div class="card-body">
         <div class="row mb-4">
@@ -85,65 +96,151 @@
 
         <hr />
 
-        @foreach (var workshop in workshops.OrderBy(w => w.SortOrder))
+        @if (viewMode == "rows")
         {
-            <div class="row mb-4">
-                <div class="col-12">
-                    <h5 class="text-@workshop.ColorClass @(workshop.ColorClass == "warning" ? "text-dark" : "")">
-                        <i class="bi bi-building"></i> @workshop.Name
-                        <small class="text-muted ms-2">(@workshopData.GetCapacity(workshop.Number) м²/день)</small>
-                    </h5>
-                </div>
-                
-                @for (int i = 0; i < ordersPerWorkshop; i++)
-                {
-                    var orderIndex = i;
-                    var fieldKey = $"Workshop{workshop.Number}.Order{orderIndex}";
-                    var hasError = HasFieldError(fieldKey);
-                    
-                    <div class="col-md-@(12 / Math.Min(ordersPerWorkshop, 4)) mb-3">
-                        <label class="form-label">Замовлення @(orderIndex + 1)</label>
-                        <input type="text" 
-                               class="form-control form-control-sm mb-1" 
-                               placeholder="Назва замовлення..."
-                               maxlength="500"
-                               value="@GetOrderName(workshop.Number, orderIndex)"
-                               @onchange="@(e => SetOrderName(workshop.Number, orderIndex, e.Value?.ToString() ?? string.Empty))" />
-                        <input type="number" 
-                               class="form-control @(hasError ? "is-invalid" : "")" 
-                               placeholder="0 (м²)"
-                               min="0"
-                               max="100000"
-                               step="1"
-                               value="@GetOrderValue(workshop.Number, orderIndex)"
-                               @onchange="@(e => SetOrderValue(workshop.Number, orderIndex, e.Value?.ToString() ?? "0"))" />
-                        @if (hasError)
-                        {
-                            <div class="invalid-feedback">@GetFieldError(fieldKey)</div>
-                        }
-                        @{
-                            var orderValue = GetOrderValue(workshop.Number, orderIndex);
-                            var capacity = workshopData.GetCapacity(workshop.Number);
-                            if (orderValue > 0)
-                            {
-                                var duration = orderValue / capacity;
-                                var durationClass = duration > 10 ? "text-danger" : duration > 5 ? "text-warning" : "text-success";
-                                <small class="@durationClass">
-                                    <i class="bi bi-clock"></i> Тривалість: @duration.ToString("F2") днів
-                                    @if (orderValue > 10000)
-                                    {
-                                        <span class="badge bg-warning ms-1">Велике замовлення</span>
-                                    }
-                                </small>
-                            }
-                        }
+            <!-- РЕЖИМ РЯДКІВ: Цехи вертикально -->
+            @foreach (var workshop in workshops.OrderBy(w => w.SortOrder))
+            {
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <h5 class="text-@workshop.ColorClass @(workshop.ColorClass == "warning" ? "text-dark" : "")">
+                            <i class="bi bi-building"></i> @workshop.Name
+                            <small class="text-muted ms-2">(@workshopData.GetCapacity(workshop.Number) м²/день)</small>
+                        </h5>
                     </div>
-                }
+                    
+                    @for (int i = 0; i < ordersPerWorkshop; i++)
+                    {
+                        var orderIndex = i;
+                        var fieldKey = $"Workshop{workshop.Number}.Order{orderIndex}";
+                        var hasError = HasFieldError(fieldKey);
+                        
+                        <div class="col-md-@(12 / Math.Min(ordersPerWorkshop, 4)) mb-3">
+                            <label class="form-label">Замовлення @(orderIndex + 1)</label>
+                            <input type="text" 
+                                   class="form-control form-control-sm mb-1" 
+                                   placeholder="Назва замовлення..."
+                                   maxlength="500"
+                                   value="@GetOrderName(workshop.Number, orderIndex)"
+                                   @onchange="@(e => SetOrderName(workshop.Number, orderIndex, e.Value?.ToString() ?? string.Empty))" />
+                            <input type="number" 
+                                   class="form-control @(hasError ? "is-invalid" : "")" 
+                                   placeholder="0 (м²)"
+                                   min="0"
+                                   max="100000"
+                                   step="1"
+                                   value="@GetOrderValue(workshop.Number, orderIndex)"
+                                   @onchange="@(e => SetOrderValue(workshop.Number, orderIndex, e.Value?.ToString() ?? "0"))" />
+                            @if (hasError)
+                            {
+                                <div class="invalid-feedback">@GetFieldError(fieldKey)</div>
+                            }
+                            @{
+                                var orderValue = GetOrderValue(workshop.Number, orderIndex);
+                                var capacity = workshopData.GetCapacity(workshop.Number);
+                                if (orderValue > 0)
+                                {
+                                    var duration = orderValue / capacity;
+                                    var durationClass = duration > 10 ? "text-danger" : duration > 5 ? "text-warning" : "text-success";
+                                    <small class="@durationClass">
+                                        <i class="bi bi-clock"></i> @duration.ToString("F2") дн.
+                                    </small>
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+                <hr />
+            }
+        }
+        else
+        {
+            <!-- РЕЖИМ КОЛОНОК: Цехи горизонтально, замовлення вертикально -->
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 120px;">Замовлення</th>
+                            @foreach (var workshop in workshops.OrderBy(w => w.SortOrder))
+                            {
+                                <th class="text-center" style="min-width: 180px;">
+                                    <span class="text-@workshop.ColorClass @(workshop.ColorClass == "warning" ? "text-dark" : "")">
+                                        <i class="bi bi-building"></i> @workshop.Name
+                                    </span>
+                                    <br/>
+                                    <small class="text-muted">@workshopData.GetCapacity(workshop.Number) м²/день</small>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < ordersPerWorkshop; i++)
+                        {
+                            var orderIndex = i;
+                            <tr>
+                                <td class="fw-bold align-middle">
+                                    <i class="bi bi-box"></i> Зам. @(orderIndex + 1)
+                                </td>
+                                @foreach (var workshop in workshops.OrderBy(w => w.SortOrder))
+                                {
+                                    var fieldKey = $"Workshop{workshop.Number}.Order{orderIndex}";
+                                    var hasError = HasFieldError(fieldKey);
+                                    
+                                    <td>
+                                        <input type="text" 
+                                               class="form-control form-control-sm mb-1" 
+                                               placeholder="Назва..."
+                                               maxlength="500"
+                                               value="@GetOrderName(workshop.Number, orderIndex)"
+                                               @onchange="@(e => SetOrderName(workshop.Number, orderIndex, e.Value?.ToString() ?? string.Empty))" />
+                                        <input type="number" 
+                                               class="form-control form-control-sm @(hasError ? "is-invalid" : "")" 
+                                               placeholder="0 м²"
+                                               min="0"
+                                               max="100000"
+                                               step="1"
+                                               value="@GetOrderValue(workshop.Number, orderIndex)"
+                                               @onchange="@(e => SetOrderValue(workshop.Number, orderIndex, e.Value?.ToString() ?? "0"))" />
+                                        @if (hasError)
+                                        {
+                                            <div class="invalid-feedback d-block">@GetFieldError(fieldKey)</div>
+                                        }
+                                        @{
+                                            var orderValue = GetOrderValue(workshop.Number, orderIndex);
+                                            var capacity = workshopData.GetCapacity(workshop.Number);
+                                            if (orderValue > 0)
+                                            {
+                                                var duration = orderValue / capacity;
+                                                var durationClass = duration > 10 ? "text-danger" : duration > 5 ? "text-warning" : "text-success";
+                                                <small class="@durationClass">
+                                                    <i class="bi bi-clock"></i> @duration.ToString("F1") дн.
+                                                </small>
+                                            }
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <td class="fw-bold">Всього:</td>
+                            @foreach (var workshop in workshops.OrderBy(w => w.SortOrder))
+                            {
+                                var total = GetWorkshopTotal(workshop.Number);
+                                <td class="text-center">
+                                    <strong class="@(total > 0 ? "text-success" : "text-muted")">
+                                        @total.ToString("N0") м²
+                                    </strong>
+                                </td>
+                            }
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
-            <hr />
         }
 
-        <div class="row">
+        <div class="row mt-4">
             <div class="col-12">
                 <div class="d-flex gap-2 flex-wrap">
                     <button type="button" class="btn btn-primary btn-lg" @onclick="AddBulkOrder" disabled="@isSaving">
@@ -236,6 +333,7 @@
     private List<ValidationError> validationErrors = new();
     private Dictionary<int, List<(string Name, double Value)>> orderInputs = new();
     private readonly OrderValidator _orderValidator = new();
+    private string viewMode = "rows"; // Нове поле для збереження режиму відображення
 
     [SupplyParameterFromQuery(Name = "date")]
     public string? InitialDate { get; set; }
