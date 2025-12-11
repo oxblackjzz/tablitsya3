@@ -119,5 +119,80 @@ window.DragDropInterop = {
     }
 };
 
+// Drag & Drop для Gantt діаграми
+window.GanttDragDrop = {
+    sortableInstances: {},
+    
+    initGanttSortable: function (elementId, dotNetHelper, workshopNumber) {
+        const el = document.getElementById(elementId);
+        if (!el) {
+            console.warn('Gantt element not found:', elementId);
+            return false;
+        }
+
+        // Знищуємо попередній інстанс
+        if (this.sortableInstances[elementId]) {
+            this.sortableInstances[elementId].destroy();
+        }
+
+        try {
+            this.sortableInstances[elementId] = new Sortable(el, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                dragClass: 'sortable-drag',
+                draggable: '.draggable-bar',
+                group: 'gantt-orders', // Дозволяє переміщення між цехами
+                sort: true,
+                
+                onStart: function (evt) {
+                    document.body.classList.add('is-dragging');
+                    // Підсвічуємо всі dropzones
+                    document.querySelectorAll('.gantt-dropzone').forEach(zone => {
+                        zone.classList.add('drop-target-active');
+                    });
+                },
+                
+                onEnd: function (evt) {
+                    document.body.classList.remove('is-dragging');
+                    document.querySelectorAll('.gantt-dropzone').forEach(zone => {
+                        zone.classList.remove('drop-target-active');
+                    });
+                    
+                    const fromWorkshop = parseInt(evt.from.dataset.workshop);
+                    const toWorkshop = parseInt(evt.to.dataset.workshop);
+                    const orderDay = parseInt(evt.item.dataset.orderDay);
+                    const squareMeters = parseFloat(evt.item.dataset.square);
+                    
+                    console.log('Gantt drag ended:', fromWorkshop, '->', toWorkshop, 'order:', orderDay);
+                    
+                    if (fromWorkshop === toWorkshop && evt.oldIndex !== evt.newIndex) {
+                        // Переміщення в межах одного цеху
+                        dotNetHelper.invokeMethodAsync('OnGanttOrderReordered', 
+                            workshopNumber,
+                            evt.oldIndex, 
+                            evt.newIndex
+                        ).catch(err => console.error('Error:', err));
+                    } else if (fromWorkshop !== toWorkshop) {
+                        // Переміщення між цехами
+                        dotNetHelper.invokeMethodAsync('OnGanttOrderTransfer',
+                            fromWorkshop,
+                            toWorkshop,
+                            orderDay,
+                            squareMeters
+                        ).catch(err => console.error('Error:', err));
+                    }
+                }
+            });
+            
+            console.log('✅ Gantt Sortable initialized for:', elementId);
+            return true;
+        } catch (err) {
+            console.error('❌ Error initializing Gantt Sortable:', err);
+            return false;
+        }
+    }
+};
+
 // Автоматична ініціалізація при завантаженні Blazor
 console.log('✅ DragDropInterop loaded');

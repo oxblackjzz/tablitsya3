@@ -6,6 +6,7 @@
 @inject ProductionPlanningService PlanningService
 @inject WorkingDaysService WorkingDays
 @inject LoggingService Logger
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
 <PageTitle>Об'єднана діаграма Ганта</PageTitle>
@@ -118,7 +119,9 @@ else
                                 <small>@workshopOrders.Count зам. | @totalSquare.ToString("N0") м²</small>
                                 <small class="capacity">@capacity м²/день</small>
                             </div>
-                            <div class="gantt-row-bars">
+                            <div class="gantt-row-bars gantt-dropzone" 
+                                 id="gantt-workshop-@workshop.Number"
+                                 data-workshop="@workshop.Number">
                                 <!-- Сітка днів -->
                                 @foreach (var date in calendarDays)
                                 {
@@ -127,21 +130,47 @@ else
                                     <div class="gantt-cell @(isWeekend ? "weekend" : "") @(isToday ? "today" : "")"></div>
                                 }
                                 
-                                <!-- Бари замовлень - ПОСЛІДОВНО одне за одним -->
+                                <!-- Бари замовлень - пропускаємо вихідні -->
                                 @{
                                     var dayWidth = 100.0 / calendarDays.Count;
-                                    // Починаємо від дати старту першого замовлення
-                                    var firstStartIndex = calendarDays.FindIndex(d => d.Date == workshopOrders.First().ProductionStartDate.Date);
+                                    
+                                    // Знаходимо перший робочий день для старту
+                                    var firstOrder = workshopOrders.First();
+                                    var firstStartIndex = calendarDays.FindIndex(d => d.Date == firstOrder.ProductionStartDate.Date);
                                     if (firstStartIndex == -1) firstStartIndex = 0;
                                     
-                                    // Накопичувальна позиція
+                                    // Накопичувальна позиція (враховуючи вихідні)
                                     double currentLeft = firstStartIndex * dayWidth;
+                                    int currentDayIndex = firstStartIndex;
                                     
                                     foreach (var order in workshopOrders)
                                     {
-                                        // Ширина бара = площа / потужність (в днях)
+                                        // Ширина бара = площа / потужність (в робочих днях)
                                         var daysOfWork = (double)order.SquareMeters / capacity;
-                                        var barWidth = daysOfWork * dayWidth;
+                                        
+                                        // Рахуємо скільки календарних днів займе робота (пропускаючи вихідні)
+                                        double calendarDaysNeeded = 0;
+                                        double workDaysRemaining = daysOfWork;
+                                        int tempIndex = currentDayIndex;
+                                        
+                                        while (workDaysRemaining > 0 && tempIndex < calendarDays.Count)
+                                        {
+                                            var date = calendarDays[tempIndex];
+                                            if (WorkingDays.IsWorkingDay(date))
+                                            {
+                                                var dayPortion = Math.Min(workDaysRemaining, 1.0);
+                                                calendarDaysNeeded += dayPortion;
+                                                workDaysRemaining -= dayPortion;
+                                            }
+                                            else
+                                            {
+                                                // Вихідний день - додаємо до ширини але не віднімаємо робочий час
+                                                calendarDaysNeeded += 1;
+                                            }
+                                            tempIndex++;
+                                        }
+                                        
+                                        var barWidth = calendarDaysNeeded * dayWidth;
                                         
                                         var shipmentIndex = calendarDays.FindIndex(d => d.Date == order.CompletionDate.Date);
                                         
@@ -156,9 +185,14 @@ else
                                         var leftStr = currentLeft.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
                                         var widthStr = barWidth.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
                                         
-                                        <div class="gantt-bar @statusClass" 
+                                        <div class="gantt-bar draggable-bar @statusClass" 
+                                             data-order-day="@order.Day"
+                                             data-workshop="@workshop.Number"
+                                             data-square="@order.SquareMeters"
                                              style="left: @(leftStr)%; width: @(widthStr)%; background-color: @GetWorkshopColor(workshop.Number);"
                                              title="@orderName: @order.SquareMeters.ToString("N0") м² (@daysOfWork.ToString("F2") дн.) | Відвантаж: @order.CompletionDate.ToString("dd.MM")">
+                                            
+                                            <span class="drag-handle-bar"><i class="bi bi-grip-vertical"></i></span>
                                             
                                             @if (!string.IsNullOrEmpty(displayName))
                                             {
@@ -181,6 +215,9 @@ else
                                                     <tr><td><i class="bi bi-stop-fill text-warning"></i> Фініш:</td><td><strong>@order.ProductionEndDate.ToString("dd.MM.yyyy")</strong></td></tr>
                                                     <tr><td><i class="bi bi-truck text-primary"></i> Відвантаж.:</td><td><strong>@order.CompletionDate.ToString("dd.MM.yyyy")</strong></td></tr>
                                                 </table>
+                                                <div class="tooltip-hint mt-2 text-muted small">
+                                                    <i class="bi bi-arrows-move"></i> Перетягніть для переміщення
+                                                </div>
                                             </div>
                                         </div>
                                         
@@ -195,6 +232,7 @@ else
                                         
                                         // Зсуваємо позицію для наступного замовлення
                                         currentLeft += barWidth;
+                                        currentDayIndex = tempIndex;
                                     }
                                 }
                             </div>
@@ -565,6 +603,38 @@ else
         vertical-align: middle;
     }
     
+    /* Drag & Drop styles */
+    .drag-handle-bar {
+        position: absolute;
+        left: 2px;
+        top: 50%;
+        transform: translateY(-50%);
+        cursor: grab;
+        opacity: 0.6;
+        font-size: 10px;
+    }
+    
+    .drag-handle-bar:hover {
+        opacity: 1;
+    }
+    
+    .draggable-bar {
+        cursor: move;
+    }
+    
+    .draggable-bar.sortable-ghost {
+        opacity: 0.4;
+    }
+    
+    .draggable-bar.sortable-chosen {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 1000;
+    }
+    
+    .gantt-dropzone.sortable-drag-over {
+        background: rgba(13, 110, 253, 0.1);
+    }
+    
     /* Dark theme */
     [data-theme="dark"] .gantt-row-label {
         border-right: 1px solid rgba(255,255,255,0.1);
@@ -606,10 +676,40 @@ else
     private List<DateTime> calendarDays = new();
     private Dictionary<int, int> workshopCapacities = new();
     private bool isLoading = true;
+    private DotNetObjectReference<GanttCombined>? dotNetHelper;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!isLoading && allOrders.Any())
+        {
+            await InitializeDragDropAsync();
+        }
+    }
+
+    private async Task InitializeDragDropAsync()
+    {
+        try
+        {
+            dotNetHelper ??= DotNetObjectReference.Create(this);
+            
+            foreach (var workshop in workshops)
+            {
+                var workshopOrders = allOrders.Where(o => o.WorkshopNumber == workshop.Number).ToList();
+                if (!workshopOrders.Any()) continue;
+                
+                var elementId = $"gantt-workshop-{workshop.Number}";
+                await JSRuntime.InvokeVoidAsync("GanttDragDrop.initGanttSortable", elementId, dotNetHelper, workshop.Number);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Drag & Drop init: {ex.Message}", "GanttCombined");
+        }
     }
 
     private async Task LoadData()
@@ -674,6 +774,134 @@ else
         }
     }
 
+    [JSInvokable]
+    public async Task OnGanttOrderReordered(int workshopNumber, int oldIndex, int newIndex)
+    {
+        try
+        {
+            if (!workshopData.WorkshopOrders.ContainsKey(workshopNumber)) return;
+            
+            var orders = workshopData.WorkshopOrders[workshopNumber];
+            if (oldIndex < 0 || oldIndex >= orders.Count || newIndex < 0 || newIndex >= orders.Count) return;
+            
+            // Переміщуємо замовлення
+            var item = orders[oldIndex];
+            orders.RemoveAt(oldIndex);
+            orders.Insert(newIndex, item);
+            
+            // Переміщуємо дати
+            if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
+            {
+                var dates = workshopData.WorkshopOrderDates[workshopNumber];
+                if (oldIndex < dates.Count)
+                {
+                    var dateItem = dates[oldIndex];
+                    dates.RemoveAt(oldIndex);
+                    dates.Insert(Math.Min(newIndex, dates.Count), dateItem);
+                }
+            }
+            
+            // Переміщуємо назви
+            if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
+            {
+                var names = workshopData.WorkshopOrderNames[workshopNumber];
+                if (oldIndex < names.Count)
+                {
+                    var nameItem = names[oldIndex];
+                    names.RemoveAt(oldIndex);
+                    names.Insert(Math.Min(newIndex, names.Count), nameItem);
+                }
+            }
+            
+            workshopData.LastUpdated = DateTime.UtcNow;
+            await StorageService.SaveWorkshopDataAsync(workshopData);
+            await LoadData();
+            
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Порядок змінено!", "success");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Помилка зміни порядку", ex, "GanttCombined");
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnGanttOrderTransfer(int fromWorkshop, int toWorkshop, int orderDay, double squareMeters)
+    {
+        try
+        {
+            if (!workshopData.WorkshopOrders.ContainsKey(fromWorkshop)) return;
+            
+            // Знаходимо індекс замовлення
+            var fromOrders = workshopData.WorkshopOrders[fromWorkshop];
+            var orderIndex = -1;
+            
+            // Шукаємо по Day (що відповідає позиції в списку + 1)
+            for (int i = 0; i < fromOrders.Count; i++)
+            {
+                if (Math.Abs(fromOrders[i] - squareMeters) < 0.01)
+                {
+                    orderIndex = i;
+                    break;
+                }
+            }
+            
+            if (orderIndex < 0) return;
+            
+            // Видаляємо з вихідного цеху
+            var orderValue = fromOrders[orderIndex];
+            fromOrders.RemoveAt(orderIndex);
+            
+            DateTime? orderDate = null;
+            if (workshopData.WorkshopOrderDates.ContainsKey(fromWorkshop) && 
+                orderIndex < workshopData.WorkshopOrderDates[fromWorkshop].Count)
+            {
+                orderDate = workshopData.WorkshopOrderDates[fromWorkshop][orderIndex];
+                workshopData.WorkshopOrderDates[fromWorkshop].RemoveAt(orderIndex);
+            }
+            
+            string orderName = "";
+            if (workshopData.WorkshopOrderNames.ContainsKey(fromWorkshop) && 
+                orderIndex < workshopData.WorkshopOrderNames[fromWorkshop].Count)
+            {
+                orderName = workshopData.WorkshopOrderNames[fromWorkshop][orderIndex];
+                workshopData.WorkshopOrderNames[fromWorkshop].RemoveAt(orderIndex);
+            }
+            
+            // Додаємо до нового цеху
+            if (!workshopData.WorkshopOrders.ContainsKey(toWorkshop))
+                workshopData.WorkshopOrders[toWorkshop] = new List<double>();
+            workshopData.WorkshopOrders[toWorkshop].Add(orderValue);
+            
+            if (orderDate.HasValue)
+            {
+                if (!workshopData.WorkshopOrderDates.ContainsKey(toWorkshop))
+                    workshopData.WorkshopOrderDates[toWorkshop] = new List<DateTime>();
+                workshopData.WorkshopOrderDates[toWorkshop].Add(orderDate.Value);
+            }
+            
+            if (!string.IsNullOrEmpty(orderName))
+            {
+                if (!workshopData.WorkshopOrderNames.ContainsKey(toWorkshop))
+                    workshopData.WorkshopOrderNames[toWorkshop] = new List<string>();
+                workshopData.WorkshopOrderNames[toWorkshop].Add(orderName);
+            }
+            
+            workshopData.LastUpdated = DateTime.UtcNow;
+            await StorageService.SaveWorkshopDataAsync(workshopData);
+            await LoadData();
+            
+            var fromName = workshops.FirstOrDefault(w => w.Number == fromWorkshop)?.Name ?? $"Цех {fromWorkshop}";
+            var toName = workshops.FirstOrDefault(w => w.Number == toWorkshop)?.Name ?? $"Цех {toWorkshop}";
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Переміщено з {fromName} до {toName}", "success");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Помилка переміщення", ex, "GanttCombined");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
+        }
+    }
+
     private string GetWorkshopColor(int workshopNumber)
     {
         var colors = new[] { "#e74c3c", "#3498db", "#27ae60", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#34495e" };
@@ -693,5 +921,10 @@ else
             DayOfWeek.Sunday => "Нд",
             _ => ""
         };
+    }
+
+    public void Dispose()
+    {
+        dotNetHelper?.Dispose();
     }
 }
