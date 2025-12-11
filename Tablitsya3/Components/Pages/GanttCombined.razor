@@ -134,44 +134,32 @@ else
                                     if (shipmentIndex == -1) shipmentIndex = endIndex;
                                     
                                     var dayWidth = 100.0 / calendarDays.Count;
-                                    var left = startIndex * dayWidth;
-                                    var width = (endIndex - startIndex + 1) * dayWidth;
                                     
-                                    // Висота бара пропорційна площі відносно потужності цеху
-                                    // Формула: площа / потужність = кількість днів роботи
-                                    // Мін висота = 20px, Макс = 55px
+                                    // ШИРИНА БАРА = площа / потужність (в днях)
+                                    // Це реальна тривалість роботи над замовленням
                                     var daysOfWork = (double)order.SquareMeters / capacity;
-                                    // Нормалізуємо: 0.5 дня = 20px, 3+ дні = 55px
-                                    var normalizedHeight = Math.Min(1.0, Math.Max(0.0, (daysOfWork - 0.3) / 2.7));
-                                    var barHeight = 20 + (normalizedHeight * 35); // від 20 до 55px
+                                    
+                                    // Позиція старту
+                                    var left = startIndex * dayWidth;
+                                    // Ширина = кількість днів роботи * ширина одного дня
+                                    var width = daysOfWork * dayWidth;
                                     
                                     var isCompleted = order.ProductionEndDate.Date < DateTime.Today;
                                     var isInProgress = order.ProductionStartDate.Date <= DateTime.Today && order.ProductionEndDate.Date >= DateTime.Today;
                                     var statusClass = isCompleted ? "completed" : isInProgress ? "in-progress" : "";
                                     
                                     var orderName = string.IsNullOrWhiteSpace(order.OrderName) ? $"№{order.Day}" : order.OrderName;
-                                    var displayName = orderName.Length > 8 ? orderName.Substring(0, 8) + ".." : orderName;
+                                    var displayName = orderName.Length > 10 ? orderName.Substring(0, 10) + ".." : orderName;
                                     
                                     <div class="gantt-bar @statusClass" 
                                          style="left: @left.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)%; 
                                                 width: @width.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)%; 
-                                                height: @barHeight.ToString("F0")px;
                                                 background-color: @GetWorkshopColor(workshop.Number);"
-                                         title="@orderName: @order.SquareMeters.ToString("N0") м² | @order.ProductionStartDate.ToString("dd.MM") - @order.CompletionDate.ToString("dd.MM")">
+                                         title="@orderName: @order.SquareMeters.ToString("N0") м² (@daysOfWork.ToString("F2") дн.) | @order.ProductionStartDate.ToString("dd.MM") → @order.CompletionDate.ToString("dd.MM")">
                                         
                                         <!-- Назва та площа -->
                                         <span class="bar-text">@displayName</span>
                                         <span class="bar-square">@order.SquareMeters.ToString("N0")</span>
-                                        
-                                        <!-- Маркер дати відвантаження -->
-                                        @if (shipmentIndex > endIndex)
-                                        {
-                                            var shipmentLeft = ((shipmentIndex - startIndex) * dayWidth / width * 100);
-                                            <div class="shipment-marker" style="left: @shipmentLeft.ToString("F0", System.Globalization.CultureInfo.InvariantCulture)%;" 
-                                                 title="Відвантаження: @order.CompletionDate.ToString("dd.MM.yyyy")">
-                                                <i class="bi bi-truck"></i>
-                                            </div>
-                                        }
                                         
                                         <!-- Tooltip -->
                                         <div class="bar-tooltip">
@@ -310,7 +298,7 @@ else
     }
     
     .gantt-date.today {
-        background: rgba(13, 110, 253, 0.2);
+        background: rgba(13, 110, 253, 0.1);
         border-left: 2px solid var(--color-accent, #0d6efd);
         border-right: 2px solid var(--color-accent, #0d6efd);
     }
@@ -378,26 +366,27 @@ else
         border-right: 2px solid var(--color-accent, #0d6efd);
     }
     
-    /* Бар замовлення */
+    /* Бар замовлення - ширина пропорційна тривалості (площа/потужність) */
     .gantt-bar {
         position: absolute;
         top: 50%;
         transform: translateY(-50%);
-        min-height: 18px;
+        height: 36px;
         border-radius: 4px;
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-start;
         padding: 0 6px;
         cursor: pointer;
         transition: all 0.15s ease;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         z-index: 10;
         overflow: visible;
+        min-width: 2px; /* мінімальна ширина для дуже малих замовлень */
     }
     
     .gantt-bar:hover {
-        transform: translateY(-50%) scale(1.05);
+        transform: translateY(-50%) scale(1.03);
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         z-index: 100;
     }
