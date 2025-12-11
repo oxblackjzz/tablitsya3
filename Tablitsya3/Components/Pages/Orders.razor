@@ -184,7 +184,19 @@ else
                                                     @order.StartDate.ToString("dd.MM.yy")
                                                 }
                                             </td>
-                                            <td class="text-end">@order.SquareMeters.ToString("N0") м²</td>
+                                            <td class="text-end">
+                                                @if (isEditing)
+                                                {
+                                                    <input type="number" @bind="editSquareMeters" 
+                                                           class="form-control form-control-sm no-drag" 
+                                                           min="1" max="100000" step="1"
+                                                           style="width: 90px;" />
+                                                }
+                                                else
+                                                {
+                                                    @order.SquareMeters.ToString("N0") <span class="text-muted">м²</span>
+                                                }
+                                            </td>
                                             <td>
                                                 @if (isEditing)
                                                 {
@@ -308,283 +320,11 @@ else
     private string EditProductionStartValue { get; set; } = "";
     private string EditProductionEndValue { get; set; } = "";
     private string EditCompletionDateValue { get; set; } = "";
+    private int editSquareMeters = 0;
     
     private DotNetObjectReference<Orders>? dotNetHelper;
 
     protected override async Task OnInitializedAsync()
-    {
-        await LoadData();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (dragDropEnabled && hasSchedules)
-        {
-            await Task.Delay(100);
-            await InitializeDragDropAsync();
-        }
-    }
-
-    private async Task LoadData()
-    {
-        isLoading = true;
-        
-        try
-        {
-            workshops = await WorkshopConfigService.GetActiveWorkshopsAsync();
-            workshopData = await StorageService.LoadWorkshopDataAsync();
-            
-            // Завантажуємо розрахунки якщо є дані
-            if (workshopData.WorkshopOrders.Any())
-            {
-                foreach (var workshop in workshops)
-                {
-                    if (workshopData.WorkshopOrders.ContainsKey(workshop.Number))
-                    {
-                        var schedule = CalculateScheduleForWorkshop(workshop.Number);
-                        if (schedule != null)
-                        {
-                            schedules[workshop.Number] = schedule;
-                        }
-                    }
-                }
-                hasSchedules = schedules.Any();
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError("Помилка завантаження даних", ex, "Orders");
-        }
-        finally
-        {
-            isLoading = false;
-        }
-    }
-
-    private ProductionSchedule? CalculateScheduleForWorkshop(int workshopNumber)
-    {
-        if (!workshopData.WorkshopOrders.ContainsKey(workshopNumber) || 
-            !workshopData.WorkshopOrders[workshopNumber].Any())
-        {
-            return null;
-        }
-
-        var orders = workshopData.WorkshopOrders[workshopNumber];
-        
-        var dates = workshopData.WorkshopOrderDates.ContainsKey(workshopNumber)
-            ? workshopData.WorkshopOrderDates[workshopNumber]
-            : orders.Select((_, i) => workshopData.StartDate.AddDays(i)).ToList();
-
-        var names = workshopData.WorkshopOrderNames.GetValueOrDefault(workshopNumber);
-
-        var capacity = workshopData.GetCapacity(workshopNumber);
-        var leadTime = workshopData.GetProductionLeadTime(workshopNumber);
-        var daysBefore = workshopData.GetDaysBeforeProduction(workshopNumber);
-
-        var schedule = PlanningService.CalculateSchedule(
-            orders,
-            workshopData.StartDate,
-            capacity,
-            leadTime,
-            dates,
-            names,
-            workshopData.CustomCompletionDates,
-            workshopNumber,
-            daysBefore
-        );
-
-        foreach (var order in schedule.Orders)
-        {
-            order.WorkshopNumber = workshopNumber;
-        }
-
-        return schedule;
-    }
-
-    private async Task InitializeDragDropAsync()
-    {
-        try
-        {
-            dotNetHelper ??= DotNetObjectReference.Create(this);
-            
-            foreach (var workshop in workshops)
-            {
-                if (schedules.ContainsKey(workshop.Number) && schedules[workshop.Number].Orders.Any())
-                {
-                    var elementId = $"orders-table-{workshop.Number}";
-                    await JSRuntime.InvokeAsync<bool>(
-                        "DragDropInterop.initSortable",
-                        elementId,
-                        dotNetHelper,
-                        workshop.Number
-                    );
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning($"Drag & Drop: {ex.Message}", "Orders");
-        }
-    }
-
-    private ProductionSchedule? GetSchedule(int workshopNumber)
-    {
-        return schedules.GetValueOrDefault(workshopNumber);
-    }
-
-    private IEnumerable<WorkshopConfig> GetFilteredWorkshops()
-    {
-        if (selectedWorkshop == 0)
-            return workshops.OrderBy(w => w.SortOrder);
-        return workshops.Where(w => w.Number == selectedWorkshop);
-    }
-
-    private IEnumerable<Order> FilterOrders(List<Order> orders, int workshopNumber)
-    {
-        var result = orders.AsEnumerable();
-        
-        // Фільтр по статусу
-        result = orderFilter switch
-        {
-            "in-production" => result.Where(o => o.GetStatus(filterDate) == "В роботі"),
-            "not-started" => result.Where(o => o.GetStatus(filterDate) == "Очікує"),
-            "completed" => result.Where(o => o.GetStatus(filterDate) == "Завершено"),
-            _ => result
-        };
-        
-        // Пошук по назві
-        if (!string.IsNullOrWhiteSpace(searchQuery))
-        {
-            result = result.Where(o => 
-                (o.OrderName?.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                o.Day.ToString().Contains(searchQuery));
-        }
-        
-        return result;
-    }
-
-    // Статистика
-    private int GetTotalOrdersCount() => schedules.Values.Sum(s => s.Orders.Count);
-    private int GetInProductionCount() => schedules.Values.SelectMany(s => s.Orders).Count(o => o.GetStatus(filterDate) == "В роботі");
-    private int GetNotStartedCount() => schedules.Values.SelectMany(s => s.Orders).Count(o => o.GetStatus(filterDate) == "Очікує");
-    private int GetCompletedCount() => schedules.Values.SelectMany(s => s.Orders).Count(o => o.GetStatus(filterDate) == "Завершено");
-
-    // Редагування
-    private void StartOrderEdit(int workshopNumber, Order order)
-    {
-        editingOrder = order;
-        editingOrder.WorkshopNumber = workshopNumber;
-        editOrderName = order.OrderName ?? "";
-        EditOrderDateValue = order.StartDate.ToString("yyyy-MM-dd");
-        EditProductionStartValue = order.ProductionStartDate.ToString("yyyy-MM-dd");
-        EditProductionEndValue = order.ProductionEndDate.ToString("yyyy-MM-dd");
-        EditCompletionDateValue = order.CompletionDate.ToString("yyyy-MM-dd");
-    }
-
-    private void CancelOrderEdit()
-    {
-        editingOrder = null;
-        editOrderName = "";
-    }
-
-    private async Task SaveOrderEdit(int workshopNumber, Order order)
-    {
-        try
-        {
-            await BackupService.CreateBackupAsync($"Редагування замовлення №{order.Day}");
-            
-            // Оновлюємо назву
-            if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
-            {
-                var index = order.Day - 1;
-                if (index >= 0 && index < workshopData.WorkshopOrderNames[workshopNumber].Count)
-                {
-                    workshopData.WorkshopOrderNames[workshopNumber][index] = editOrderName;
-                }
-            }
-
-            // Оновлюємо дату замовлення
-            if (DateTime.TryParse(EditOrderDateValue, out var newOrderDate))
-            {
-                if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
-                {
-                    var index = order.Day - 1;
-                    if (index >= 0 && index < workshopData.WorkshopOrderDates[workshopNumber].Count)
-                    {
-                        workshopData.WorkshopOrderDates[workshopNumber][index] = newOrderDate;
-                    }
-                }
-            }
-
-            // Оновлюємо кастомну дату завершення
-            if (DateTime.TryParse(EditCompletionDateValue, out var newCompletionDate))
-            {
-                var orderKey = $"{workshopNumber}_{order.Day}";
-                workshopData.CustomCompletionDates[orderKey] = newCompletionDate;
-            }
-
-            workshopData.LastUpdated = DateTime.UtcNow;
-            await StorageService.SaveWorkshopDataAsync(workshopData);
-            
-            // Перераховуємо графік
-            var schedule = CalculateScheduleForWorkshop(workshopNumber);
-            if (schedule != null)
-            {
-                schedules[workshopNumber] = schedule;
-            }
-
-            CancelOrderEdit();
-            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Замовлення збережено!", "success");
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError("Помилка збереження", ex, "Orders");
-            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
-        }
-    }
-
-    private async Task DeleteOrder(int workshopNumber, int orderDay)
-    {
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Видалити замовлення №{orderDay}?");
-        if (!confirmed) return;
-
-        try
-        {
-            await BackupService.CreateBackupAsync($"Видалення замовлення №{orderDay}");
-            
-            var index = orderDay - 1;
-            
-            if (workshopData.WorkshopOrders.ContainsKey(workshopNumber) && index < workshopData.WorkshopOrders[workshopNumber].Count)
-            {
-                workshopData.WorkshopOrders[workshopNumber].RemoveAt(index);
-            }
-            if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber) && index < workshopData.WorkshopOrderDates[workshopNumber].Count)
-            {
-                workshopData.WorkshopOrderDates[workshopNumber].RemoveAt(index);
-            }
-            if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber) && index < workshopData.WorkshopOrderNames[workshopNumber].Count)
-            {
-                workshopData.WorkshopOrderNames[workshopNumber].RemoveAt(index);
-            }
-
-            workshopData.LastUpdated = DateTime.UtcNow;
-            await StorageService.SaveWorkshopDataAsync(workshopData);
-            
-            var schedule = CalculateScheduleForWorkshop(workshopNumber);
-            if (schedule != null)
-            {
-                schedules[workshopNumber] = schedule;
-            }
-
-            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Замовлення видалено!", "success");
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError("Помилка видалення", ex, "Orders");
-        }
-    }
-
-    [JSInvokable]
     public async Task OnOrderReordered(int workshopNumber, int oldIndex, int newIndex)
     {
         try
