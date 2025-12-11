@@ -502,14 +502,35 @@ else
         {
             await BackupService.CreateBackupAsync($"Редагування замовлення №{order.Day}");
             
-            var index = order.Day - 1;
+            // order.Day - це 1-based номер в розрахованому графіку
+            // Знаходимо індекс цього замовлення в schedule.Orders
+            var schedule = GetSchedule(workshopNumber);
+            if (schedule == null) return;
+            
+            // Шукаємо індекс замовлення в списку schedule.Orders
+            var orderIndex = schedule.Orders.FindIndex(o => o.Day == order.Day);
+            if (orderIndex < 0) return;
+            
+            // Цей індекс відповідає індексу в workshopData.WorkshopOrders
+            var index = orderIndex;
             
             // Оновлюємо назву
             if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
             {
-                if (index >= 0 && index < workshopData.WorkshopOrderNames[workshopNumber].Count)
+                // Якщо список назв коротший - розширюємо його
+                while (workshopData.WorkshopOrderNames[workshopNumber].Count <= index)
                 {
-                    workshopData.WorkshopOrderNames[workshopNumber][index] = editOrderName;
+                    workshopData.WorkshopOrderNames[workshopNumber].Add("");
+                }
+                workshopData.WorkshopOrderNames[workshopNumber][index] = editOrderName;
+            }
+            else
+            {
+                // Створюємо список назв якщо не існує
+                workshopData.WorkshopOrderNames[workshopNumber] = new List<string>();
+                for (int i = 0; i <= index; i++)
+                {
+                    workshopData.WorkshopOrderNames[workshopNumber].Add(i == index ? editOrderName : "");
                 }
             }
 
@@ -544,14 +565,16 @@ else
             workshopData.LastUpdated = DateTime.UtcNow;
             await StorageService.SaveWorkshopDataAsync(workshopData);
             
-            var schedule = CalculateScheduleForWorkshop(workshopNumber);
-            if (schedule != null)
+            // Перераховуємо графік
+            var newSchedule = CalculateScheduleForWorkshop(workshopNumber);
+            if (newSchedule != null)
             {
-                schedules[workshopNumber] = schedule;
+                schedules[workshopNumber] = newSchedule;
             }
 
             CancelOrderEdit();
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Замовлення збережено!", "success");
+            StateHasChanged();
         }
         catch (Exception ex)
         {
