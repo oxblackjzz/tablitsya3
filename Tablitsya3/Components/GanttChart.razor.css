@@ -8,6 +8,7 @@
     border-radius: 12px;
     padding: 20px;
     overflow: visible;
+    margin-bottom: 40px;
 }
 
 .gantt-title {
@@ -41,14 +42,14 @@
     overflow-y: visible;
     scrollbar-width: thin;
     scrollbar-color: var(--color-accent, #0d6efd) transparent;
-    padding-bottom: 40px;
-    margin-bottom: 20px;
+    padding-bottom: 60px;
+    margin-bottom: 30px;
 }
 
 /* Timeline Container */
 .gantt-timeline {
     position: relative;
-    min-height: 280px;
+    min-height: 350px;
     background: var(--bg-card, #ffffff);
     border: 1px solid var(--border-color, #dee2e6);
     border-radius: 8px;
@@ -177,7 +178,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    padding: 55px 0 40px 0;
+    padding: 55px 0 60px 0;
     z-index: 100;
     pointer-events: auto;
     overflow: visible;
@@ -185,8 +186,8 @@
 
 .gantt-bar {
     position: absolute;
-    top: 70px;
-    height: 55px;
+    top: 80px;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: flex-start;
