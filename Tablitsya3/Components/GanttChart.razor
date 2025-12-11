@@ -118,11 +118,8 @@
 
             var orderPositionsTemp = CalculateOrderPositions(allOrdersSorted, firstWorkingDay, allWorkingDaysGlobal);
 
-            var allCalendarDates = currentViewMode == ViewMode.Pending 
-   ? GenerateCalendarDatesRange(calendarStartDate, calendarEndDate)
-     .Where(d => WorkingDays.IsWorkingDay(d))
-  .ToList()
-  : GenerateCalendarDatesRange(calendarStartDate, calendarEndDate);
+            // Завжди показуємо ВСІ календарні дні (включаючи вихідні)
+            var allCalendarDates = GenerateCalendarDatesRange(calendarStartDate, calendarEndDate);
      var workingDaysOnly = allCalendarDates.Where(d => WorkingDays.IsWorkingDay(d)).ToList();
           var totalWorkingDays = workingDaysOnly.Count;
 
@@ -192,6 +189,8 @@
       <i class="bi bi-star-fill"></i>
          }
    @calendarDateShort
+   <br/>
+   <small class="day-of-week">@GetDayOfWeekShort(calendarDate)</small>
          @if (ordersStartingThisDay.Any())
                  {
        <br/>
@@ -215,10 +214,7 @@
           </small>
            }
     }
-        </span>
-            <span class="calendar-date @(isToday ? "today-marker" : "")">
-          @GetDayOfWeekShort(calendarDate)
-          @if (isToday)
+   @if (isToday)
               {
        <br/>
    <small class="today-badge">СЬОГОДНІ</small>
@@ -228,7 +224,7 @@
         <br/>
       <small class="holiday-badge">@WorkingDays.GetNonWorkingDayReason(calendarDate)</small>
        }
-         </span>
+        </span>
          </div>
      }
           </div>
