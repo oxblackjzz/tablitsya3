@@ -16,7 +16,7 @@
         <h1 class="mb-1">
             <i class="bi bi-bar-chart-steps text-primary"></i> Об'єднана діаграма
         </h1>
-        <p class="text-secondary mb-0">Всі цехи на одній діаграмі</p>
+        <p class="text-secondary mb-0">Всі цехи - завантаження по днях</p>
     </div>
     <div class="d-flex gap-2">
         <a href="/production-planning" class="btn btn-outline-primary">
@@ -45,7 +45,7 @@ else if (!allOrders.Any())
 }
 else
 {
-    <!-- Легенда цехів -->
+    <!-- Легенда цехів з потужностями -->
     <div class="card mb-3">
         <div class="card-body py-2">
             <div class="d-flex gap-4 flex-wrap align-items-center">
@@ -53,29 +53,33 @@ else
                 @foreach (var workshop in workshops)
                 {
                     var count = allOrders.Count(o => o.WorkshopNumber == workshop.Number);
+                    var capacity = workshopCapacities.GetValueOrDefault(workshop.Number, 1000);
                     <div class="d-flex align-items-center gap-2">
                         <div class="workshop-color-box" style="background-color: @GetWorkshopColor(workshop.Number);"></div>
-                        <span class="small">@workshop.Name (@count)</span>
+                        <span class="small">@workshop.Name</span>
+                        <span class="badge bg-secondary">@capacity м²/день</span>
+                        <span class="badge bg-light text-dark">@count зам.</span>
                     </div>
                 }
-                <span class="ms-auto small text-muted">
-                    Всього: @allOrders.Count замовлень | @calendarDays.Count днів
-                </span>
             </div>
         </div>
     </div>
 
     <!-- Діаграма -->
     <div class="card">
-        <div class="card-header bg-light py-2">
+        <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
             <small class="text-muted">
                 <i class="bi bi-calendar-range"></i> 
                 @calendarDays.First().ToString("dd.MM.yyyy") - @calendarDays.Last().ToString("dd.MM.yyyy")
+                (@calendarDays.Count днів)
+            </small>
+            <small class="text-muted">
+                <i class="bi bi-info-circle"></i> Висота бара = площа замовлення / потужність цеху
             </small>
         </div>
         <div class="card-body p-0">
             <div class="gantt-combined-wrapper">
-                <div class="gantt-combined" style="min-width: @(Math.Max(calendarDays.Count * 32, 900))px;">
+                <div class="gantt-combined" style="min-width: @(Math.Max(calendarDays.Count * 36, 900))px;">
                     
                     <!-- Заголовок з датами -->
                     <div class="gantt-dates-header">
@@ -87,90 +91,131 @@ else
                                 var isToday = date.Date == DateTime.Today;
                                 <div class="gantt-date @(isWeekend ? "weekend" : "") @(isToday ? "today" : "")">
                                     <span class="day">@date.ToString("dd")</span>
+                                    <span class="month">@date.ToString("MM")</span>
                                     <span class="weekday">@GetDayOfWeekShort(date)</span>
                                 </div>
                             }
                         </div>
                     </div>
                     
-                    <!-- Рядки замовлень згруповані по цехах -->
+                    <!-- Рядки для кожного цеху -->
                     @foreach (var workshop in workshops)
                     {
-                        var workshopOrders = allOrders.Where(o => o.WorkshopNumber == workshop.Number).OrderBy(o => o.ProductionStartDate).ToList();
+                        var workshopOrders = allOrders.Where(o => o.WorkshopNumber == workshop.Number).ToList();
                         if (!workshopOrders.Any()) continue;
                         
-                        <!-- Заголовок цеху -->
-                        <div class="gantt-workshop-header" style="background-color: @GetWorkshopColor(workshop.Number);">
-                            <div class="gantt-label-spacer workshop-title">
-                                @workshop.Name
-                                <small>@workshopOrders.Count зам.</small>
+                        var capacity = workshopCapacities.GetValueOrDefault(workshop.Number, 1000);
+                        var totalSquare = workshopOrders.Sum(o => o.SquareMeters);
+                        
+                        <div class="gantt-row" data-workshop="@workshop.Number">
+                            <div class="gantt-row-label" style="background-color: @GetWorkshopColor(workshop.Number);">
+                                <span class="workshop-name">@workshop.Name</span>
+                                <small>@workshopOrders.Count зам. | @totalSquare.ToString("N0") м²</small>
+                                <small class="capacity">@capacity м²/день</small>
                             </div>
-                            <div class="gantt-dates">
+                            <div class="gantt-row-bars">
+                                <!-- Сітка днів -->
                                 @foreach (var date in calendarDays)
                                 {
                                     var isWeekend = !WorkingDays.IsWorkingDay(date);
                                     var isToday = date.Date == DateTime.Today;
-                                    <div class="gantt-cell-header @(isWeekend ? "weekend" : "") @(isToday ? "today" : "")"></div>
+                                    <div class="gantt-cell @(isWeekend ? "weekend" : "") @(isToday ? "today" : "")"></div>
                                 }
-                            </div>
-                        </div>
-                        
-                        <!-- Кожне замовлення на окремому рядку -->
-                        @foreach (var order in workshopOrders)
-                        {
-                            var startIndex = calendarDays.FindIndex(d => d.Date == order.ProductionStartDate.Date);
-                            var endIndex = calendarDays.FindIndex(d => d.Date == order.ProductionEndDate.Date);
-                            
-                            if (startIndex == -1) startIndex = 0;
-                            if (endIndex == -1) endIndex = calendarDays.Count - 1;
-                            
-                            var left = (startIndex * 100.0 / calendarDays.Count);
-                            var width = ((endIndex - startIndex + 1) * 100.0 / calendarDays.Count);
-                            
-                            var isCompleted = order.ProductionEndDate.Date < DateTime.Today;
-                            var isInProgress = order.ProductionStartDate.Date <= DateTime.Today && order.ProductionEndDate.Date >= DateTime.Today;
-                            var statusClass = isCompleted ? "completed" : isInProgress ? "in-progress" : "";
-                            var orderName = string.IsNullOrWhiteSpace(order.OrderName) ? $"№{order.Day}" : order.OrderName;
-                            
-                            <div class="gantt-order-row">
-                                <div class="gantt-order-label">
-                                    <span class="order-num">@order.Day</span>
-                                    <span class="order-name" title="@orderName">@(orderName.Length > 15 ? orderName.Substring(0, 15) + "..." : orderName)</span>
-                                </div>
-                                <div class="gantt-order-timeline">
-                                    <!-- Сітка -->
-                                    @foreach (var date in calendarDays)
-                                    {
-                                        var isWeekend = !WorkingDays.IsWorkingDay(date);
-                                        var isToday = date.Date == DateTime.Today;
-                                        <div class="gantt-cell @(isWeekend ? "weekend" : "") @(isToday ? "today" : "")"></div>
-                                    }
-                                    <!-- Бар замовлення -->
-                                    <div class="gantt-order-bar @statusClass" 
-                                         style="left: @left.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)%; width: @width.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)%; background-color: @GetWorkshopColor(workshop.Number);">
-                                        <span class="bar-label">@order.SquareMeters.ToString("N0") м²</span>
+                                
+                                <!-- Бари замовлень -->
+                                @foreach (var order in workshopOrders)
+                                {
+                                    var startIndex = calendarDays.FindIndex(d => d.Date == order.ProductionStartDate.Date);
+                                    var endIndex = calendarDays.FindIndex(d => d.Date == order.ProductionEndDate.Date);
+                                    var shipmentIndex = calendarDays.FindIndex(d => d.Date == order.CompletionDate.Date);
+                                    
+                                    if (startIndex == -1) startIndex = 0;
+                                    if (endIndex == -1) endIndex = calendarDays.Count - 1;
+                                    if (shipmentIndex == -1) shipmentIndex = endIndex;
+                                    
+                                    var dayWidth = 100.0 / calendarDays.Count;
+                                    var left = startIndex * dayWidth;
+                                    var width = (endIndex - startIndex + 1) * dayWidth;
+                                    
+                                    // Висота бара пропорційна площі відносно потужності
+                                    // Базова висота рядка = 60px, максимум бара = 50px
+                                    var daysNeeded = order.SquareMeters / capacity;
+                                    var heightPercent = Math.Min(daysNeeded / 3.0 * 100, 100); // 3 дні = 100% висоти
+                                    var barHeight = Math.Max(18, Math.Min(50, 18 + (heightPercent * 0.32)));
+                                    
+                                    var isCompleted = order.ProductionEndDate.Date < DateTime.Today;
+                                    var isInProgress = order.ProductionStartDate.Date <= DateTime.Today && order.ProductionEndDate.Date >= DateTime.Today;
+                                    var statusClass = isCompleted ? "completed" : isInProgress ? "in-progress" : "";
+                                    
+                                    var orderName = string.IsNullOrWhiteSpace(order.OrderName) ? $"№{order.Day}" : order.OrderName;
+                                    var displayName = orderName.Length > 8 ? orderName.Substring(0, 8) + ".." : orderName;
+                                    
+                                    <div class="gantt-bar @statusClass" 
+                                         style="left: @left.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)%; 
+                                                width: @width.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)%; 
+                                                height: @barHeight.ToString("F0")px;
+                                                background-color: @GetWorkshopColor(workshop.Number);"
+                                         title="@orderName: @order.SquareMeters.ToString("N0") м² | @order.ProductionStartDate.ToString("dd.MM") - @order.CompletionDate.ToString("dd.MM")">
+                                        
+                                        <!-- Назва та площа -->
+                                        <span class="bar-text">@displayName</span>
+                                        <span class="bar-square">@order.SquareMeters.ToString("N0")</span>
+                                        
+                                        <!-- Маркер дати відвантаження -->
+                                        @if (shipmentIndex > endIndex)
+                                        {
+                                            var shipmentLeft = ((shipmentIndex - startIndex) * dayWidth / width * 100);
+                                            <div class="shipment-marker" style="left: @shipmentLeft.ToString("F0", System.Globalization.CultureInfo.InvariantCulture)%;" 
+                                                 title="Відвантаження: @order.CompletionDate.ToString("dd.MM.yyyy")">
+                                                <i class="bi bi-truck"></i>
+                                            </div>
+                                        }
+                                        
                                         <!-- Tooltip -->
                                         <div class="bar-tooltip">
                                             <div class="tooltip-title">@orderName</div>
-                                            <div class="tooltip-row"><span>Площа:</span> <strong>@order.SquareMeters.ToString("N0") м²</strong></div>
-                                            <div class="tooltip-row"><span>Старт:</span> <strong>@order.ProductionStartDate.ToString("dd.MM.yyyy")</strong></div>
-                                            <div class="tooltip-row"><span>Фініш:</span> <strong>@order.ProductionEndDate.ToString("dd.MM.yyyy")</strong></div>
-                                            <div class="tooltip-row"><span>Відвантаж.:</span> <strong>@order.CompletionDate.ToString("dd.MM.yyyy")</strong></div>
-                                            <div class="tooltip-row"><span>Днів:</span> <strong>@order.ProductionDuration.ToString("F1")</strong></div>
+                                            <table class="tooltip-table">
+                                                <tr><td>Площа:</td><td><strong>@order.SquareMeters.ToString("N0") м²</strong></td></tr>
+                                                <tr><td>Потужність:</td><td>@capacity м²/день</td></tr>
+                                                <tr><td>Днів роботи:</td><td><strong>@order.ProductionDuration.ToString("F1")</strong></td></tr>
+                                                <tr class="divider"><td colspan="2"></td></tr>
+                                                <tr><td><i class="bi bi-play-fill text-success"></i> Старт:</td><td><strong>@order.ProductionStartDate.ToString("dd.MM.yyyy")</strong></td></tr>
+                                                <tr><td><i class="bi bi-stop-fill text-warning"></i> Фініш:</td><td><strong>@order.ProductionEndDate.ToString("dd.MM.yyyy")</strong></td></tr>
+                                                <tr><td><i class="bi bi-truck text-primary"></i> Відвантаж.:</td><td><strong>@order.CompletionDate.ToString("dd.MM.yyyy")</strong></td></tr>
+                                            </table>
                                         </div>
                                     </div>
-                                </div>
+                                    
+                                    <!-- Вертикальна лінія відвантаження -->
+                                    @if (shipmentIndex >= 0 && shipmentIndex < calendarDays.Count)
+                                    {
+                                        var shipLeft = (shipmentIndex + 0.5) * dayWidth;
+                                        <div class="shipment-line" 
+                                             style="left: @shipLeft.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)%;"
+                                             title="Відвантаження №@order.Day: @order.CompletionDate.ToString("dd.MM.yyyy")">
+                                        </div>
+                                    }
+                                }
                             </div>
-                        }
+                        </div>
                     }
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- Підказка -->
-    <div class="small text-muted mt-2">
-        <i class="bi bi-lightbulb"></i> Наведіть на замовлення для деталей. Прокрутіть горизонтально для перегляду всього періоду.
+    <!-- Легенда -->
+    <div class="card mt-3">
+        <div class="card-body py-2">
+            <div class="d-flex gap-4 flex-wrap align-items-center small">
+                <span class="text-secondary"><i class="bi bi-info-circle"></i> Легенда:</span>
+                <span><span class="legend-bar"></span> Виробництво</span>
+                <span><span class="legend-line"></span> Дата відвантаження</span>
+                <span><span class="legend-weekend"></span> Вихідні</span>
+                <span><span class="legend-today"></span> Сьогодні</span>
+                <span class="ms-auto text-muted">Наведіть на замовлення для деталей</span>
+            </div>
+        </div>
     </div>
 }
 
@@ -185,6 +230,7 @@ else
     .gantt-combined-wrapper {
         overflow-x: auto;
         overflow-y: visible;
+        padding-bottom: 10px;
     }
     
     .gantt-combined {
@@ -203,13 +249,15 @@ else
     }
     
     .gantt-label-spacer {
-        width: 140px;
-        min-width: 140px;
-        padding: 8px;
+        width: 130px;
+        min-width: 130px;
+        padding: 6px 8px;
         background: var(--bg-secondary, #f8f9fa);
         position: sticky;
         left: 0;
         z-index: 25;
+        font-size: 11px;
+        font-weight: 600;
     }
     
     .gantt-dates {
@@ -219,11 +267,12 @@ else
     
     .gantt-date {
         flex: 1;
-        min-width: 32px;
+        min-width: 36px;
         text-align: center;
         padding: 4px 2px;
-        font-size: 10px;
+        font-size: 9px;
         border-right: 1px solid var(--border-color-light, #e9ecef);
+        line-height: 1.2;
     }
     
     .gantt-date .day {
@@ -232,146 +281,118 @@ else
         font-size: 11px;
     }
     
-    .gantt-date .weekday {
+    .gantt-date .month {
         display: block;
         color: var(--text-muted, #adb5bd);
         font-size: 8px;
     }
     
+    .gantt-date .weekday {
+        display: block;
+        color: var(--text-secondary, #6c757d);
+        font-size: 8px;
+        text-transform: uppercase;
+    }
+    
     .gantt-date.weekend {
-        background: rgba(220, 53, 69, 0.08);
+        background: rgba(220, 53, 69, 0.1);
         color: var(--color-danger, #dc3545);
     }
     
     .gantt-date.today {
-        background: rgba(13, 110, 253, 0.15);
+        background: rgba(13, 110, 253, 0.2);
         border-left: 2px solid var(--color-accent, #0d6efd);
         border-right: 2px solid var(--color-accent, #0d6efd);
     }
     
-    /* Заголовок цеху */
-    .gantt-workshop-header {
+    /* Рядок цеху */
+    .gantt-row {
         display: flex;
-        color: white;
+        border-bottom: 1px solid var(--border-color, #dee2e6);
+        min-height: 65px;
     }
     
-    .gantt-workshop-header .workshop-title {
+    .gantt-row-label {
+        width: 130px;
+        min-width: 130px;
+        padding: 6px 10px;
         display: flex;
         flex-direction: column;
         justify-content: center;
-        font-weight: 600;
-        font-size: 12px;
-        background: inherit;
-    }
-    
-    .gantt-workshop-header .workshop-title small {
-        font-weight: 400;
-        opacity: 0.8;
-    }
-    
-    .gantt-cell-header {
-        flex: 1;
-        min-width: 32px;
-        height: 28px;
-        border-right: 1px solid rgba(255,255,255,0.2);
-    }
-    
-    .gantt-cell-header.weekend {
-        background: rgba(0,0,0,0.1);
-    }
-    
-    .gantt-cell-header.today {
-        background: rgba(255,255,255,0.2);
-    }
-    
-    /* Рядок замовлення */
-    .gantt-order-row {
-        display: flex;
-        border-bottom: 1px solid var(--border-color-light, #e9ecef);
-        min-height: 32px;
-    }
-    
-    .gantt-order-row:hover {
-        background: rgba(13, 110, 253, 0.03);
-    }
-    
-    .gantt-order-label {
-        width: 140px;
-        min-width: 140px;
-        padding: 4px 8px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        background: var(--bg-card, #fff);
+        color: white;
         position: sticky;
         left: 0;
         z-index: 15;
-        border-right: 1px solid var(--border-color, #dee2e6);
     }
     
-    .gantt-order-label .order-num {
-        background: var(--bg-secondary, #f0f0f0);
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-weight: 600;
-        font-size: 10px;
-        color: var(--text-secondary, #6c757d);
+    .gantt-row-label .workshop-name {
+        font-weight: 700;
+        font-size: 12px;
     }
     
-    .gantt-order-label .order-name {
-        flex: 1;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        color: var(--text-primary, #212529);
+    .gantt-row-label small {
+        font-size: 9px;
+        opacity: 0.9;
     }
     
-    .gantt-order-timeline {
+    .gantt-row-label .capacity {
+        background: rgba(255,255,255,0.2);
+        padding: 1px 4px;
+        border-radius: 3px;
+        margin-top: 2px;
+        display: inline-block;
+    }
+    
+    .gantt-row-bars {
         flex: 1;
         display: flex;
         position: relative;
-        min-height: 32px;
+        min-height: 65px;
+        align-items: center;
     }
     
     .gantt-cell {
         flex: 1;
-        min-width: 32px;
+        min-width: 36px;
+        height: 100%;
         border-right: 1px solid var(--border-color-light, #f0f0f0);
     }
     
     .gantt-cell.weekend {
-        background: rgba(220, 53, 69, 0.04);
+        background: rgba(220, 53, 69, 0.05);
     }
     
     .gantt-cell.today {
-        background: rgba(13, 110, 253, 0.08);
+        background: rgba(13, 110, 253, 0.1);
         border-left: 2px solid var(--color-accent, #0d6efd);
         border-right: 2px solid var(--color-accent, #0d6efd);
     }
     
     /* Бар замовлення */
-    .gantt-order-bar {
+    .gantt-bar {
         position: absolute;
-        top: 4px;
-        height: 24px;
+        top: 50%;
+        transform: translateY(-50%);
+        min-height: 18px;
         border-radius: 4px;
         display: flex;
         align-items: center;
+        justify-content: space-between;
         padding: 0 6px;
         cursor: pointer;
         transition: all 0.15s ease;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         z-index: 10;
+        overflow: visible;
     }
     
-    .gantt-order-bar:hover {
-        transform: scale(1.02);
-        box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+    .gantt-bar:hover {
+        transform: translateY(-50%) scale(1.05);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         z-index: 100;
     }
     
-    .gantt-order-bar .bar-label {
+    .gantt-bar .bar-text {
         color: white;
         font-size: 9px;
         font-weight: 600;
@@ -380,13 +401,49 @@ else
         overflow: hidden;
     }
     
-    .gantt-order-bar.completed {
+    .gantt-bar .bar-square {
+        color: rgba(255,255,255,0.9);
+        font-size: 8px;
+        font-weight: 500;
+        background: rgba(0,0,0,0.2);
+        padding: 1px 4px;
+        border-radius: 3px;
+        margin-left: 4px;
+    }
+    
+    .gantt-bar.completed {
         opacity: 0.5;
         filter: grayscale(40%);
     }
     
-    .gantt-order-bar.in-progress {
-        box-shadow: 0 0 0 2px rgba(255,255,255,0.6), 0 2px 6px rgba(0,0,0,0.2);
+    .gantt-bar.in-progress {
+        box-shadow: 0 0 0 2px rgba(255,255,255,0.7), 0 2px 8px rgba(0,0,0,0.25);
+        animation: pulse 2s infinite;
+    }
+    
+    @@keyframes pulse {
+        0%, 100% { box-shadow: 0 0 0 2px rgba(255,255,255,0.7), 0 2px 8px rgba(0,0,0,0.25); }
+        50% { box-shadow: 0 0 0 4px rgba(255,255,255,0.5), 0 2px 12px rgba(0,0,0,0.3); }
+    }
+    
+    /* Лінія відвантаження */
+    .shipment-line {
+        position: absolute;
+        top: 5px;
+        bottom: 5px;
+        width: 2px;
+        background: linear-gradient(to bottom, transparent, #0d6efd, transparent);
+        z-index: 5;
+        opacity: 0.6;
+    }
+    
+    .shipment-marker {
+        position: absolute;
+        top: -8px;
+        transform: translateX(-50%);
+        color: white;
+        font-size: 8px;
+        opacity: 0.8;
     }
     
     /* Tooltip */
@@ -401,39 +458,89 @@ else
         border: 1px solid var(--border-color, #dee2e6);
         border-radius: 8px;
         padding: 10px;
-        min-width: 180px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        min-width: 200px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.2);
         z-index: 1000;
         font-size: 11px;
     }
     
-    .gantt-order-bar:hover .bar-tooltip {
+    .gantt-bar:hover .bar-tooltip {
         display: block;
     }
     
     .bar-tooltip .tooltip-title {
         font-weight: 700;
-        margin-bottom: 6px;
+        font-size: 12px;
+        margin-bottom: 8px;
         padding-bottom: 6px;
         border-bottom: 1px solid var(--border-color, #dee2e6);
         color: var(--text-primary, #212529);
     }
     
-    .bar-tooltip .tooltip-row {
-        display: flex;
-        justify-content: space-between;
-        margin: 2px 0;
+    .bar-tooltip .tooltip-table {
+        width: 100%;
+    }
+    
+    .bar-tooltip .tooltip-table td {
+        padding: 2px 0;
         color: var(--text-secondary, #6c757d);
     }
     
-    .bar-tooltip .tooltip-row strong {
+    .bar-tooltip .tooltip-table td:last-child {
+        text-align: right;
         color: var(--text-primary, #212529);
     }
     
+    .bar-tooltip .tooltip-table tr.divider td {
+        padding: 4px 0;
+        border-bottom: 1px dashed var(--border-color, #dee2e6);
+    }
+    
+    /* Легенда */
+    .legend-bar {
+        display: inline-block;
+        width: 30px;
+        height: 12px;
+        background: linear-gradient(135deg, #3498db, #2980b9);
+        border-radius: 3px;
+        margin-right: 4px;
+        vertical-align: middle;
+    }
+    
+    .legend-line {
+        display: inline-block;
+        width: 2px;
+        height: 14px;
+        background: #0d6efd;
+        margin-right: 4px;
+        vertical-align: middle;
+    }
+    
+    .legend-weekend {
+        display: inline-block;
+        width: 20px;
+        height: 12px;
+        background: rgba(220, 53, 69, 0.15);
+        border: 1px solid rgba(220, 53, 69, 0.3);
+        border-radius: 2px;
+        margin-right: 4px;
+        vertical-align: middle;
+    }
+    
+    .legend-today {
+        display: inline-block;
+        width: 20px;
+        height: 12px;
+        background: rgba(13, 110, 253, 0.2);
+        border: 2px solid #0d6efd;
+        border-radius: 2px;
+        margin-right: 4px;
+        vertical-align: middle;
+    }
+    
     /* Dark theme */
-    [data-theme="dark"] .gantt-order-label {
-        background: var(--bg-card);
-        border-color: var(--border-color);
+    [data-theme="dark"] .gantt-row-label {
+        border-right: 1px solid rgba(255,255,255,0.1);
     }
     
     [data-theme="dark"] .bar-tooltip {
@@ -447,6 +554,7 @@ else
     private List<WorkshopConfig> workshops = new();
     private List<Order> allOrders = new();
     private List<DateTime> calendarDays = new();
+    private Dictionary<int, int> workshopCapacities = new();
     private bool isLoading = true;
 
     protected override async Task OnInitializedAsync()
@@ -465,6 +573,7 @@ else
             workshopData = await StorageService.LoadWorkshopDataAsync();
             
             allOrders.Clear();
+            workshopCapacities.Clear();
             
             foreach (var workshop in workshops)
             {
@@ -478,6 +587,8 @@ else
                 var capacity = workshopData.GetCapacity(workshop.Number);
                 var leadTime = workshopData.GetProductionLeadTime(workshop.Number);
                 var daysBefore = workshopData.GetDaysBeforeProduction(workshop.Number);
+                
+                workshopCapacities[workshop.Number] = capacity;
                 
                 var schedule = PlanningService.CalculateSchedule(
                     orders, workshopData.StartDate, capacity, leadTime,
@@ -495,7 +606,7 @@ else
             if (allOrders.Any())
             {
                 var minDate = allOrders.Min(o => o.ProductionStartDate).Date;
-                var maxDate = allOrders.Max(o => o.ProductionEndDate).Date.AddDays(2);
+                var maxDate = allOrders.Max(o => o.CompletionDate).Date.AddDays(2);
                 
                 calendarDays = Enumerable.Range(0, (maxDate - minDate).Days + 1)
                     .Select(i => minDate.AddDays(i))
