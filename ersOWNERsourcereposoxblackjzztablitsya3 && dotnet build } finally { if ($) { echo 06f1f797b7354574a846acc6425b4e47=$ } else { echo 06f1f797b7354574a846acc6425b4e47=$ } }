@@ -1,0 +1,3 @@
+[33m0d8a74a[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m feat: Add experimental combined Gantt chart for all workshops
+[33m5619428[m fix: Restore tooltip popup on order hover with proper styling
+[33m4f56956[m refactor: Clean minimal Gantt chart design - better readability
