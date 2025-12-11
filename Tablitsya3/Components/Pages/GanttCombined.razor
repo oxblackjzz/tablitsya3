@@ -101,11 +101,16 @@ else
                     <!-- Рядки для кожного цеху -->
                     @foreach (var workshop in workshops)
                     {
-                        var workshopOrders = allOrders.Where(o => o.WorkshopNumber == workshop.Number).ToList();
+                        var workshopOrders = allOrders.Where(o => o.WorkshopNumber == workshop.Number)
+                            .OrderBy(o => o.ProductionStartDate)
+                            .ToList();
                         if (!workshopOrders.Any()) continue;
                         
                         var capacity = workshopCapacities.GetValueOrDefault(workshop.Number, 1000);
                         var totalSquare = workshopOrders.Sum(o => o.SquareMeters);
+                        
+                        // Рахуємо загальну кількість днів роботи для всіх замовлень цеху
+                        var totalDaysOfWork = workshopOrders.Sum(o => (double)o.SquareMeters / capacity);
                         
                         <div class="gantt-row" data-workshop="@workshop.Number">
                             <div class="gantt-row-label" style="background-color: @GetWorkshopColor(workshop.Number);">
@@ -122,44 +127,47 @@ else
                                     <div class="gantt-cell @(isWeekend ? "weekend" : "") @(isToday ? "today" : "")"></div>
                                 }
                                 
-                                <!-- Бари замовлень -->
+                                <!-- Бари замовлень - ПОСЛІДОВНО одне за одним -->
+                                @{
+                                    var dayWidth = 100.0 / calendarDays.Count;
+                                    // Починаємо від дати старту першого замовлення
+                                    var firstStartIndex = calendarDays.FindIndex(d => d.Date == workshopOrders.First().ProductionStartDate.Date);
+                                    if (firstStartIndex == -1) firstStartIndex = 0;
+                                    
+                                    // Накопичувальна позиція - кожне замовлення починається там де закінчилось попереднє
+                                    double cumulativeLeft = firstStartIndex * dayWidth;
+                                }
+                                
                                 @foreach (var order in workshopOrders)
                                 {
-                                    var startIndex = calendarDays.FindIndex(d => d.Date == order.ProductionStartDate.Date);
-                                    var endIndex = calendarDays.FindIndex(d => d.Date == order.ProductionEndDate.Date);
-                                    var shipmentIndex = calendarDays.FindIndex(d => d.Date == order.CompletionDate.Date);
-                                    
-                                    if (startIndex == -1) startIndex = 0;
-                                    if (endIndex == -1) endIndex = calendarDays.Count - 1;
-                                    if (shipmentIndex == -1) shipmentIndex = endIndex;
-                                    
-                                    var dayWidth = 100.0 / calendarDays.Count;
-                                    
-                                    // ШИРИНА БАРА = площа / потужність (в днях)
-                                    // Це реальна тривалість роботи над замовленням
+                                    // Ширина бара = площа / потужність (в днях)
                                     var daysOfWork = (double)order.SquareMeters / capacity;
-                                    
-                                    // Позиція старту
-                                    var left = startIndex * dayWidth;
-                                    // Ширина = кількість днів роботи * ширина одного дня
                                     var width = daysOfWork * dayWidth;
+                                    
+                                    var shipmentIndex = calendarDays.FindIndex(d => d.Date == order.CompletionDate.Date);
                                     
                                     var isCompleted = order.ProductionEndDate.Date < DateTime.Today;
                                     var isInProgress = order.ProductionStartDate.Date <= DateTime.Today && order.ProductionEndDate.Date >= DateTime.Today;
                                     var statusClass = isCompleted ? "completed" : isInProgress ? "in-progress" : "";
                                     
                                     var orderName = string.IsNullOrWhiteSpace(order.OrderName) ? $"№{order.Day}" : order.OrderName;
-                                    var displayName = orderName.Length > 10 ? orderName.Substring(0, 10) + ".." : orderName;
+                                    var displayName = width > 3 ? (orderName.Length > 8 ? orderName.Substring(0, 8) + ".." : orderName) : "";
+                                    var showSquare = width > 2;
                                     
                                     <div class="gantt-bar @statusClass" 
-                                         style="left: @left.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)%; 
-                                                width: @width.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)%; 
+                                         style="left: @cumulativeLeft.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)%; 
+                                                width: @width.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)%; 
                                                 background-color: @GetWorkshopColor(workshop.Number);"
-                                         title="@orderName: @order.SquareMeters.ToString("N0") м² (@daysOfWork.ToString("F2") дн.) | @order.ProductionStartDate.ToString("dd.MM") → @order.CompletionDate.ToString("dd.MM")">
+                                         title="@orderName: @order.SquareMeters.ToString("N0") м² (@daysOfWork.ToString("F2") дн.) | Відвантаж: @order.CompletionDate.ToString("dd.MM")">
                                         
-                                        <!-- Назва та площа -->
-                                        <span class="bar-text">@displayName</span>
-                                        <span class="bar-square">@order.SquareMeters.ToString("N0")</span>
+                                        @if (!string.IsNullOrEmpty(displayName))
+                                        {
+                                            <span class="bar-text">@displayName</span>
+                                        }
+                                        @if (showSquare)
+                                        {
+                                            <span class="bar-square">@order.SquareMeters.ToString("N0")</span>
+                                        }
                                         
                                         <!-- Tooltip -->
                                         <div class="bar-tooltip">
@@ -167,22 +175,19 @@ else
                                             <table class="tooltip-table">
                                                 <tr><td>Площа:</td><td><strong>@order.SquareMeters.ToString("N0") м²</strong></td></tr>
                                                 <tr><td>Потужність цеху:</td><td>@capacity м²/день</td></tr>
-                                                <tr><td>Завантаження:</td><td><strong>@daysOfWork.ToString("F2") дн.</strong></td></tr>
+                                                <tr><td>Тривалість:</td><td><strong>@daysOfWork.ToString("F2") дн.</strong></td></tr>
                                                 <tr class="divider"><td colspan="2"></td></tr>
                                                 <tr><td><i class="bi bi-play-fill text-success"></i> Старт:</td><td><strong>@order.ProductionStartDate.ToString("dd.MM.yyyy")</strong></td></tr>
                                                 <tr><td><i class="bi bi-stop-fill text-warning"></i> Фініш:</td><td><strong>@order.ProductionEndDate.ToString("dd.MM.yyyy")</strong></td></tr>
                                                 <tr><td><i class="bi bi-truck text-primary"></i> Відвантаж.:</td><td><strong>@order.CompletionDate.ToString("dd.MM.yyyy")</strong></td></tr>
                                             </table>
-                                            <!-- Візуальний індикатор завантаження -->
-                                            <div class="load-indicator">
-                                                <small>Завантаження цеху:</small>
-                                                <div class="load-bar">
-                                                    <div class="load-fill" style="width: @(Math.Min(100, daysOfWork * 33).ToString("F0"))%;"></div>
-                                                </div>
-                                                <small>@(daysOfWork * 100 / 3).ToString("F0")%</small>
-                                            </div>
                                         </div>
                                     </div>
+                                    
+                                    @{
+                                        // Зсуваємо позицію для наступного замовлення
+                                        cumulativeLeft += width;
+                                    }
                                     
                                     <!-- Вертикальна лінія відвантаження -->
                                     @if (shipmentIndex >= 0 && shipmentIndex < calendarDays.Count)
@@ -190,7 +195,7 @@ else
                                         var shipLeft = (shipmentIndex + 0.5) * dayWidth;
                                         <div class="shipment-line" 
                                              style="left: @shipLeft.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)%;"
-                                             title="Відвантаження №@order.Day: @order.CompletionDate.ToString("dd.ММ.yyyy")">
+                                             title="Відвантаження №@order.Day: @order.CompletionDate.ToString("dd.MM.yyyy")">
                                         </div>
                                     }
                                 }
