@@ -216,7 +216,7 @@ else
                                                     <tr><td><i class="bi bi-truck text-primary"></i> Відвантаж.:</td><td><strong>@order.CompletionDate.ToString("dd.MM.yyyy")</strong></td></tr>
                                                 </table>
                                                 <div class="tooltip-hint mt-2 text-muted small">
-                                                    <i class="bi bi-arrows-move"></i> Перетягніть для переміщення
+                                                    <i class="bi bi-arrows-move"></i> Перетягніть для зміни порядку або на інший цех
                                                 </div>
                                             </div>
                                         </div>
@@ -911,7 +911,7 @@ else
         }
         catch (Exception ex)
         {
-            Logger.LogError("Помилка переміщення", ex, "GanttCombined");
+            Logger.LogError($"Помилка переміщення: {ex.Message}", ex, "GanttCombined");
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
         }
     }

@@ -143,9 +143,9 @@ window.DragDropInterop = {
 };
 
 // Drag & Drop для Gantt діаграми
+// Підтримує: переміщення між цехами + зміна порядку в межах цеху
 window.GanttDragDrop = {
     sortableInstances: {},
-    dotNetHelperRef: null,
     
     initGanttSortable: function (elementId, dotNetHelper, workshopNumber) {
         const el = document.getElementById(elementId);
@@ -153,9 +153,6 @@ window.GanttDragDrop = {
             console.warn('Gantt element not found:', elementId);
             return false;
         }
-
-        // Зберігаємо dotNetHelper
-        this.dotNetHelperRef = dotNetHelper;
 
         // Знищуємо попередній інстанс
         if (this.sortableInstances[elementId]) {
@@ -169,20 +166,20 @@ window.GanttDragDrop = {
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
                 dragClass: 'sortable-drag',
-                draggable: '.draggable-bar',  // Тільки бари
-                filter: '.gantt-cell, .shipment-line',  // Виключаємо клітинки та лінії
+                draggable: '.draggable-bar',
+                filter: '.gantt-cell, .shipment-line',
                 group: 'gantt-orders',
-                sort: true,
+                sort: true,  // Дозволяємо сортування
                 forceFallback: true,
                 fallbackOnBody: true,
-                swapThreshold: 0.65,
                 
                 onStart: function (evt) {
                     document.body.classList.add('is-dragging');
+                    // Підсвічуємо всі dropzones
                     document.querySelectorAll('.gantt-dropzone').forEach(zone => {
                         zone.classList.add('drop-target-active');
                     });
-                    console.log('Gantt drag started:', evt.oldIndex, 'item:', evt.item);
+                    console.log('Gantt drag started, orderDay:', evt.item.dataset.orderDay);
                 },
                 
                 onEnd: function (evt) {
@@ -196,28 +193,36 @@ window.GanttDragDrop = {
                     const orderDay = parseInt(evt.item.dataset.orderDay);
                     const squareMeters = parseFloat(evt.item.dataset.square);
                     
-                    // Рахуємо реальні індекси (тільки серед draggable-bar)
+                    // Отримуємо всі бари в контейнерах
                     const fromBars = Array.from(evt.from.querySelectorAll('.draggable-bar'));
                     const toBars = Array.from(evt.to.querySelectorAll('.draggable-bar'));
                     
-                    const oldIndex = fromBars.indexOf(evt.item);
+                    // Знаходимо старий індекс по orderDay (1-based Day -> 0-based index)
+                    const oldIndex = orderDay - 1;
+                    
+                    // Знаходимо новий індекс в цільовому контейнері
                     const newIndex = toBars.indexOf(evt.item);
                     
-                    console.log('Gantt drag ended:', fromWorkshop, '->', toWorkshop, 'oldIndex:', oldIndex, 'newIndex:', newIndex, 'orderDay:', orderDay);
+                    console.log('Gantt drag ended:', {
+                        fromWorkshop, toWorkshop, orderDay, squareMeters,
+                        oldIndex, newIndex,
+                        fromBarsCount: fromBars.length,
+                        toBarsCount: toBars.length
+                    });
                     
-                    // ВАЖЛИВО: Скасовуємо DOM зміни - Blazor сам оновить
-                    // Повертаємо елемент на старе місце
-                    if (evt.from === evt.to && oldIndex !== newIndex && oldIndex >= 0 && newIndex >= 0) {
-                        // В межах одного контейнера - переміщення порядку
-                        console.log('Reordering within workshop:', fromWorkshop);
-                        dotNetHelper.invokeMethodAsync('OnGanttOrderReordered', 
-                            fromWorkshop,
-                            oldIndex, 
-                            newIndex
-                        ).then(() => {
-                            console.log('OnGanttOrderReordered success');
-                        }).catch(err => console.error('Error:', err));
-                    } else if (fromWorkshop !== toWorkshop) {
+                    if (fromWorkshop === toWorkshop) {
+                        // Переміщення в межах одного цеху
+                        if (oldIndex !== newIndex && newIndex >= 0) {
+                            console.log('Reordering within workshop:', fromWorkshop, 'from', oldIndex, 'to', newIndex);
+                            dotNetHelper.invokeMethodAsync('OnGanttOrderReordered', 
+                                fromWorkshop,
+                                oldIndex, 
+                                newIndex
+                            ).then(() => {
+                                console.log('OnGanttOrderReordered success');
+                            }).catch(err => console.error('Error:', err));
+                        }
+                    } else {
                         // Переміщення між цехами
                         console.log('Transferring between workshops:', fromWorkshop, '->', toWorkshop);
                         dotNetHelper.invokeMethodAsync('OnGanttOrderTransfer',
