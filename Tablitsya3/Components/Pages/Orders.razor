@@ -646,67 +646,73 @@ else
     {
         try
         {
+            Logger.LogInfo($"OnOrderReordered: workshop={workshopNumber}, old={oldIndex}, new={newIndex}", "Orders");
+            
+            if (!workshopData.WorkshopOrders.ContainsKey(workshopNumber))
+            {
+                Logger.LogWarning($"Workshop {workshopNumber} not found in WorkshopOrders", "Orders");
+                return;
+            }
+            
+            var orders = workshopData.WorkshopOrders[workshopNumber];
+            
+            // Перевіряємо межі
+            if (oldIndex < 0 || oldIndex >= orders.Count || newIndex < 0 || newIndex >= orders.Count)
+            {
+                Logger.LogWarning($"Invalid indices: old={oldIndex}, new={newIndex}, count={orders.Count}", "Orders");
+                return;
+            }
+            
             await BackupService.CreateBackupAsync($"Зміна порядку в цеху №{workshopNumber}");
             
-            var schedule = GetSchedule(workshopNumber);
-            if (schedule == null) return;
-
-            var filteredOrders = FilterOrders(schedule.Orders, workshopNumber).ToList();
-            if (oldIndex < 0 || oldIndex >= filteredOrders.Count || newIndex < 0 || newIndex >= filteredOrders.Count)
-                return;
-
-            var movedOrderDay = filteredOrders[oldIndex].Day;
-            var targetOrderDay = filteredOrders[newIndex].Day;
-
-            if (workshopData.WorkshopOrders.ContainsKey(workshopNumber))
+            // Переміщуємо замовлення (площу)
+            var orderValue = orders[oldIndex];
+            orders.RemoveAt(oldIndex);
+            orders.Insert(newIndex, orderValue);
+            
+            // Переміщуємо дати
+            if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
             {
-                var orders = workshopData.WorkshopOrders[workshopNumber];
-                var originalOldIndex = schedule.Orders.FindIndex(o => o.Day == movedOrderDay);
-                var originalNewIndex = schedule.Orders.FindIndex(o => o.Day == targetOrderDay);
-
-                if (originalOldIndex >= 0 && originalNewIndex >= 0)
+                var dates = workshopData.WorkshopOrderDates[workshopNumber];
+                if (oldIndex < dates.Count && newIndex <= dates.Count)
                 {
-                    var item = orders[originalOldIndex];
-                    orders.RemoveAt(originalOldIndex);
-                    orders.Insert(originalNewIndex, item);
-
-                    if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
-                    {
-                        var dates = workshopData.WorkshopOrderDates[workshopNumber];
-                        if (originalOldIndex < dates.Count)
-                        {
-                            var dateItem = dates[originalOldIndex];
-                            dates.RemoveAt(originalOldIndex);
-                            dates.Insert(Math.Min(originalNewIndex, dates.Count), dateItem);
-                        }
-                    }
-
-                    if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
-                    {
-                        var names = workshopData.WorkshopOrderNames[workshopNumber];
-                        if (originalOldIndex < names.Count)
-                        {
-                            var nameItem = names[originalOldIndex];
-                            names.RemoveAt(originalOldIndex);
-                            names.Insert(Math.Min(originalNewIndex, names.Count), nameItem);
-                        }
-                    }
+                    var dateValue = dates[oldIndex];
+                    dates.RemoveAt(oldIndex);
+                    dates.Insert(Math.Min(newIndex, dates.Count), dateValue);
                 }
             }
-
+            
+            // Переміщуємо назви
+            if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
+            {
+                var names = workshopData.WorkshopOrderNames[workshopNumber];
+                if (oldIndex < names.Count && newIndex <= names.Count)
+                {
+                    var nameValue = names[oldIndex];
+                    names.RemoveAt(oldIndex);
+                    names.Insert(Math.Min(newIndex, names.Count), nameValue);
+                }
+            }
+            
+            workshopData.LastUpdated = DateTime.UtcNow;
+            await StorageService.SaveWorkshopDataAsync(workshopData);
+            
+            // Перераховуємо графік
             var newSchedule = CalculateScheduleForWorkshop(workshopNumber);
             if (newSchedule != null)
             {
                 schedules[workshopNumber] = newSchedule;
             }
             
-            await StorageService.SaveWorkshopDataAsync(workshopData);
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Порядок збережено!", "success");
             await InvokeAsync(StateHasChanged);
+            
+            Logger.LogInfo($"Order reordered successfully", "Orders");
         }
         catch (Exception ex)
         {
-            Logger.LogError("Помилка зміни порядку", ex, "Orders");
+            Logger.LogError($"Помилка зміни порядку: {ex.Message}", ex, "Orders");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
         }
     }
 

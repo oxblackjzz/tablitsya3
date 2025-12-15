@@ -15,6 +15,7 @@ window.DragDropInterop = {
         // Знищуємо попередній інстанс якщо є
         if (this.sortableInstances[elementId]) {
             this.sortableInstances[elementId].destroy();
+            delete this.sortableInstances[elementId];
         }
 
         try {
@@ -38,6 +39,28 @@ window.DragDropInterop = {
                     console.log('Drag ended:', evt.oldIndex, '->', evt.newIndex);
                     
                     if (evt.oldIndex !== evt.newIndex) {
+                        // ВАЖЛИВО: Скасовуємо DOM зміни - повертаємо елемент на місце
+                        // Blazor сам оновить DOM після StateHasChanged
+                        const item = evt.item;
+                        const parent = evt.from;
+                        
+                        if (evt.oldIndex < evt.newIndex) {
+                            // Елемент був переміщений вниз - повертаємо його перед елементом на старій позиції
+                            const refNode = parent.children[evt.oldIndex];
+                            if (refNode) {
+                                parent.insertBefore(item, refNode);
+                            }
+                        } else {
+                            // Елемент був переміщений вгору
+                            const refNode = parent.children[evt.oldIndex + 1];
+                            if (refNode) {
+                                parent.insertBefore(item, refNode);
+                            } else {
+                                parent.appendChild(item);
+                            }
+                        }
+                        
+                        // Тепер викликаємо .NET метод
                         dotNetHelper.invokeMethodAsync('OnOrderReordered', 
                             workshopNumber,
                             evt.oldIndex, 
