@@ -779,25 +779,35 @@ else
     {
         try
         {
-            if (!workshopData.WorkshopOrders.ContainsKey(workshopNumber)) return;
+            Logger.LogInfo($"OnGanttOrderReordered: workshop={workshopNumber}, old={oldIndex}, new={newIndex}", "GanttCombined");
+            
+            if (!workshopData.WorkshopOrders.ContainsKey(workshopNumber)) 
+            {
+                Logger.LogWarning($"Workshop {workshopNumber} not found", "GanttCombined");
+                return;
+            }
             
             var orders = workshopData.WorkshopOrders[workshopNumber];
-            if (oldIndex < 0 || oldIndex >= orders.Count || newIndex < 0 || newIndex >= orders.Count) return;
+            if (oldIndex < 0 || oldIndex >= orders.Count || newIndex < 0 || newIndex >= orders.Count) 
+            {
+                Logger.LogWarning($"Invalid indices: old={oldIndex}, new={newIndex}, count={orders.Count}", "GanttCombined");
+                return;
+            }
             
-            // Переміщуємо замовлення
-            var item = orders[oldIndex];
+            // Переміщуємо замовлення (площу)
+            var orderValue = orders[oldIndex];
             orders.RemoveAt(oldIndex);
-            orders.Insert(newIndex, item);
+            orders.Insert(newIndex, orderValue);
             
             // Переміщуємо дати
             if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
             {
                 var dates = workshopData.WorkshopOrderDates[workshopNumber];
-                if (oldIndex < dates.Count)
+                if (oldIndex < dates.Count && newIndex <= dates.Count)
                 {
-                    var dateItem = dates[oldIndex];
+                    var dateValue = dates[oldIndex];
                     dates.RemoveAt(oldIndex);
-                    dates.Insert(Math.Min(newIndex, dates.Count), dateItem);
+                    dates.Insert(Math.Min(newIndex, dates.Count), dateValue);
                 }
             }
             
@@ -805,11 +815,11 @@ else
             if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
             {
                 var names = workshopData.WorkshopOrderNames[workshopNumber];
-                if (oldIndex < names.Count)
+                if (oldIndex < names.Count && newIndex <= names.Count)
                 {
-                    var nameItem = names[oldIndex];
+                    var nameValue = names[oldIndex];
                     names.RemoveAt(oldIndex);
-                    names.Insert(Math.Min(newIndex, names.Count), nameItem);
+                    names.Insert(Math.Min(newIndex, names.Count), nameValue);
                 }
             }
             
@@ -818,10 +828,14 @@ else
             await LoadData();
             
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Порядок змінено!", "success");
+            await InvokeAsync(StateHasChanged);
+            
+            Logger.LogInfo("Order reordered successfully", "GanttCombined");
         }
         catch (Exception ex)
         {
-            Logger.LogError("Помилка зміни порядку", ex, "GanttCombined");
+            Logger.LogError($"Помилка зміни порядку: {ex.Message}", ex, "GanttCombined");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
         }
     }
 
