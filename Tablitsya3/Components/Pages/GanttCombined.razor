@@ -176,7 +176,7 @@ else
                                     var firstStartIndex = calendarDays.FindIndex(d => d.Date == firstOrder.ProductionStartDate.Date);
                                     if (firstStartIndex == -1) firstStartIndex = 0;
                                     
-                                    // Накопичувальна позиція (враховуючи вихідні)
+                                    // Накопичувальна позиція (врахуючи вихідні)
                                     double currentLeft = firstStartIndex * dayWidth;
                                     int currentDayIndex = firstStartIndex;
                                     
@@ -839,6 +839,68 @@ else
                     names.RemoveAt(oldIndex);
                     names.Insert(Math.Min(newIndex, names.Count), nameValue);
                 }
+            }
+            
+            // ✅ ОНОВЛЮЄМО КЛЮЧІ OriginalWorkshops при reorder
+            // Ключі формату "workshop_Day" де Day = index + 1 (1-based)
+            var originalWorkshopsCopy = workshopData.OriginalWorkshops
+                .Where(k => k.Key.StartsWith($"{workshopNumber}_"))
+                .ToDictionary(k => k.Key, k => k.Value);
+            
+            if (originalWorkshopsCopy.Any())
+            {
+                // Видаляємо старі ключі цього цеху
+                foreach (var key in originalWorkshopsCopy.Keys)
+                {
+                    workshopData.OriginalWorkshops.Remove(key);
+                }
+                
+                // Перерахуємо ключі з урахуванням нового порядку
+                // Якщо елемент переміщено з oldIndex на newIndex, всі ключі між ними зсуваються
+                foreach (var kvp in originalWorkshopsCopy)
+                {
+                    var parts = kvp.Key.Split('_');
+                    if (parts.Length == 2 && int.TryParse(parts[1], out int day))
+                    {
+                        int currentIndex = day - 1; // 0-based
+                        int newKeyIndex;
+                        
+                        if (currentIndex == oldIndex)
+                        {
+                            // Це елемент який переміщуємо
+                            newKeyIndex = newIndex;
+                        }
+                        else if (oldIndex < newIndex)
+                        {
+                            // Переміщення вниз: елементи між oldIndex і newIndex зсуваються вгору
+                            if (currentIndex > oldIndex && currentIndex <= newIndex)
+                            {
+                                newKeyIndex = currentIndex - 1;
+                            }
+                            else
+                            {
+                                newKeyIndex = currentIndex;
+                            }
+                        }
+                        else
+                        {
+                            // Переміщення вгору: елементи між newIndex і oldIndex зсуваються вниз
+                            if (currentIndex >= newIndex && currentIndex < oldIndex)
+                            {
+                                newKeyIndex = currentIndex + 1;
+                            }
+                            else
+                            {
+                                newKeyIndex = currentIndex;
+                            }
+                        }
+                        
+                        var newKey = $"{workshopNumber}_{newKeyIndex + 1}"; // 1-based
+                        workshopData.OriginalWorkshops[newKey] = kvp.Value;
+                    }
+                }
+                
+                Logger.LogInfo($"Updated {originalWorkshopsCopy.Count} OriginalWorkshops keys after reorder", "GanttCombined");
             }
             
             workshopData.LastUpdated = DateTime.UtcNow;
