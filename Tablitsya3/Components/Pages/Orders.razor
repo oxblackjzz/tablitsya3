@@ -444,8 +444,12 @@ else
             foreach (var workshopNum in workshopData.WorkshopOrders.Keys.ToList())
             {
                 var squares = workshopData.WorkshopOrders[workshopNum];
-                var dates = workshopData.WorkshopOrderDates.GetValueOrDefault(workshopNum) ?? new List<DateTime>();
-                var names = workshopData.WorkshopOrderNames.GetValueOrDefault(workshopNum) ?? new List<string>();
+                var dates = workshopData.WorkshopOrderDates.ContainsKey(workshopNum) 
+                    ? workshopData.WorkshopOrderDates[workshopNum] 
+                    : new List<DateTime>();
+                var names = workshopData.WorkshopOrderNames.ContainsKey(workshopNum) 
+                    ? workshopData.WorkshopOrderNames[workshopNum] 
+                    : new List<string>();
                 
                 var seen = new HashSet<(double square, DateTime date)>();
                 var indicesToRemove = new List<int>();
@@ -453,11 +457,12 @@ else
                 for (int i = 0; i < squares.Count; i++)
                 {
                     var date = i < dates.Count ? dates[i] : workshopData.StartDate;
-                    var key = (Math.Round(squares[i], 2), date.Date);
+                    var key = (Math.Round(squares[i], 0), date.Date); // округлюємо до цілого
                     
                     if (seen.Contains(key))
                     {
                         indicesToRemove.Add(i);
+                        Logger.LogInfo($"Duplicate found: workshop={workshopNum}, index={i}, square={squares[i]}, date={date:dd.MM.yy}", "Orders");
                     }
                     else
                     {
@@ -465,41 +470,51 @@ else
                     }
                 }
                 
+                Logger.LogInfo($"Workshop {workshopNum}: found {indicesToRemove.Count} duplicates to remove", "Orders");
+                
                 // Видаляємо з кінця щоб індекси не зсувались
                 foreach (var index in indicesToRemove.OrderByDescending(i => i))
                 {
+                    Logger.LogInfo($"Removing index {index} from workshop {workshopNum}", "Orders");
+                    
                     if (index < squares.Count)
                         squares.RemoveAt(index);
                     
-                    if (index < dates.Count)
-                        dates.RemoveAt(index);
+                    if (workshopData.WorkshopOrderDates.ContainsKey(workshopNum) && index < workshopData.WorkshopOrderDates[workshopNum].Count)
+                        workshopData.WorkshopOrderDates[workshopNum].RemoveAt(index);
                     
-                    if (index < names.Count)
-                        names.RemoveAt(index);
+                    if (workshopData.WorkshopOrderNames.ContainsKey(workshopNum) && index < workshopData.WorkshopOrderNames[workshopNum].Count)
+                        workshopData.WorkshopOrderNames[workshopNum].RemoveAt(index);
                     
                     removedCount++;
                 }
-                
-                // Оновлюємо дати і назви якщо вони існують
-                if (dates.Any())
-                    workshopData.WorkshopOrderDates[workshopNum] = dates;
-                if (names.Any())
-                    workshopData.WorkshopOrderNames[workshopNum] = names;
             }
             
+            Logger.LogInfo($"Total removed: {removedCount}", "Orders");
+            
             workshopData.LastUpdated = DateTime.UtcNow;
+            
+            // Очищаємо кеш ПЕРЕД збереженням
+            StorageService.InvalidateCache();
+            
             await StorageService.SaveWorkshopDataAsync(workshopData);
             
-            // Очищаємо кеш і перезавантажуємо
+            // Очищаємо локальні дані
             schedules.Clear();
+            hasDuplicates = false;
+            duplicateCount = 0;
+            
+            // Перезавантажуємо
             await LoadData();
             
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", 
                 $"Видалено {removedCount} дублікатів!", "success");
+                
+            StateHasChanged();
         }
         catch (Exception ex)
         {
-            Logger.LogError("Помилка очищення дублікатів", ex, "Orders");
+            Logger.LogError($"Помилка очищення дублікатів: {ex.Message}", ex, "Orders");
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", 
                 $"Помилка: {ex.Message}", "error");
         }
