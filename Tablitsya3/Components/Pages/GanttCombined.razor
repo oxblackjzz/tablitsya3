@@ -1,4 +1,5 @@
 ﻿@page "/gantt-combined"
+@implements IDisposable
 @using Tablitsya3.Models
 @using Tablitsya3.Services
 @inject UnifiedStorageService StorageService
@@ -148,7 +149,7 @@ else
                                         // Ширина бара = площа / потужність (в робочих днях)
                                         var daysOfWork = (double)order.SquareMeters / capacity;
                                         
-                                        // Рахуємо скільки календарних днів займе робота (пропускаючи вихідні)
+                                        // Рахуємо скільки календарних днів займе robota (пропускаючи вихідні)
                                         double calendarDaysNeeded = 0;
                                         double workDaysRemaining = daysOfWork;
                                         int tempIndex = currentDayIndex;
@@ -850,23 +851,53 @@ else
     {
         try
         {
-            if (!workshopData.WorkshopOrders.ContainsKey(fromWorkshop)) return;
+            Logger.LogInfo($"OnGanttOrderTransfer: from={fromWorkshop}, to={toWorkshop}, day={orderDay}, square={squareMeters}", "GanttCombined");
             
-            // Знаходимо індекс замовлення
-            var fromOrders = workshopData.WorkshopOrders[fromWorkshop];
-            var orderIndex = -1;
-            
-            // Шукаємо по Day (що відповідає позиції в списку + 1)
-            for (int i = 0; i < fromOrders.Count; i++)
+            if (!workshopData.WorkshopOrders.ContainsKey(fromWorkshop)) 
             {
-                if (Math.Abs(fromOrders[i] - squareMeters) < 0.01)
+                Logger.LogWarning($"Source workshop {fromWorkshop} not found", "GanttCombined");
+                return;
+            }
+            
+            var fromOrders = workshopData.WorkshopOrders[fromWorkshop];
+            
+            // orderDay = 1-based index в списку замовлень цеху
+            // Але після сортування може не відповідати реальному індексу
+            // Тому шукаємо по комбінації squareMeters + приблизна позиція
+            var orderIndex = orderDay - 1;
+            
+            // Перевіряємо чи індекс валідний і площа співпадає
+            if (orderIndex < 0 || orderIndex >= fromOrders.Count)
+            {
+                // Шукаємо по площі
+                orderIndex = -1;
+                for (int i = 0; i < fromOrders.Count; i++)
                 {
-                    orderIndex = i;
-                    break;
+                    if (Math.Abs(fromOrders[i] - squareMeters) < 0.01)
+                    {
+                        orderIndex = i;
+                        break;
+                    }
+                }
+            }
+            else if (Math.Abs(fromOrders[orderIndex] - squareMeters) > 0.01)
+            {
+                // Індекс є але площа не співпадає - шукаємо по площі
+                for (int i = 0; i < fromOrders.Count; i++)
+                {
+                    if (Math.Abs(fromOrders[i] - squareMeters) < 0.01)
+                    {
+                        orderIndex = i;
+                        break;
+                    }
                 }
             }
             
-            if (orderIndex < 0) return;
+            if (orderIndex < 0 || orderIndex >= fromOrders.Count) 
+            {
+                Logger.LogWarning($"Order not found: day={orderDay}, square={squareMeters}", "GanttCombined");
+                return;
+            }
             
             // Видаляємо з вихідного цеху
             var orderValue = fromOrders[orderIndex];
@@ -914,6 +945,8 @@ else
             var fromName = workshops.FirstOrDefault(w => w.Number == fromWorkshop)?.Name ?? $"Цех {fromWorkshop}";
             var toName = workshops.FirstOrDefault(w => w.Number == toWorkshop)?.Name ?? $"Цех {toWorkshop}";
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Переміщено з {fromName} до {toName}", "success");
+            
+            Logger.LogInfo($"Order transferred successfully: {orderValue} м² from {fromName} to {toName}", "GanttCombined");
         }
         catch (Exception ex)
         {
