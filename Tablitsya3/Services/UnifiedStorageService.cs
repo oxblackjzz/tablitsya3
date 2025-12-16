@@ -38,12 +38,7 @@ namespace Tablitsya3.Services
 
         public async Task SaveWorkshopDataAsync(WorkshopData data)
         {
-            // Автоматично синхронізуємо формати перед збереженням
-            if (data.DataVersion >= 2)
-            {
-                data.SyncToOldFormat();
-            }
-            
+            // НЕ викликаємо SyncToOldFormat - працюємо тільки зі старим форматом
             _logger.LogDebug("💾 Saving data through cached storage...");
             await _cachedStorage.SaveWorkshopDataAsync(data);
         }
@@ -53,15 +48,14 @@ namespace Tablitsya3.Services
             _logger.LogDebug("📖 Loading data through cached storage...");
             var data = await _cachedStorage.LoadWorkshopDataAsync();
             
-            // Автоматична міграція при завантаженні
-            if (data != null && data.DataVersion < 2)
-            {
-                _logger.LogInformation("🔄 Migrating data to new OrderData format...");
-                data.MigrateToNewFormat();
-                // Зберігаємо мігровані дані
-                await _cachedStorage.SaveWorkshopDataAsync(data);
-                _logger.LogInformation("✅ Data migration completed");
-            }
+            // ВИМКНЕНО: Автоматична міграція викликала дублювання даних
+            // if (data != null && data.DataVersion < 2)
+            // {
+            //     _logger.LogInformation("🔄 Migrating data to new OrderData format...");
+            //     data.MigrateToNewFormat();
+            //     await _cachedStorage.SaveWorkshopDataAsync(data);
+            //     _logger.LogInformation("✅ Data migration completed");
+            // }
             
             return data;
         }
