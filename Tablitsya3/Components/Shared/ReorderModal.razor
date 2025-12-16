@@ -1,4 +1,5 @@
 ﻿@using Tablitsya3.Models
+@inject IJSRuntime JSRuntime
 
 <div class="modal @(IsVisible ? "show d-block" : "")" tabindex="-1" style="background: rgba(0,0,0,0.5);">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -13,8 +14,8 @@
                 @if (Orders != null && Orders.Any())
                 {
                     <div class="alert alert-info m-3 mb-0 py-2">
-                        <i class="bi bi-info-circle"></i>
-                        Перетягніть замовлення для зміни порядку виробництва
+                        <i class="bi bi-grip-vertical"></i>
+                        Перетягніть замовлення для зміни порядку або використовуйте кнопки ↑↓
                     </div>
                     
                     <table class="table table-hover mb-0">
@@ -28,16 +29,16 @@
                                 <th style="width: 80px;"></th>
                             </tr>
                         </thead>
-                        <tbody id="reorder-list">
+                        <tbody id="reorder-modal-list">
                             @for (int i = 0; i < Orders.Count; i++)
                             {
                                 var order = Orders[i];
                                 var index = i;
-                                <tr class="reorder-item" data-index="@i">
+                                <tr class="reorder-item" data-index="@i" data-square="@order.SquareMeters">
                                     <td class="drag-handle-cell">
                                         <i class="bi bi-grip-vertical drag-handle text-muted"></i>
                                     </td>
-                                    <td class="text-muted">@(i + 1)</td>
+                                    <td class="text-muted order-number">@(i + 1)</td>
                                     <td>
                                         <strong>@(string.IsNullOrEmpty(order.Name) ? $"№{i + 1}" : order.Name)</strong>
                                     </td>
@@ -47,13 +48,13 @@
                                     <td class="text-muted small">@order.OrderDate.ToString("dd.MM.yyyy")</td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-secondary" 
+                                            <button class="btn btn-outline-secondary no-drag" 
                                                     disabled="@(index == 0)"
                                                     @onclick="() => MoveUp(index)"
                                                     title="Вгору">
                                                 <i class="bi bi-arrow-up"></i>
                                             </button>
-                                            <button class="btn btn-outline-secondary" 
+                                            <button class="btn btn-outline-secondary no-drag" 
                                                     disabled="@(index == Orders.Count - 1)"
                                                     @onclick="() => MoveDown(index)"
                                                     title="Вниз">
@@ -81,6 +82,10 @@
                         <i class="bi bi-exclamation-circle text-warning"></i>
                         <span>Є незбережені зміни</span>
                     }
+                    else
+                    {
+                        <span>@Orders?.Count замовлень</span>
+                    }
                 </span>
                 <button type="button" class="btn btn-secondary" @onclick="Close">
                     <i class="bi bi-x-lg"></i> Скасувати
@@ -106,19 +111,37 @@
     
     .drag-handle {
         font-size: 1.2rem;
+        color: var(--bs-secondary);
+    }
+    
+    .drag-handle:hover {
+        color: var(--bs-primary);
     }
     
     .reorder-item {
-        transition: background-color 0.2s;
+        transition: all 0.2s ease;
     }
     
     .reorder-item:hover {
         background-color: var(--bs-light);
     }
     
-    .reorder-item.dragging {
-        opacity: 0.5;
-        background-color: var(--bs-info-bg-subtle);
+    .reorder-item.sortable-ghost {
+        opacity: 0.4;
+        background-color: var(--bs-info-bg-subtle) !important;
+    }
+    
+    .reorder-item.sortable-chosen {
+        background-color: var(--bs-primary-bg-subtle) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .reorder-item.sortable-drag {
+        background-color: white;
+    }
+    
+    #reorder-modal-list {
+        min-height: 100px;
     }
 </style>
 
@@ -132,6 +155,7 @@
     
     private List<ReorderItem>? originalOrders;
     private bool HasChanges => CheckForChanges();
+    private bool sortableInitialized = false;
     
     protected override void OnParametersSet()
     {
@@ -144,7 +168,39 @@
                 OrderDate = o.OrderDate, 
                 Name = o.Name 
             }).ToList();
+            sortableInitialized = false;
         }
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsVisible && Orders != null && Orders.Any() && !sortableInitialized)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("ReorderModalDragDrop.init", "reorder-modal-list", 
+                    DotNetObjectReference.Create(this));
+                sortableInitialized = true;
+            }
+            catch (Exception)
+            {
+                // JS not ready yet
+            }
+        }
+    }
+    
+    [JSInvokable]
+    public void OnItemReordered(int oldIndex, int newIndex)
+    {
+        if (Orders == null || oldIndex < 0 || newIndex < 0 || 
+            oldIndex >= Orders.Count || newIndex >= Orders.Count)
+            return;
+        
+        var item = Orders[oldIndex];
+        Orders.RemoveAt(oldIndex);
+        Orders.Insert(newIndex, item);
+        
+        InvokeAsync(StateHasChanged);
     }
     
     private bool CheckForChanges()
@@ -185,6 +241,7 @@
     
     private async Task Close()
     {
+        sortableInitialized = false;
         await OnClose.InvokeAsync();
     }
     
@@ -192,6 +249,7 @@
     {
         if (Orders != null)
         {
+            sortableInitialized = false;
             await OnSave.InvokeAsync(Orders);
         }
     }

@@ -38,6 +38,12 @@ namespace Tablitsya3.Services
 
         public async Task SaveWorkshopDataAsync(WorkshopData data)
         {
+            // Автоматично синхронізуємо формати перед збереженням
+            if (data.DataVersion >= 2)
+            {
+                data.SyncToOldFormat();
+            }
+            
             _logger.LogDebug("💾 Saving data through cached storage...");
             await _cachedStorage.SaveWorkshopDataAsync(data);
         }
@@ -45,7 +51,19 @@ namespace Tablitsya3.Services
         public async Task<WorkshopData?> LoadWorkshopDataAsync()
         {
             _logger.LogDebug("📖 Loading data through cached storage...");
-            return await _cachedStorage.LoadWorkshopDataAsync();
+            var data = await _cachedStorage.LoadWorkshopDataAsync();
+            
+            // Автоматична міграція при завантаженні
+            if (data != null && data.DataVersion < 2)
+            {
+                _logger.LogInformation("🔄 Migrating data to new OrderData format...");
+                data.MigrateToNewFormat();
+                // Зберігаємо мігровані дані
+                await _cachedStorage.SaveWorkshopDataAsync(data);
+                _logger.LogInformation("✅ Data migration completed");
+            }
+            
+            return data;
         }
 
         public async Task ClearAllDataAsync()
@@ -84,6 +102,21 @@ namespace Tablitsya3.Services
         public CacheStatistics GetCacheStatistics()
         {
             return _cachedStorage.GetCacheStatistics();
+        }
+        
+        /// <summary>
+        /// Примусова міграція даних в новий формат
+        /// </summary>
+        public async Task ForceMigrateAsync()
+        {
+            var data = await _cachedStorage.LoadWorkshopDataAsync();
+            if (data != null)
+            {
+                _logger.LogInformation("🔄 Force migrating data to OrderData format...");
+                data.MigrateToNewFormat();
+                await _cachedStorage.SaveWorkshopDataAsync(data);
+                _logger.LogInformation("✅ Force migration completed");
+            }
         }
     }
 }

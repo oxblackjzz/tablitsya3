@@ -246,5 +246,80 @@ window.GanttDragDrop = {
     }
 };
 
+// Drag & Drop для модального вікна зміни порядку
+window.ReorderModalDragDrop = {
+    sortableInstance: null,
+    
+    init: function (elementId, dotNetHelper) {
+        const el = document.getElementById(elementId);
+        if (!el) {
+            console.warn('Reorder modal element not found:', elementId);
+            return false;
+        }
+
+        // Знищуємо попередній інстанс
+        if (this.sortableInstance) {
+            this.sortableInstance.destroy();
+            this.sortableInstance = null;
+        }
+
+        try {
+            this.sortableInstance = new Sortable(el, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                dragClass: 'sortable-drag',
+                handle: '.drag-handle-cell',
+                filter: '.no-drag, button',
+                preventOnFilter: false,
+                forceFallback: true,
+                
+                onStart: function (evt) {
+                    document.body.classList.add('is-dragging');
+                },
+                
+                onEnd: function (evt) {
+                    document.body.classList.remove('is-dragging');
+                    
+                    if (evt.oldIndex !== evt.newIndex) {
+                        // Оновлюємо номери в таблиці
+                        const rows = el.querySelectorAll('.reorder-item');
+                        rows.forEach((row, index) => {
+                            const numCell = row.querySelector('.order-number');
+                            if (numCell) {
+                                numCell.textContent = index + 1;
+                            }
+                            row.dataset.index = index;
+                        });
+                        
+                        // Викликаємо .NET метод
+                        dotNetHelper.invokeMethodAsync('OnItemReordered', 
+                            evt.oldIndex, 
+                            evt.newIndex
+                        ).then(() => {
+                            console.log('Reorder modal: item moved', evt.oldIndex, '->', evt.newIndex);
+                        }).catch(err => {
+                            console.error('Error calling OnItemReordered:', err);
+                        });
+                    }
+                }
+            });
+            
+            console.log('✅ Reorder Modal Sortable initialized');
+            return true;
+        } catch (err) {
+            console.error('❌ Error initializing Reorder Modal Sortable:', err);
+            return false;
+        }
+    },
+    
+    destroy: function () {
+        if (this.sortableInstance) {
+            this.sortableInstance.destroy();
+            this.sortableInstance = null;
+        }
+    }
+};
+
 // Автоматична ініціалізація при завантаженні Blazor
 console.log('✅ DragDropInterop loaded');
