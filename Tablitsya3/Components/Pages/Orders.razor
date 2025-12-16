@@ -22,6 +22,12 @@
         <p class="text-secondary mb-0">Детальний перегляд та редагування замовлень по цехах</p>
     </div>
     <div class="d-flex gap-2">
+        @if (hasDuplicates)
+        {
+            <button class="btn btn-warning" @onclick="CleanupDuplicates">
+                <i class="bi bi-exclamation-triangle"></i> Видалити дублі (@duplicateCount)
+            </button>
+        }
         <a href="/production-planning" class="btn btn-outline-primary">
             <i class="bi bi-bar-chart-fill"></i> Діаграми Ганта
         </a>
@@ -307,6 +313,10 @@ else
     private bool hasSchedules = false;
     private bool dragDropEnabled = true;
     
+    // Дублікати
+    private bool hasDuplicates = false;
+    private int duplicateCount = 0;
+    
     // Фільтри
     private string orderFilter = "all";
     private int selectedWorkshop = 0;
@@ -347,6 +357,9 @@ else
             workshops = await WorkshopConfigService.GetActiveWorkshopsAsync();
             workshopData = await StorageService.LoadWorkshopDataAsync();
             
+            // Перевірка на дублікати
+            CheckForDuplicates();
+            
             if (workshopData.WorkshopOrders.Any())
             {
                 foreach (var workshop in workshops)
@@ -370,6 +383,120 @@ else
         finally
         {
             isLoading = false;
+        }
+    }
+    
+    private void CheckForDuplicates()
+    {
+        duplicateCount = 0;
+        
+        // Збираємо всі унікальні замовлення (по площі + даті + назві)
+        var allOrders = new List<(int workshop, double square, DateTime date, string name)>();
+        
+        foreach (var kvp in workshopData.WorkshopOrders)
+        {
+            var workshopNum = kvp.Key;
+            var squares = kvp.Value;
+            var dates = workshopData.WorkshopOrderDates.GetValueOrDefault(workshopNum) ?? new List<DateTime>();
+            var names = workshopData.WorkshopOrderNames.GetValueOrDefault(workshopNum) ?? new List<string>();
+            
+            for (int i = 0; i < squares.Count; i++)
+            {
+                var date = i < dates.Count ? dates[i] : workshopData.StartDate;
+                var name = i < names.Count ? names[i] : "";
+                allOrders.Add((workshopNum, squares[i], date, name));
+            }
+        }
+        
+        // Знаходимо дублікати (однакова площа + дата + назва в різних цехах)
+        var grouped = allOrders
+            .GroupBy(o => (o.square, o.date, o.name))
+            .Where(g => g.Count() > 1 && g.Select(x => x.workshop).Distinct().Count() > 1);
+        
+        duplicateCount = grouped.Sum(g => g.Count() - 1);
+        hasDuplicates = duplicateCount > 0;
+        
+        if (hasDuplicates)
+        {
+            Logger.LogWarning($"Знайдено {duplicateCount} дублікатів замовлень", "Orders");
+        }
+    }
+    
+    private async Task CleanupDuplicates()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Видалити {duplicateCount} дублікатів замовлень? Залишиться тільки перше входження в кожному цеху.");
+        if (!confirmed) return;
+        
+        try
+        {
+            await BackupService.CreateBackupAsync("Очищення дублікатів");
+            
+            // Збираємо унікальні замовлення
+            var seenOrders = new HashSet<(double square, DateTime date, string name)>();
+            var toRemove = new Dictionary<int, List<int>>(); // workshop -> list of indices to remove
+            
+            foreach (var kvp in workshopData.WorkshopOrders)
+            {
+                var workshopNum = kvp.Key;
+                var squares = kvp.Value;
+                var dates = workshopData.WorkshopOrderDates.GetValueOrDefault(workshopNum) ?? new List<DateTime>();
+                var names = workshopData.WorkshopOrderNames.GetValueOrDefault(workshopNum) ?? new List<string>();
+                
+                toRemove[workshopNum] = new List<int>();
+                
+                for (int i = 0; i < squares.Count; i++)
+                {
+                    var date = i < dates.Count ? dates[i] : workshopData.StartDate;
+                    var name = i < names.Count ? names[i] : "";
+                    var key = (squares[i], date, name);
+                    
+                    if (seenOrders.Contains(key))
+                    {
+                        toRemove[workshopNum].Add(i);
+                    }
+                    else
+                    {
+                        seenOrders.Add(key);
+                    }
+                }
+            }
+            
+            // Видаляємо дублікати (з кінця щоб індекси не зсувались)
+            int removedCount = 0;
+            foreach (var kvp in toRemove)
+            {
+                var workshopNum = kvp.Key;
+                foreach (var index in kvp.Value.OrderByDescending(i => i))
+                {
+                    if (index < workshopData.WorkshopOrders[workshopNum].Count)
+                        workshopData.WorkshopOrders[workshopNum].RemoveAt(index);
+                    
+                    if (workshopData.WorkshopOrderDates.ContainsKey(workshopNum) && 
+                        index < workshopData.WorkshopOrderDates[workshopNum].Count)
+                        workshopData.WorkshopOrderDates[workshopNum].RemoveAt(index);
+                    
+                    if (workshopData.WorkshopOrderNames.ContainsKey(workshopNum) && 
+                        index < workshopData.WorkshopOrderNames[workshopNum].Count)
+                        workshopData.WorkshopOrderNames[workshopNum].RemoveAt(index);
+                    
+                    removedCount++;
+                }
+            }
+            
+            workshopData.LastUpdated = DateTime.UtcNow;
+            await StorageService.SaveWorkshopDataAsync(workshopData);
+            
+            await LoadData();
+            
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", 
+                $"Видалено {removedCount} дублікатів!", "success");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Помилка очищення дублікатів", ex, "Orders");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", 
+                $"Помилка: {ex.Message}", "error");
         }
     }
 
