@@ -916,18 +916,38 @@ else
             UndoRedo.SaveState(workshopData, $"Переміщення з {fromName} до {toName}");
             
             // Зберігаємо оригінальний цех (якщо ще не збережено)
+            // Ключ = workshop_Day, де Day = orderIndex + 1 (1-based)
             var originalKey = $"{fromWorkshop}_{orderIndex + 1}";
             int originalWorkshop = fromWorkshop;
             if (workshopData.OriginalWorkshops.ContainsKey(originalKey))
             {
                 originalWorkshop = workshopData.OriginalWorkshops[originalKey];
                 workshopData.OriginalWorkshops.Remove(originalKey);
+                Logger.LogInfo($"Retrieved original workshop from key={originalKey}: {originalWorkshop}", "GanttCombined");
+            }
+            
+            // Оновлюємо ключі для замовлень після видаленого (зсуваємо вниз)
+            var keysToUpdate = workshopData.OriginalWorkshops
+                .Where(k => k.Key.StartsWith($"{fromWorkshop}_"))
+                .Select(k => {
+                    var parts = k.Key.Split('_');
+                    if (parts.Length == 2 && int.TryParse(parts[1], out int day) && day > orderIndex + 1)
+                        return (OldKey: k.Key, NewKey: $"{fromWorkshop}_{day - 1}", Value: k.Value);
+                    return (OldKey: (string?)null, NewKey: (string?)null, Value: 0);
+                })
+                .Where(x => x.OldKey != null)
+                .ToList();
+            
+            foreach (var update in keysToUpdate)
+            {
+                workshopData.OriginalWorkshops.Remove(update.OldKey!);
+                workshopData.OriginalWorkshops[update.NewKey!] = update.Value;
             }
             
             // Видаляємо з вихідного цеху
             var orderValue = fromOrders[orderIndex];
             fromOrders.RemoveAt(orderIndex);
-            
+
             DateTime? orderDate = null;
             if (workshopData.WorkshopOrderDates.ContainsKey(fromWorkshop) && 
                 orderIndex < workshopData.WorkshopOrderDates[fromWorkshop].Count)
@@ -950,9 +970,12 @@ else
             workshopData.WorkshopOrders[toWorkshop].Add(orderValue);
             
             // Зберігаємо оригінальний цех для нової позиції
-            var newIndex = workshopData.WorkshopOrders[toWorkshop].Count;
+            // ВАЖЛИВО: ключ має бути workshop_Day, де Day = index + 1 (1-based)
+            var newIndex = workshopData.WorkshopOrders[toWorkshop].Count; // це вже буде Day (1-based)
             var newKey = $"{toWorkshop}_{newIndex}";
             workshopData.OriginalWorkshops[newKey] = originalWorkshop;
+            
+            Logger.LogInfo($"Saved original workshop: key={newKey}, originalWorkshop={originalWorkshop}", "GanttCombined");
             
             if (orderDate.HasValue)
             {
