@@ -25,7 +25,7 @@
         @if (hasDuplicates)
         {
             <button class="btn btn-warning" @onclick="CleanupDuplicates">
-                <i class="bi bi-exclamation-triangle"></i> Видалити дублі (@duplicateCount)
+                <i class="bi bi-exclamation-triangle"></i> Видалити дублікатів (@duplicateCount)
             </button>
         }
         <a href="/production-planning" class="btn btn-outline-primary">
@@ -149,8 +149,11 @@ else
                                     </tr>
                                 </thead>
                                 <tbody id="orders-table-@workshop.Number" data-workshop="@workshop.Number">
+                                    @{ var orderIndex = 0; }
                                     @foreach (var order in filteredOrders)
                                     {
+                                        var currentIndex = orderIndex;
+                                        var realIndex = order.Day - 1; // Day is 1-based, index is 0-based
                                         var isEditing = editingOrder?.Day == order.Day && editingOrder?.WorkshopNumber == workshop.Number;
                                         var status = order.GetStatus(filterDate);
                                         var statusClass = status switch {
@@ -160,7 +163,7 @@ else
                                             _ => "badge bg-secondary"
                                         };
                                         
-                                        <tr class="draggable-row @(isEditing ? "table-warning" : "")" data-order-day="@order.Day">
+                                        <tr class="draggable-row @(isEditing ? "table-warning" : "")" data-order-day="@order.Day" data-real-index="@realIndex">
                                             <td class="drag-handle text-center" title="Перетягніть для зміни порядку">
                                                 <i class="bi bi-grip-vertical text-muted"></i>
                                             </td>
@@ -258,13 +261,15 @@ else
                                                         <button class="btn btn-outline-primary btn-sm" @onclick="() => StartOrderEdit(workshop.Number, order)" title="Редагувати">
                                                             <i class="bi bi-pencil"></i>
                                                         </button>
-                                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteOrder(workshop.Number, order.Day)" title="Видалити">
+                                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteOrderByIndex(workshop.Number, realIndex, order.Day)" title="Видалити">
                                                             <i class="bi bi-trash"></i>
                                                         </button>
                                                     </div>
                                                 }
                                             </td>
                                         </tr>
+                                        
+                                        orderIndex++;
                                     }
                                 </tbody>
                             </table>
@@ -390,30 +395,31 @@ else
     {
         duplicateCount = 0;
         
-        // Збираємо всі унікальні замовлення (по площі + даті + назві)
-        var allOrders = new List<(int workshop, double square, DateTime date, string name)>();
-        
+        // Перевіряємо дублікати В МЕЖАХ кожного цеху (однакова площа + дата)
         foreach (var kvp in workshopData.WorkshopOrders)
         {
             var workshopNum = kvp.Key;
             var squares = kvp.Value;
             var dates = workshopData.WorkshopOrderDates.GetValueOrDefault(workshopNum) ?? new List<DateTime>();
-            var names = workshopData.WorkshopOrderNames.GetValueOrDefault(workshopNum) ?? new List<string>();
+            
+            var seen = new HashSet<(double square, DateTime date)>();
             
             for (int i = 0; i < squares.Count; i++)
             {
                 var date = i < dates.Count ? dates[i] : workshopData.StartDate;
-                var name = i < names.Count ? names[i] : "";
-                allOrders.Add((workshopNum, squares[i], date, name));
+                var key = (Math.Round(squares[i], 2), date.Date); // округлюємо площу
+                
+                if (seen.Contains(key))
+                {
+                    duplicateCount++;
+                }
+                else
+                {
+                    seen.Add(key);
+                }
             }
         }
         
-        // Знаходимо дублікати (однакова площа + дата + назва в різних цехах)
-        var grouped = allOrders
-            .GroupBy(o => (o.square, o.date, o.name))
-            .Where(g => g.Count() > 1 && g.Select(x => x.workshop).Distinct().Count() > 1);
-        
-        duplicateCount = grouped.Sum(g => g.Count() - 1);
         hasDuplicates = duplicateCount > 0;
         
         if (hasDuplicates)
@@ -425,68 +431,67 @@ else
     private async Task CleanupDuplicates()
     {
         var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
-            $"Видалити {duplicateCount} дублікатів замовлень? Залишиться тільки перше входження в кожному цеху.");
+            $"Видалити {duplicateCount} дублікатів замовлень? Залишиться тільки перше входження.");
         if (!confirmed) return;
         
         try
         {
             await BackupService.CreateBackupAsync("Очищення дублікатів");
             
-            // Збираємо унікальні замовлення
-            var seenOrders = new HashSet<(double square, DateTime date, string name)>();
-            var toRemove = new Dictionary<int, List<int>>(); // workshop -> list of indices to remove
+            int removedCount = 0;
             
-            foreach (var kvp in workshopData.WorkshopOrders)
+            // Для кожного цеху видаляємо дублікати
+            foreach (var workshopNum in workshopData.WorkshopOrders.Keys.ToList())
             {
-                var workshopNum = kvp.Key;
-                var squares = kvp.Value;
+                var squares = workshopData.WorkshopOrders[workshopNum];
                 var dates = workshopData.WorkshopOrderDates.GetValueOrDefault(workshopNum) ?? new List<DateTime>();
                 var names = workshopData.WorkshopOrderNames.GetValueOrDefault(workshopNum) ?? new List<string>();
                 
-                toRemove[workshopNum] = new List<int>();
+                var seen = new HashSet<(double square, DateTime date)>();
+                var indicesToRemove = new List<int>();
                 
                 for (int i = 0; i < squares.Count; i++)
                 {
                     var date = i < dates.Count ? dates[i] : workshopData.StartDate;
-                    var name = i < names.Count ? names[i] : "";
-                    var key = (squares[i], date, name);
+                    var key = (Math.Round(squares[i], 2), date.Date);
                     
-                    if (seenOrders.Contains(key))
+                    if (seen.Contains(key))
                     {
-                        toRemove[workshopNum].Add(i);
+                        indicesToRemove.Add(i);
                     }
                     else
                     {
-                        seenOrders.Add(key);
+                        seen.Add(key);
                     }
                 }
-            }
-            
-            // Видаляємо дублікати (з кінця щоб індекси не зсувались)
-            int removedCount = 0;
-            foreach (var kvp in toRemove)
-            {
-                var workshopNum = kvp.Key;
-                foreach (var index in kvp.Value.OrderByDescending(i => i))
+                
+                // Видаляємо з кінця щоб індекси не зсувались
+                foreach (var index in indicesToRemove.OrderByDescending(i => i))
                 {
-                    if (index < workshopData.WorkshopOrders[workshopNum].Count)
-                        workshopData.WorkshopOrders[workshopNum].RemoveAt(index);
+                    if (index < squares.Count)
+                        squares.RemoveAt(index);
                     
-                    if (workshopData.WorkshopOrderDates.ContainsKey(workshopNum) && 
-                        index < workshopData.WorkshopOrderDates[workshopNum].Count)
-                        workshopData.WorkshopOrderDates[workshopNum].RemoveAt(index);
+                    if (index < dates.Count)
+                        dates.RemoveAt(index);
                     
-                    if (workshopData.WorkshopOrderNames.ContainsKey(workshopNum) && 
-                        index < workshopData.WorkshopOrderNames[workshopNum].Count)
-                        workshopData.WorkshopOrderNames[workshopNum].RemoveAt(index);
+                    if (index < names.Count)
+                        names.RemoveAt(index);
                     
                     removedCount++;
                 }
+                
+                // Оновлюємо дати і назви якщо вони існують
+                if (dates.Any())
+                    workshopData.WorkshopOrderDates[workshopNum] = dates;
+                if (names.Any())
+                    workshopData.WorkshopOrderNames[workshopNum] = names;
             }
             
             workshopData.LastUpdated = DateTime.UtcNow;
             await StorageService.SaveWorkshopDataAsync(workshopData);
             
+            // Очищаємо кеш і перезавантажуємо
+            schedules.Clear();
             await LoadData();
             
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", 
@@ -721,42 +726,67 @@ else
 
     private async Task DeleteOrder(int workshopNumber, int orderDay)
     {
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Видалити замовлення №{orderDay}?");
+        // Deprecated - use DeleteOrderByIndex
+        var index = orderDay - 1;
+        await DeleteOrderByIndex(workshopNumber, index, orderDay);
+    }
+    
+    private async Task DeleteOrderByIndex(int workshopNumber, int index, int displayNumber)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Видалити замовлення №{displayNumber}?");
         if (!confirmed) return;
 
         try
         {
-            await BackupService.CreateBackupAsync($"Видалення замовлення №{orderDay}");
+            await BackupService.CreateBackupAsync($"Видалення замовлення №{displayNumber}");
             
-            // Знаходимо правильний індекс через schedule
-            var schedule = GetSchedule(workshopNumber);
-            if (schedule == null) return;
+            Logger.LogInfo($"DeleteOrderByIndex: workshop={workshopNumber}, index={index}", "Orders");
             
-            var orderIndex = schedule.Orders.FindIndex(o => o.Day == orderDay);
-            if (orderIndex < 0) return;
-            
-            var index = orderIndex;
-            
-            if (workshopData.WorkshopOrders.ContainsKey(workshopNumber) && index < workshopData.WorkshopOrders[workshopNumber].Count)
+            // Перевіряємо межі
+            if (!workshopData.WorkshopOrders.ContainsKey(workshopNumber))
             {
-                workshopData.WorkshopOrders[workshopNumber].RemoveAt(index);
+                Logger.LogWarning($"Workshop {workshopNumber} not found", "Orders");
+                await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Цех не знайдено", "error");
+                return;
             }
-            if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber) && index < workshopData.WorkshopOrderDates[workshopNumber].Count)
+            
+            var orders = workshopData.WorkshopOrders[workshopNumber];
+            if (index < 0 || index >= orders.Count)
             {
-                workshopData.WorkshopOrderDates[workshopNumber].RemoveAt(index);
+                Logger.LogWarning($"Invalid index {index}, orders count={orders.Count}", "Orders");
+                await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Невірний індекс", "error");
+                return;
             }
-            if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber) && index < workshopData.WorkshopOrderNames[workshopNumber].Count)
+            
+            // Видаляємо
+            orders.RemoveAt(index);
+            
+            if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
             {
-                workshopData.WorkshopOrderNames[workshopNumber].RemoveAt(index);
+                var dates = workshopData.WorkshopOrderDates[workshopNumber];
+                if (index < dates.Count)
+                    dates.RemoveAt(index);
+            }
+            
+            if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
+            {
+                var names = workshopData.WorkshopOrderNames[workshopNumber];
+                if (index < names.Count)
+                    names.RemoveAt(index);
             }
 
             workshopData.LastUpdated = DateTime.UtcNow;
             await StorageService.SaveWorkshopDataAsync(workshopData);
             
+            // Перераховуємо графік
             var newSchedule = CalculateScheduleForWorkshop(workshopNumber);
             if (newSchedule != null)
             {
                 schedules[workshopNumber] = newSchedule;
+            }
+            else
+            {
+                schedules.Remove(workshopNumber);
             }
 
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Замовлення видалено!", "success");
@@ -764,7 +794,8 @@ else
         }
         catch (Exception ex)
         {
-            Logger.LogError("Помилка видалення", ex, "Orders");
+            Logger.LogError($"Помилка видалення: {ex.Message}", ex, "Orders");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
         }
     }
 
