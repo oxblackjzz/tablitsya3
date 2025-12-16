@@ -28,7 +28,7 @@
             <button class="btn btn-outline-secondary" 
                     @onclick="PerformUndo" 
                     disabled="@(!UndoRedo.CanUndo)"
-                    title="@(UndoRedo.CanUndo ? $"Скасувати: {UndoRedo.GetUndoDescription()}" : "Немає дій для скасування")">
+                    title="@(UndoRedo.CanUndo ? $"Скасувати: UndoRedo.GetUndoDescription()" : "Немає дій для скасування")">
                 <i class="bi bi-arrow-counterclockwise"></i>
                 @if (UndoRedo.UndoCount > 0)
                 {
@@ -38,7 +38,7 @@
             <button class="btn btn-outline-secondary" 
                     @onclick="PerformRedo" 
                     disabled="@(!UndoRedo.CanRedo)"
-                    title="@(UndoRedo.CanRedo ? $"Повторити: {UndoRedo.GetRedoDescription()}" : "Немає дій для повторення")">
+                    title="@(UndoRedo.CanRedo ? $"Повторити: UndoRedo.GetRedoDescription()" : "Немає дій для повторення")">
                 <i class="bi bi-arrow-clockwise"></i>
                 @if (UndoRedo.RedoCount > 0)
                 {
@@ -102,7 +102,7 @@ else
                 (@calendarDays.Count днів)
             </small>
             <small class="text-muted">
-                <i class="bi bi-info-circle"></i> Висота бара = площа замовлення / потужність цеху
+                <i class="bi bi-info-circle"></i> Висотаbara = площа замовлення / потужність цеху
             </small>
         </div>
         <div class="card-body p-0">
@@ -228,13 +228,28 @@ else
                                         var leftStr = currentLeft.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
                                         var widthStr = barWidth.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
                                         
-                                        <div class="gantt-bar draggable-bar @statusClass" 
+                                        // Визначаємо колір - оригінальний цех або поточний
+                                        var orderKey = $"{workshop.Number}_{order.Day}";
+                                        var colorWorkshop = workshopData.OriginalWorkshops.ContainsKey(orderKey) 
+                                            ? workshopData.OriginalWorkshops[orderKey] 
+                                            : workshop.Number;
+                                        var barColor = GetWorkshopColor(colorWorkshop);
+                                        var isTransferred = colorWorkshop != workshop.Number;
+                                        
+                                        var titleText = $"{orderName}: {order.SquareMeters:N0} м² ({daysOfWork:F2} дн.) | Відвантаж: {order.CompletionDate:dd.MM}";
+                                        if (isTransferred)
+                                        {
+                                            titleText += $" | З цеху {colorWorkshop}";
+                                        }
+                                        
+                                        <div class="gantt-bar draggable-bar @statusClass @(isTransferred ? "transferred" : "")" 
                                              data-order-day="@order.Day"
                                              data-workshop="@workshop.Number"
+                                             data-original-workshop="@colorWorkshop"
                                              data-square="@order.SquareMeters"
-                                             style="left: @(leftStr)%; width: @(widthStr)%; background-color: @GetWorkshopColor(workshop.Number);"
-                                             title="@orderName: @order.SquareMeters.ToString("N0") м² (@daysOfWork.ToString("F2") дн.) | Відвантаж: @order.CompletionDate.ToString("dd.MM")">
-                                            
+                                             style="left: @(leftStr)%; width: @(widthStr)%; background-color: @barColor;"
+                                             title="@titleText">
+                                           
                                             <span class="drag-handle-bar"><i class="bi bi-grip-vertical"></i></span>
                                             
                                             @if (!string.IsNullOrEmpty(displayName))
@@ -253,6 +268,12 @@ else
                                                     <tr><td>Площа:</td><td><strong>@order.SquareMeters.ToString("N0") м²</strong></td></tr>
                                                     <tr><td>Потужність цеху:</td><td>@capacity м²/день</td></tr>
                                                     <tr><td>Тривалість:</td><td><strong>@daysOfWork.ToString("F2") дн.</strong></td></tr>
+                                                    @if (isTransferred)
+                                                    {
+                                                        var origName = workshops.FirstOrDefault(w => w.Number == colorWorkshop)?.Name ?? $"Цех {colorWorkshop}";
+                                                        <tr class="divider"><td colspan="2"></td></tr>
+                                                        <tr><td><i class="bi bi-arrow-left-right text-info"></i> Оригінал:</td><td><strong style="color: @barColor;">@origName</strong></td></tr>
+                                                    }
                                                     <tr class="divider"><td colspan="2"></td></tr>
                                                     <tr><td><i class="bi bi-play-fill text-success"></i> Старт:</td><td><strong>@order.ProductionStartDate.ToString("dd.MM.yyyy")</strong></td></tr>
                                                     <tr><td><i class="bi bi-stop-fill text-warning"></i> Фініш:</td><td><strong>@order.ProductionEndDate.ToString("dd.MM.yyyy")</strong></td></tr>
@@ -511,6 +532,28 @@ else
     .gantt-bar.in-progress {
         box-shadow: 0 0 0 2px rgba(255,255,255,0.7), 0 2px 8px rgba(0,0,0,0.25);
         animation: pulse 2s infinite;
+    }
+    
+    /* Переміщене замовлення - з індикатором */
+    .gantt-bar.transferred {
+        border: 2px dashed rgba(255,255,255,0.6);
+    }
+    
+    .gantt-bar.transferred::after {
+        content: '↔';
+        position: absolute;
+        top: -8px;
+        right: -4px;
+        font-size: 10px;
+        background: white;
+        color: #333;
+        border-radius: 50%;
+        width: 14px;
+        height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
     }
     
     @@keyframes pulse {
@@ -872,6 +915,15 @@ else
             var toName = workshops.FirstOrDefault(w => w.Number == toWorkshop)?.Name ?? $"Цех {toWorkshop}";
             UndoRedo.SaveState(workshopData, $"Переміщення з {fromName} до {toName}");
             
+            // Зберігаємо оригінальний цех (якщо ще не збережено)
+            var originalKey = $"{fromWorkshop}_{orderIndex + 1}";
+            int originalWorkshop = fromWorkshop;
+            if (workshopData.OriginalWorkshops.ContainsKey(originalKey))
+            {
+                originalWorkshop = workshopData.OriginalWorkshops[originalKey];
+                workshopData.OriginalWorkshops.Remove(originalKey);
+            }
+            
             // Видаляємо з вихідного цеху
             var orderValue = fromOrders[orderIndex];
             fromOrders.RemoveAt(orderIndex);
@@ -896,6 +948,11 @@ else
             if (!workshopData.WorkshopOrders.ContainsKey(toWorkshop))
                 workshopData.WorkshopOrders[toWorkshop] = new List<double>();
             workshopData.WorkshopOrders[toWorkshop].Add(orderValue);
+            
+            // Зберігаємо оригінальний цех для нової позиції
+            var newIndex = workshopData.WorkshopOrders[toWorkshop].Count;
+            var newKey = $"{toWorkshop}_{newIndex}";
+            workshopData.OriginalWorkshops[newKey] = originalWorkshop;
             
             if (orderDate.HasValue)
             {

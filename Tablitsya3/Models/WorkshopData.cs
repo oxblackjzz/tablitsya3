@@ -12,6 +12,12 @@ namespace Tablitsya3.Models
         public Dictionary<int, List<string>> WorkshopOrderNames { get; set; } = new();
         public Dictionary<string, DateTime> CustomCompletionDates { get; set; } = new();
         
+        /// <summary>
+        /// Оригінальний цех для кожного замовлення (для збереження кольору при переміщенні)
+        /// Ключ: "workshopNumber_orderIndex" (1-based), Значення: оригінальний номер цеху
+        /// </summary>
+        public Dictionary<string, int> OriginalWorkshops { get; set; } = new();
+        
         // Новий формат з OrderData
         public Dictionary<int, List<OrderData>> Orders { get; set; } = new();
         
