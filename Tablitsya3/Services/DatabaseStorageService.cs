@@ -73,6 +73,7 @@ namespace Tablitsya3.Services
          await _context.Database.ExecuteSqlRawAsync("DELETE FROM workshop_production_lead_times");
          await _context.Database.ExecuteSqlRawAsync("DELETE FROM workshop_days_before_production");
               await _context.Database.ExecuteSqlRawAsync("DELETE FROM custom_completion_dates");
+          await _context.Database.ExecuteSqlRawAsync("DELETE FROM original_workshops");
 
           _logger.LogInformation("✅ Deleted all old data via SQL");
 
@@ -173,6 +174,21 @@ if (newCapacities.Any())
  await _context.CustomCompletionDates.AddRangeAsync(newCustomDates);
     }
 
+        // ✅ ДОДАЄМО ОРИГІНАЛЬНІ ЦЕХИ (для збереження кольору при переміщенні)
+        var newOriginalWorkshops = data.OriginalWorkshops
+            .Select(ow => new OriginalWorkshopEntity
+            {
+                OrderKey = ow.Key,
+                OriginalWorkshopNumber = ow.Value
+            })
+            .ToList();
+        
+        if (newOriginalWorkshops.Any())
+        {
+            await _context.OriginalWorkshops.AddRangeAsync(newOriginalWorkshops);
+            _logger.LogInformation($"✅ Saving {newOriginalWorkshops.Count} original workshop mappings");
+        }
+
   // ✅ ЗБЕРІГАЄМО НОВІ ДАНІ
      await _context.SaveChangesAsync();
         
@@ -265,6 +281,18 @@ catch (Exception ex)
       // ✅ КОНВЕРТУЄМО КАСТОМНІ ДАТИ З UTC В LOCAL
                  data.CustomCompletionDates[customDate.OrderKey] = customDate.CompletionDate.ToLocalTime().Date;
   }
+
+      // ✅ ЗАВАНТАЖУЄМО ОРИГІНАЛЬНІ ЦЕХИ (для збереження кольору при переміщенні)
+      var allOriginalWorkshops = await _context.OriginalWorkshops.ToListAsync();
+      foreach (var ow in allOriginalWorkshops)
+      {
+          data.OriginalWorkshops[ow.OrderKey] = ow.OriginalWorkshopNumber;
+      }
+      
+      if (allOriginalWorkshops.Any())
+      {
+          _logger.LogInformation($"✅ Loaded {allOriginalWorkshops.Count} original workshop mappings");
+      }
 
       _logger.LogInformation($"Workshop data loaded from database. Orders count: {allOrders.Count}");
        return data;

@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS workshop_production_lead_times (
 );
 
 -- Створюємо таблицю workshop_days_before_production (НОВА!)
-CREATE TABLE IF NOT EXISTS workshop_days_before_production (
+CREATE TABLE IF NOT EXISTS workshop_days_before_proDUCTION (
     id SERIAL PRIMARY KEY,
     workshop_number INTEGER NOT NULL,
     days_before_production INTEGER NOT NULL DEFAULT 16
@@ -116,6 +116,13 @@ CREATE TABLE IF NOT EXISTS custom_completion_dates (
     id SERIAL PRIMARY KEY,
     order_key VARCHAR(200) NOT NULL,
     completion_date TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+-- Створюємо таблицю original_workshops (для збереження кольору при переміщенні)
+CREATE TABLE IF NOT EXISTS original_workshops (
+    id SERIAL PRIMARY KEY,
+    order_key VARCHAR(200) NOT NULL,
+    original_workshop_number INTEGER NOT NULL
 );
 ";
 
@@ -156,6 +163,10 @@ DROP INDEX IF EXISTS ""IX_custom_completion_dates_order_key"";
 -- Створюємо унікальний індекс для order_key
 CREATE UNIQUE INDEX IF NOT EXISTS ""IX_custom_completion_dates_order_key_unique"" 
     ON custom_completion_dates(order_key);
+
+-- Індекс для original_workshops
+CREATE UNIQUE INDEX IF NOT EXISTS ""IX_original_workshops_order_key"" 
+    ON original_workshops(order_key);
 ";
 
                 // Виконуємо створення індексів
@@ -178,7 +189,7 @@ FROM information_schema.tables
 WHERE table_schema = 'public' 
     AND table_name IN ('workshop_data', 'orders', 'workshop_capacities', 
                        'workshop_production_lead_times', 'workshop_days_before_production',
-                       'custom_completion_dates');
+                       'custom_completion_dates', 'original_workshops');
 ";
 
                 _logger.LogInformation("🔎 Verifying tables...");
@@ -188,16 +199,16 @@ WHERE table_schema = 'public'
                 {
                     var tableCount = (long)(await command.ExecuteScalarAsync() ?? 0L);
 
-                    if (tableCount == 6)
+                    if (tableCount == 7)
                     {
-                        _logger.LogInformation("✅ All 6 tables verified successfully");
-                        Console.WriteLine("✅ All 6 tables verified successfully");
+                        _logger.LogInformation("✅ All 7 tables verified successfully");
+                        Console.WriteLine("✅ All 7 tables verified successfully");
                         return true;
                     }
                     else
                     {
-                        _logger.LogWarning($"⚠️ Only {tableCount} out of 6 tables found");
-                        Console.WriteLine($"⚠️ Only {tableCount} out of 6 tables found");
+                        _logger.LogWarning($"⚠️ Only {tableCount} out of 7 tables found");
+                        Console.WriteLine($"⚠️ Only {tableCount} out of 7 tables found");
                         return false;
                     }
                 }
@@ -230,13 +241,13 @@ FROM information_schema.tables
 WHERE table_schema = 'public' 
     AND table_name IN ('workshop_data', 'orders', 'workshop_capacities', 
                        'workshop_production_lead_times', 'workshop_days_before_production',
-                       'custom_completion_dates');
+                       'custom_completion_dates', 'original_workshops');
 ";
 
                 await using var command = new NpgsqlCommand(checkScript, connection);
                 var tableCount = (long)(await command.ExecuteScalarAsync() ?? 0L);
 
-                var exists = tableCount == 6;
+                var exists = tableCount == 7;
                 
                 if (exists)
                 {
@@ -245,8 +256,8 @@ WHERE table_schema = 'public'
                 }
                 else
                 {
-                    _logger.LogInformation($"⚠️ Only {tableCount} out of 6 tables exist, migration needed");
-                    Console.WriteLine($"⚠️ Only {tableCount} out of 6 tables exist, migration needed");
+                    _logger.LogInformation($"⚠️ Only {tableCount} out of 7 tables exist, migration needed");
+                    Console.WriteLine($"⚠️ Only {tableCount} out of 7 tables exist, migration needed");
                 }
                 
                 return exists;

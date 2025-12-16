@@ -103,4 +103,28 @@ namespace Tablitsya3.Data.Entities
         [Column("completion_date")]
         public DateTime CompletionDate { get; set; }
     }
+    
+    /// <summary>
+    /// Зберігає оригінальний цех для переміщених замовлень (для збереження кольору)
+    /// </summary>
+    [Table("original_workshops")]
+    public class OriginalWorkshopEntity
+    {
+        [Key]
+        [Column("id")]
+        public int Id { get; set; }
+
+        /// <summary>
+        /// Ключ у форматі "workshopNumber_orderDay" (1-based)
+        /// </summary>
+        [Column("order_key")]
+        [MaxLength(200)]
+        public string OrderKey { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Номер оригінального цеху (звідки було переміщено)
+        /// </summary>
+        [Column("original_workshop_number")]
+        public int OriginalWorkshopNumber { get; set; }
+    }
 }
