@@ -129,6 +129,10 @@ Console.WriteLine("✅ BackupService registered");
 builder.Services.AddScoped<DragDropInterop>();
 Console.WriteLine("✅ DragDropInterop registered");
 
+// ✅ ДОДАЄМО UNDO/REDO СЕРВІС
+builder.Services.AddScoped<UndoRedoService>();
+Console.WriteLine("✅ UndoRedoService registered");
+
 // ✅ ДОДАЄМО СЕРВІС ТЕМИ
 builder.Services.AddScoped<ThemeService>();
 Console.WriteLine("✅ ThemeService registered");

@@ -2,10 +2,12 @@
 @implements IDisposable
 @using Tablitsya3.Models
 @using Tablitsya3.Services
+@using Tablitsya3.Components.Shared
 @inject UnifiedStorageService StorageService
 @inject WorkshopConfigService WorkshopConfigService
 @inject ProductionPlanningService PlanningService
 @inject WorkingDaysService WorkingDays
+@inject UndoRedoService UndoRedo
 @inject LoggingService Logger
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
@@ -21,6 +23,30 @@
         <p class="text-secondary mb-0">Всі цехи - завантаження по днях</p>
     </div>
     <div class="d-flex gap-2">
+        <!-- Undo/Redo кнопки -->
+        <div class="btn-group">
+            <button class="btn btn-outline-secondary" 
+                    @onclick="PerformUndo" 
+                    disabled="@(!UndoRedo.CanUndo)"
+                    title="@(UndoRedo.CanUndo ? $"Скасувати: {UndoRedo.GetUndoDescription()}" : "Немає дій для скасування")">
+                <i class="bi bi-arrow-counterclockwise"></i>
+                @if (UndoRedo.UndoCount > 0)
+                {
+                    <span class="badge bg-secondary ms-1">@UndoRedo.UndoCount</span>
+                }
+            </button>
+            <button class="btn btn-outline-secondary" 
+                    @onclick="PerformRedo" 
+                    disabled="@(!UndoRedo.CanRedo)"
+                    title="@(UndoRedo.CanRedo ? $"Повторити: {UndoRedo.GetRedoDescription()}" : "Немає дій для повторення")">
+                <i class="bi bi-arrow-clockwise"></i>
+                @if (UndoRedo.RedoCount > 0)
+                {
+                    <span class="badge bg-secondary ms-1">@UndoRedo.RedoCount</span>
+                }
+            </button>
+        </div>
+        
         <a href="/production-planning" class="btn btn-outline-primary">
             <i class="bi bi-bar-chart-fill"></i> Окремі діаграми
         </a>
@@ -110,15 +136,25 @@ else
                         
                         var capacity = workshopCapacities.GetValueOrDefault(workshop.Number, 1000);
                         var totalSquare = workshopOrders.Sum(o => o.SquareMeters);
+                        var workshopNum = workshop.Number;
+                        var workshopName = workshop.Name;
+                        var workshopColor = GetWorkshopColor(workshop.Number);
                         
                         // Рахуємо загальну кількість днів роботи для всіх замовлень цеху
                         var totalDaysOfWork = workshopOrders.Sum(o => (double)o.SquareMeters / capacity);
                         
                         <div class="gantt-row" data-workshop="@workshop.Number">
-                            <div class="gantt-row-label" style="background-color: @GetWorkshopColor(workshop.Number);">
+                            <div class="gantt-row-label" style="background-color: @workshopColor;">
                                 <span class="workshop-name">@workshop.Name</span>
                                 <small>@workshopOrders.Count зам. | @totalSquare.ToString("N0") м²</small>
-                                <small class="capacity">@capacity м²/день</small>
+                                <div class="d-flex align-items-center gap-1 mt-1">
+                                    <small class="capacity">@capacity м²/день</small>
+                                    <button class="btn btn-sm btn-light btn-reorder" 
+                                            @onclick="() => OpenReorderModal(workshopNum, workshopName, workshopColor)"
+                                            title="Змінити порядок">
+                                        <i class="bi bi-arrow-down-up"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div class="gantt-row-bars gantt-dropzone" 
                                  id="gantt-workshop-@workshop.Number"
@@ -264,6 +300,15 @@ else
         </div>
     </div>
 }
+
+<!-- Модальне вікно для зміни порядку -->
+<ReorderModal 
+    IsVisible="@isReorderModalVisible"
+    WorkshopName="@reorderWorkshopName"
+    WorkshopColor="@reorderWorkshopColor"
+    Orders="@reorderOrders"
+    OnClose="CloseReorderModal"
+    OnSave="SaveReorderedOrders" />
 
 <style>
     .workshop-color-box {
@@ -568,111 +613,17 @@ else
         transition: width 0.3s ease;
     }
     
-    /* Легенда */
-    .legend-bar {
-        display: inline-block;
-        width: 30px;
-        height: 12px;
-        background: linear-gradient(135deg, #3498db, #2980b9);
-        border-radius: 3px;
-        margin-right: 4px;
-        vertical-align: middle;
-    }
-    
-    .legend-line {
-        display: inline-block;
-        width: 2px;
-        height: 14px;
-        background: #0d6efd;
-        margin-right: 4px;
-        vertical-align: middle;
-    }
-    
-    .legend-weekend {
-        display: inline-block;
-        width: 20px;
-        height: 12px;
-        background: rgba(220, 53, 69, 0.15);
-        border: 1px solid rgba(220, 53, 69, 0.3);
-        border-radius: 2px;
-        margin-right: 4px;
-        vertical-align: middle;
-    }
-    
-    .legend-today {
-        display: inline-block;
-        width: 20px;
-        height: 12px;
-        background: rgba(13, 110, 253, 0.2);
-        border: 2px solid #0d6efd;
-        border-radius: 2px;
-        margin-right: 4px;
-        vertical-align: middle;
-    }
-    
-    /* Drag & Drop styles */
-    .drag-handle-bar {
-        position: absolute;
-        left: 2px;
-        top: 50%;
-        transform: translateY(-50%);
-        cursor: grab;
-        opacity: 0.6;
+    /* Кнопка зміни порядку */
+    .btn-reorder {
+        padding: 2px 6px;
         font-size: 10px;
+        opacity: 0.8;
+        border: none;
     }
     
-    .drag-handle-bar:hover {
+    .btn-reorder:hover {
         opacity: 1;
-    }
-    
-    .draggable-bar {
-        cursor: move;
-    }
-    
-    .draggable-bar.sortable-ghost {
-        opacity: 0.4;
-    }
-    
-    .draggable-bar.sortable-chosen {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        z-index: 1000;
-    }
-    
-    .gantt-dropzone.sortable-drag-over {
-        background: rgba(13, 110, 253, 0.1);
-    }
-    
-    /* Dark theme */
-    [data-theme="dark"] .gantt-row-label {
-        border-right: 1px solid rgba(255,255,255,0.1);
-    }
-    
-    [data-theme="dark"] .bar-tooltip {
-        background: var(--bg-card);
-        border-color: var(--border-color);
-    }
-    
-    .load-indicator {
-        margin-top: 6px;
-        width: 100%;
-    }
-    
-    .load-bar {
-        position: relative;
-        height: 4px;
-        background: rgba(13, 110, 253, 0.2);
-        border-radius: 2px;
-        overflow: hidden;
-    }
-    
-    .load-fill {
-        position: absolute;
-        top: 0;
-        left: 0;
-        height: 100%;
-        background: linear-gradient(90deg, #0d6efd, #198754);
-        border-radius: 2px;
-        transition: width 0.3s ease;
+        background: rgba(255,255,255,0.3);
     }
 </style>
 
@@ -684,10 +635,23 @@ else
     private Dictionary<int, int> workshopCapacities = new();
     private bool isLoading = true;
     private DotNetObjectReference<GanttCombined>? dotNetHelper;
+    
+    // Reorder modal state
+    private bool isReorderModalVisible = false;
+    private int reorderWorkshopNumber = 0;
+    private string reorderWorkshopName = "";
+    private string reorderWorkshopColor = "#3498db";
+    private List<ReorderModal.ReorderItem>? reorderOrders;
 
     protected override async Task OnInitializedAsync()
     {
+        UndoRedo.OnStateChanged += OnUndoRedoStateChanged;
         await LoadData();
+    }
+    
+    private void OnUndoRedoStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -801,6 +765,10 @@ else
                 return;
             }
             
+            // Зберігаємо стан для Undo
+            var workshopName = workshops.FirstOrDefault(w => w.Number == workshopNumber)?.Name ?? $"Цех {workshopNumber}";
+            UndoRedo.SaveState(workshopData, $"Зміна порядку в {workshopName}");
+            
             // Переміщуємо замовлення (площу)
             var orderValue = orders[oldIndex];
             orders.RemoveAt(oldIndex);
@@ -899,6 +867,11 @@ else
                 return;
             }
             
+            // Зберігаємо стан для Undo
+            var fromName = workshops.FirstOrDefault(w => w.Number == fromWorkshop)?.Name ?? $"Цех {fromWorkshop}";
+            var toName = workshops.FirstOrDefault(w => w.Number == toWorkshop)?.Name ?? $"Цех {toWorkshop}";
+            UndoRedo.SaveState(workshopData, $"Переміщення з {fromName} до {toName}");
+            
             // Видаляємо з вихідного цеху
             var orderValue = fromOrders[orderIndex];
             fromOrders.RemoveAt(orderIndex);
@@ -942,8 +915,6 @@ else
             await StorageService.SaveWorkshopDataAsync(workshopData);
             await LoadData();
             
-            var fromName = workshops.FirstOrDefault(w => w.Number == fromWorkshop)?.Name ?? $"Цех {fromWorkshop}";
-            var toName = workshops.FirstOrDefault(w => w.Number == toWorkshop)?.Name ?? $"Цех {toWorkshop}";
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Переміщено з {fromName} до {toName}", "success");
             
             Logger.LogInfo($"Order transferred successfully: {orderValue} м² from {fromName} to {toName}", "GanttCombined");
@@ -975,9 +946,101 @@ else
             _ => ""
         };
     }
+    
+    // ========== Undo/Redo ==========[]
+    
+    private async Task PerformUndo()
+    {
+        var snapshot = UndoRedo.Undo(workshopData);
+        if (snapshot != null)
+        {
+            snapshot.ApplyTo(workshopData);
+            await StorageService.SaveWorkshopDataAsync(workshopData);
+            await LoadData();
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Скасовано!", "info");
+        }
+    }
+    
+    private async Task PerformRedo()
+    {
+        var snapshot = UndoRedo.Redo(workshopData);
+        if (snapshot != null)
+        {
+            snapshot.ApplyTo(workshopData);
+            await StorageService.SaveWorkshopDataAsync(workshopData);
+            await LoadData();
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Повторено!", "info");
+        }
+    }
+    
+    // ========== Reorder Modal =========
+    
+    private void OpenReorderModal(int workshopNumber, string workshopName, string color)
+    {
+        reorderWorkshopNumber = workshopNumber;
+        reorderWorkshopName = workshopName;
+        reorderWorkshopColor = color;
+        
+        // Підготовка списку замовлень для редагування
+        if (workshopData.WorkshopOrders.ContainsKey(workshopNumber))
+        {
+            var orders = workshopData.WorkshopOrders[workshopNumber];
+            var dates = workshopData.WorkshopOrderDates.GetValueOrDefault(workshopNumber) 
+                ?? orders.Select((_, i) => workshopData.StartDate.AddDays(i)).ToList();
+            var names = workshopData.WorkshopOrderNames.GetValueOrDefault(workshopNumber) 
+                ?? orders.Select((_, i) => "").ToList();
+            
+            reorderOrders = new List<ReorderModal.ReorderItem>();
+            for (int i = 0; i < orders.Count; i++)
+            {
+                reorderOrders.Add(new ReorderModal.ReorderItem
+                {
+                    SquareMeters = orders[i],
+                    OrderDate = i < dates.Count ? dates[i] : workshopData.StartDate,
+                    Name = i < names.Count ? names[i] : ""
+                });
+            }
+        }
+        else
+        {
+            reorderOrders = new List<ReorderModal.ReorderItem>();
+        }
+        
+        isReorderModalVisible = true;
+        StateHasChanged();
+    }
+    
+    private void CloseReorderModal()
+    {
+        isReorderModalVisible = false;
+        reorderOrders = null;
+        StateHasChanged();
+    }
+    
+    private async Task SaveReorderedOrders(List<ReorderModal.ReorderItem> orders)
+    {
+        if (!workshopData.WorkshopOrders.ContainsKey(reorderWorkshopNumber)) return;
+        
+        // Зберігаємо стан перед зміною
+        UndoRedo.SaveState(workshopData, $"Зміна порядку в {reorderWorkshopName}");
+        
+        // Оновлюємо дані
+        workshopData.WorkshopOrders[reorderWorkshopNumber] = orders.Select(o => o.SquareMeters).ToList();
+        workshopData.WorkshopOrderDates[reorderWorkshopNumber] = orders.Select(o => o.OrderDate).ToList();
+        workshopData.WorkshopOrderNames[reorderWorkshopNumber] = orders.Select(o => o.Name).ToList();
+        
+        workshopData.LastUpdated = DateTime.UtcNow;
+        await StorageService.SaveWorkshopDataAsync(workshopData);
+        
+        isReorderModalVisible = false;
+        await LoadData();
+        
+        await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Порядок змінено!", "success");
+    }
 
     public void Dispose()
     {
+        UndoRedo.OnStateChanged -= OnUndoRedoStateChanged;
         dotNetHelper?.Dispose();
     }
 }
