@@ -145,14 +145,6 @@ else
                                     
                                     foreach (var order in workshopOrders)
                                     {
-                                        // Знаходимо реальну позицію старту цього замовлення в календарі
-                                        var orderStartIndex = calendarDays.FindIndex(d => d.Date == order.ProductionStartDate.Date);
-                                        if (orderStartIndex >= 0)
-                                        {
-                                            currentLeft = orderStartIndex * dayWidth;
-                                            currentDayIndex = orderStartIndex;
-                                        }
-                                        
                                         // Ширина бара = площа / потужність (в робочих днях)
                                         var daysOfWork = (double)order.SquareMeters / capacity;
                                         
@@ -161,7 +153,7 @@ else
                                         double workDaysRemaining = daysOfWork;
                                         int tempIndex = currentDayIndex;
                                         
-                                        while (workDaysRemaining > 0 && tempIndex < calendarDays.Count)
+                                        while (workDaysRemaining > 0.001 && tempIndex < calendarDays.Count)
                                         {
                                             var date = calendarDays[tempIndex];
                                             if (WorkingDays.IsWorkingDay(date))
@@ -178,19 +170,13 @@ else
                                             tempIndex++;
                                         }
                                         
-                                        // Якщо ще залишились робочі дні - додаємо їх (бар вийде за межі)
-                                        if (workDaysRemaining > 0)
+                                        // Якщо ще залишились робочі дні (вийшли за календар) - додаємо їх
+                                        if (workDaysRemaining > 0.001)
                                         {
                                             calendarDaysNeeded += workDaysRemaining;
                                         }
-                                        
-                                        var barWidth = Math.Max(calendarDaysNeeded * dayWidth, 0.5); // Мінімальна ширина
-                                        
-                                        // Обмежуємо ширину щоб не виходити за 100%
-                                        if (currentLeft + barWidth > 100)
-                                        {
-                                            barWidth = Math.Max(100 - currentLeft, 0.5);
-                                        }
+                                      
+                                        var barWidth = Math.Max(calendarDaysNeeded * dayWidth, 0.3); // Мінімальна ширина
                                         
                                         var shipmentIndex = calendarDays.FindIndex(d => d.Date == order.CompletionDate.Date);
                                         
@@ -205,9 +191,6 @@ else
                                         var leftStr = currentLeft.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
                                         var widthStr = barWidth.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
                                         
-                                        // Рендеримо тільки якщо бар в межах видимої області
-                                        if (currentLeft < 100)
-                                        {
                                         <div class="gantt-bar draggable-bar @statusClass" 
                                              data-order-day="@order.Day"
                                              data-workshop="@workshop.Number"
@@ -252,11 +235,10 @@ else
                                                  title="Відвантаження №@order.Day: @order.CompletionDate.ToString("dd.MM.yyyy")">
                                             </div>
                                         }
-                                        }
                                         
-                                        // Зсуваємо позицію для наступного замовлення
+                                        // Зсуваємо позицію для наступного замовлення (послідовно)
                                         currentLeft += barWidth;
-                                        currentDayIndex = tempIndex < calendarDays.Count ? tempIndex : calendarDays.Count - 1;
+                                        currentDayIndex = tempIndex;
                                     }
                                 }
                             </div>
