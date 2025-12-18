@@ -146,6 +146,7 @@ window.DragDropInterop = {
 // Підтримує: переміщення між цехами + зміна порядку в межах цеху
 window.GanttDragDrop = {
     sortableInstances: {},
+    dragData: null, // Зберігаємо дані про drag операцію
     
     initGanttSortable: function (elementId, dotNetHelper, workshopNumber) {
         const el = document.getElementById(elementId);
@@ -160,6 +161,8 @@ window.GanttDragDrop = {
             delete this.sortableInstances[elementId];
         }
 
+        const self = this;
+
         try {
             this.sortableInstances[elementId] = new Sortable(el, {
                 animation: 150,
@@ -167,23 +170,40 @@ window.GanttDragDrop = {
                 chosenClass: 'sortable-chosen',
                 dragClass: 'sortable-drag',
                 draggable: '.draggable-bar',
-                filter: '.gantt-cell, .shipment-line', // Ігноруємо клітинки
+                filter: '.gantt-cell, .shipment-line',
                 preventOnFilter: false,
                 group: 'gantt-orders',
-                sort: true,  // Дозволяємо сортування
+                sort: false, // Вимикаємо автоматичне сортування бо бари абсолютно позиціоновані
                 forceFallback: true,
                 fallbackOnBody: true,
                 
                 onStart: function (evt) {
                     document.body.classList.add('is-dragging');
-                    // Підсвічуємо всі dropzones
                     document.querySelectorAll('.gantt-dropzone').forEach(zone => {
                         zone.classList.add('drop-target-active');
                     });
+                    
+                    // Зберігаємо початкову позицію для розрахунку
+                    const bars = Array.from(evt.from.querySelectorAll('.draggable-bar'));
+                    const sortedBars = bars.sort((a, b) => {
+                        const leftA = parseFloat(a.style.left) || 0;
+                        const leftB = parseFloat(b.style.left) || 0;
+                        return leftA - leftB;
+                    });
+                    
+                    self.dragData = {
+                        item: evt.item,
+                        fromWorkshop: parseInt(evt.from.dataset.workshop),
+                        orderDay: parseInt(evt.item.dataset.orderDay),
+                        squareMeters: parseFloat(evt.item.dataset.square),
+                        oldIndex: sortedBars.indexOf(evt.item),
+                        sortedBars: sortedBars
+                    };
+                    
                     console.log('Gantt drag started:', {
-                        orderDay: evt.item.dataset.orderDay,
-                        workshop: evt.item.dataset.workshop,
-                        oldIndex: evt.oldIndex
+                        orderDay: self.dragData.orderDay,
+                        workshop: self.dragData.fromWorkshop,
+                        oldIndex: self.dragData.oldIndex
                     });
                 },
                 
@@ -193,25 +213,50 @@ window.GanttDragDrop = {
                         zone.classList.remove('drop-target-active');
                     });
                     
-                    const fromWorkshop = parseInt(evt.from.dataset.workshop);
+                    if (!self.dragData) return;
+                    
+                    const fromWorkshop = self.dragData.fromWorkshop;
                     const toWorkshop = parseInt(evt.to.dataset.workshop);
-                    const orderDay = parseInt(evt.item.dataset.orderDay);
-                    const squareMeters = parseFloat(evt.item.dataset.square);
-                    
-                    // Використовуємо oldDraggableIndex і newDraggableIndex 
-                    // бо вони рахують тільки draggable елементи (не .gantt-cell)
-                    const oldIndex = evt.oldDraggableIndex;
-                    const newIndex = evt.newDraggableIndex;
-                    
-                    console.log('Gantt drag ended:', {
-                        fromWorkshop, toWorkshop, orderDay, squareMeters,
-                        oldIndex, newIndex,
-                        oldDraggableIndex: evt.oldDraggableIndex,
-                        newDraggableIndex: evt.newDraggableIndex
-                    });
+                    const orderDay = self.dragData.orderDay;
+                    const squareMeters = self.dragData.squareMeters;
+                    const oldIndex = self.dragData.oldIndex;
                     
                     if (fromWorkshop === toWorkshop) {
                         // Переміщення в межах одного цеху
+                        // Визначаємо новий індекс по X-позиції курсора
+                        const container = evt.to;
+                        const containerRect = container.getBoundingClientRect();
+                        const dropX = evt.originalEvent.clientX - containerRect.left;
+                        const containerWidth = containerRect.width;
+                        
+                        // Отримуємо всі бари крім того що перетягуємо
+                        const otherBars = self.dragData.sortedBars.filter(b => b !== evt.item);
+                        
+                        // Визначаємо нову позицію
+                        let newIndex = otherBars.length; // За замовчуванням - в кінець
+                        
+                        for (let i = 0; i < otherBars.length; i++) {
+                            const bar = otherBars[i];
+                            const barLeft = parseFloat(bar.style.left) || 0;
+                            const barWidth = parseFloat(bar.style.width) || 0;
+                            const barCenterPercent = barLeft + barWidth / 2;
+                            const barCenterPx = (barCenterPercent / 100) * containerWidth;
+                            
+                            if (dropX < barCenterPx) {
+                                newIndex = i;
+                                break;
+                            }
+                        }
+                        
+                        // Коригуємо якщо переміщуємо вправо
+                        if (newIndex > oldIndex) {
+                            // Враховуємо що ми видалили елемент зі старої позиції
+                        }
+                        
+                        console.log('Gantt drag ended (same workshop):', {
+                            fromWorkshop, oldIndex, newIndex, dropX, containerWidth
+                        });
+                        
                         if (oldIndex !== newIndex && oldIndex >= 0 && newIndex >= 0) {
                             console.log('Reordering within workshop:', fromWorkshop, 'from', oldIndex, 'to', newIndex);
                             dotNetHelper.invokeMethodAsync('OnGanttOrderReordered', 
@@ -222,7 +267,7 @@ window.GanttDragDrop = {
                                 console.log('OnGanttOrderReordered success');
                             }).catch(err => console.error('Error calling OnGanttOrderReordered:', err));
                         } else {
-                            console.log('Same position or invalid indices, no reorder needed:', {oldIndex, newIndex});
+                            console.log('Same position, no reorder needed');
                         }
                     } else {
                         // Переміщення між цехами
@@ -236,6 +281,8 @@ window.GanttDragDrop = {
                             console.log('OnGanttOrderTransfer success');
                         }).catch(err => console.error('Error calling OnGanttOrderTransfer:', err));
                     }
+                    
+                    self.dragData = null;
                 }
             });
             
