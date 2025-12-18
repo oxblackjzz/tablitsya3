@@ -167,7 +167,8 @@ window.GanttDragDrop = {
                 chosenClass: 'sortable-chosen',
                 dragClass: 'sortable-drag',
                 draggable: '.draggable-bar',
-                filter: '.gantt-cell, .shipment-line',
+                filter: '.gantt-cell, .shipment-line', // Ігноруємо клітинки
+                preventOnFilter: false,
                 group: 'gantt-orders',
                 sort: true,  // Дозволяємо сортування
                 forceFallback: true,
@@ -179,7 +180,11 @@ window.GanttDragDrop = {
                     document.querySelectorAll('.gantt-dropzone').forEach(zone => {
                         zone.classList.add('drop-target-active');
                     });
-                    console.log('Gantt drag started, orderDay:', evt.item.dataset.orderDay);
+                    console.log('Gantt drag started:', {
+                        orderDay: evt.item.dataset.orderDay,
+                        workshop: evt.item.dataset.workshop,
+                        oldIndex: evt.oldIndex
+                    });
                 },
                 
                 onEnd: function (evt) {
@@ -193,26 +198,21 @@ window.GanttDragDrop = {
                     const orderDay = parseInt(evt.item.dataset.orderDay);
                     const squareMeters = parseFloat(evt.item.dataset.square);
                     
-                    // Отримуємо всі бари в контейнерах
-                    const fromBars = Array.from(evt.from.querySelectorAll('.draggable-bar'));
-                    const toBars = Array.from(evt.to.querySelectorAll('.draggable-bar'));
-                    
-                    // Знаходимо старий індекс по orderDay (1-based Day -> 0-based index)
-                    const oldIndex = orderDay - 1;
-                    
-                    // Знаходимо новий індекс в цільовому контейнері
-                    const newIndex = toBars.indexOf(evt.item);
+                    // Використовуємо oldDraggableIndex і newDraggableIndex 
+                    // бо вони рахують тільки draggable елементи (не .gantt-cell)
+                    const oldIndex = evt.oldDraggableIndex;
+                    const newIndex = evt.newDraggableIndex;
                     
                     console.log('Gantt drag ended:', {
                         fromWorkshop, toWorkshop, orderDay, squareMeters,
                         oldIndex, newIndex,
-                        fromBarsCount: fromBars.length,
-                        toBarsCount: toBars.length
+                        oldDraggableIndex: evt.oldDraggableIndex,
+                        newDraggableIndex: evt.newDraggableIndex
                     });
                     
                     if (fromWorkshop === toWorkshop) {
                         // Переміщення в межах одного цеху
-                        if (oldIndex !== newIndex && newIndex >= 0) {
+                        if (oldIndex !== newIndex && oldIndex >= 0 && newIndex >= 0) {
                             console.log('Reordering within workshop:', fromWorkshop, 'from', oldIndex, 'to', newIndex);
                             dotNetHelper.invokeMethodAsync('OnGanttOrderReordered', 
                                 fromWorkshop,
@@ -220,7 +220,9 @@ window.GanttDragDrop = {
                                 newIndex
                             ).then(() => {
                                 console.log('OnGanttOrderReordered success');
-                            }).catch(err => console.error('Error:', err));
+                            }).catch(err => console.error('Error calling OnGanttOrderReordered:', err));
+                        } else {
+                            console.log('Same position or invalid indices, no reorder needed:', {oldIndex, newIndex});
                         }
                     } else {
                         // Переміщення між цехами
@@ -232,7 +234,7 @@ window.GanttDragDrop = {
                             squareMeters
                         ).then(() => {
                             console.log('OnGanttOrderTransfer success');
-                        }).catch(err => console.error('Error:', err));
+                        }).catch(err => console.error('Error calling OnGanttOrderTransfer:', err));
                     }
                 }
             });
