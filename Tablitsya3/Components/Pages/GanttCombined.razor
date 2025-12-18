@@ -73,6 +73,58 @@ else if (!allOrders.Any())
 }
 else
 {
+    <!-- Фільтри по періоду -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row align-items-center g-3">
+                <div class="col-auto">
+                    <strong class="text-secondary"><i class="bi bi-funnel"></i> Період:</strong>
+                </div>
+                <div class="col-auto">
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm @(periodFilter == "week" ? "btn-primary" : "btn-outline-primary")" 
+                                @onclick="@(() => SetPeriodFilter("week"))">
+                            <i class="bi bi-calendar-week"></i> Тиждень
+                        </button>
+                        <button class="btn btn-sm @(periodFilter == "2weeks" ? "btn-primary" : "btn-outline-primary")" 
+                                @onclick="@(() => SetPeriodFilter("2weeks"))">
+                            <i class="bi bi-calendar2-week"></i> 2 тижні
+                        </button>
+                        <button class="btn btn-sm @(periodFilter == "month" ? "btn-primary" : "btn-outline-primary")" 
+                                @onclick="@(() => SetPeriodFilter("month"))">
+                            <i class="bi bi-calendar-month"></i> Місяць
+                        </button>
+                        <button class="btn btn-sm @(periodFilter == "all" ? "btn-primary" : "btn-outline-primary")" 
+                                @onclick="@(() => SetPeriodFilter("all"))">
+                            <i class="bi bi-calendar3"></i> Все
+                        </button>
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="MovePeriodBack" title="Назад">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="MovePeriodToday" title="Сьогодні">
+                            <i class="bi bi-calendar-check"></i> Сьогодні
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="MovePeriodForward" title="Вперед">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-auto ms-auto">
+                    <small class="text-muted">
+                        <i class="bi bi-calendar-range"></i> 
+                        @filteredCalendarDays.First().ToString("dd.MM.yyyy") - @filteredCalendarDays.Last().ToString("dd.MM.yyyy")
+                        <span class="badge bg-secondary ms-1">@filteredCalendarDays.Count днів</span>
+                        <span class="badge bg-info ms-1">@GetFilteredOrdersCount() замовлень</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Легенда цехів з потужностями -->
     <div class="card mb-3">
         <div class="card-body py-2">
@@ -80,7 +132,7 @@ else
                 <strong class="text-secondary"><i class="bi bi-palette"></i> Цехи:</strong>
                 @foreach (var workshop in workshops)
                 {
-                    var count = allOrders.Count(o => o.WorkshopNumber == workshop.Number);
+                    var count = GetFilteredOrders(workshop.Number).Count();
                     var capacity = workshopCapacities.GetValueOrDefault(workshop.Number, 1000);
                     <div class="d-flex align-items-center gap-2">
                         <div class="workshop-color-box" style="background-color: @GetWorkshopColor(workshop.Number);"></div>
@@ -95,25 +147,15 @@ else
 
     <!-- Діаграма -->
     <div class="card">
-        <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
-            <small class="text-muted">
-                <i class="bi bi-calendar-range"></i> 
-                @calendarDays.First().ToString("dd.MM.yyyy") - @calendarDays.Last().ToString("dd.MM.yyyy")
-                (@calendarDays.Count днів)
-            </small>
-            <small class="text-muted">
-                <i class="bi bi-info-circle"></i> Висотаbara = площа замовлення / потужність цеху
-            </small>
-        </div>
         <div class="card-body p-0">
             <div class="gantt-combined-wrapper">
-                <div class="gantt-combined" style="min-width: @(Math.Max(calendarDays.Count * 36, 900))px;">
+                <div class="gantt-combined" style="min-width: @(Math.Max(filteredCalendarDays.Count * 36, 900))px;">
                     
                     <!-- Заголовок з датами -->
                     <div class="gantt-dates-header">
                         <div class="gantt-label-spacer"></div>
                         <div class="gantt-dates">
-                            @foreach (var date in calendarDays)
+                            @foreach (var date in filteredCalendarDays)
                             {
                                 var isWeekend = !WorkingDays.IsWorkingDay(date);
                                 var isToday = date.Date == DateTime.Today;
@@ -129,7 +171,7 @@ else
                     <!-- Рядки для кожного цеху -->
                     @foreach (var workshop in workshops)
                     {
-                        var workshopOrders = allOrders.Where(o => o.WorkshopNumber == workshop.Number)
+                        var workshopOrders = GetFilteredOrders(workshop.Number)
                             .OrderBy(o => o.ProductionStartDate)
                             .ToList();
                         if (!workshopOrders.Any()) continue;
@@ -160,7 +202,7 @@ else
                                  id="gantt-workshop-@workshop.Number"
                                  data-workshop="@workshop.Number">
                                 <!-- Сітка днів -->
-                                @foreach (var date in calendarDays)
+                                @foreach (var date in filteredCalendarDays)
                                 {
                                     var isWeekend = !WorkingDays.IsWorkingDay(date);
                                     var isToday = date.Date == DateTime.Today;
@@ -169,11 +211,11 @@ else
                                 
                                 <!-- Бари замовлень - пропускаємо вихідні -->
                                 @{
-                                    var dayWidth = 100.0 / calendarDays.Count;
+                                    var dayWidth = 100.0 / filteredCalendarDays.Count;
                                     
                                     // Знаходимо перший робочий день для старту
                                     var firstOrder = workshopOrders.First();
-                                    var firstStartIndex = calendarDays.FindIndex(d => d.Date == firstOrder.ProductionStartDate.Date);
+                                    var firstStartIndex = filteredCalendarDays.FindIndex(d => d.Date == firstOrder.ProductionStartDate.Date);
                                     if (firstStartIndex == -1) firstStartIndex = 0;
                                     
                                     // Накопичувальна позиція (врахуючи вихідні)
@@ -190,9 +232,9 @@ else
                                         double workDaysRemaining = daysOfWork;
                                         int tempIndex = currentDayIndex;
                                         
-                                        while (workDaysRemaining > 0.001 && tempIndex < calendarDays.Count)
+                                        while (workDaysRemaining > 0.001 && tempIndex < filteredCalendarDays.Count)
                                         {
-                                            var date = calendarDays[tempIndex];
+                                            var date = filteredCalendarDays[tempIndex];
                                             if (WorkingDays.IsWorkingDay(date))
                                             {
                                                 var dayPortion = Math.Min(workDaysRemaining, 1.0);
@@ -215,7 +257,7 @@ else
                                       
                                         var barWidth = Math.Max(calendarDaysNeeded * dayWidth, 0.3); // Мінімальна ширина
                                         
-                                        var shipmentIndex = calendarDays.FindIndex(d => d.Date == order.CompletionDate.Date);
+                                        var shipmentIndex = filteredCalendarDays.FindIndex(d => d.Date == order.CompletionDate.Date);
                                         
                                         var isCompleted = order.ProductionEndDate.Date < DateTime.Today;
                                         var isInProgress = order.ProductionStartDate.Date <= DateTime.Today && order.ProductionEndDate.Date >= DateTime.Today;
@@ -285,7 +327,7 @@ else
                                             </div>
                                         </div>
                                         
-                                        @if (shipmentIndex >= 0 && shipmentIndex < calendarDays.Count)
+                                        @if (shipmentIndex >= 0 && shipmentIndex < filteredCalendarDays.Count)
                                         {
                                             var shipLeft = ((shipmentIndex + 0.5) * dayWidth).ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
                                             <div class="shipment-line" 
@@ -685,6 +727,129 @@ else
     private string reorderWorkshopName = "";
     private string reorderWorkshopColor = "#3498db";
     private List<ReorderModal.ReorderItem>? reorderOrders;
+
+    // Period filter state
+    private string periodFilter = "month"; // week, 2weeks, month, all
+    private DateTime periodStart = DateTime.Today;
+    
+    // Filtered calendar days based on period filter
+    private List<DateTime> filteredCalendarDays => GetFilteredCalendarDays();
+    
+    private List<DateTime> GetFilteredCalendarDays()
+    {
+        if (!calendarDays.Any()) return new List<DateTime>();
+        
+        if (periodFilter == "all")
+        {
+            return calendarDays;
+        }
+        
+        int days = periodFilter switch
+        {
+            "week" => 7,
+            "2weeks" => 14,
+            "month" => 31,
+            _ => 31
+        };
+        
+        var startDate = periodStart.Date;
+        var endDate = startDate.AddDays(days - 1);
+        
+        // Фільтруємо дні в межах діапазону
+        var filtered = calendarDays
+            .Where(d => d.Date >= startDate && d.Date <= endDate)
+            .OrderBy(d => d)
+            .ToList();
+        
+        // Якщо немає днів - повертаємо хоча б перші N днів з calendarDays
+        if (!filtered.Any() && calendarDays.Any())
+        {
+            return calendarDays.Take(days).ToList();
+        }
+        
+        return filtered;
+    }
+    
+    private IEnumerable<Order> GetFilteredOrders(int workshopNumber)
+    {
+        var startDate = filteredCalendarDays.FirstOrDefault();
+        var endDate = filteredCalendarDays.LastOrDefault();
+        
+        if (startDate == default || endDate == default)
+        {
+            return allOrders.Where(o => o.WorkshopNumber == workshopNumber);
+        }
+        
+        // Замовлення які перетинаються з періодом фільтра
+        return allOrders.Where(o => 
+            o.WorkshopNumber == workshopNumber &&
+            o.ProductionStartDate.Date <= endDate &&
+            o.ProductionEndDate.Date >= startDate
+        );
+    }
+    
+    private int GetFilteredOrdersCount()
+    {
+        var startDate = filteredCalendarDays.FirstOrDefault();
+        var endDate = filteredCalendarDays.LastOrDefault();
+        
+        if (startDate == default || endDate == default)
+        {
+            return allOrders.Count;
+        }
+        
+        return allOrders.Count(o => 
+            o.ProductionStartDate.Date <= endDate &&
+            o.ProductionEndDate.Date >= startDate
+        );
+    }
+    
+    private void SetPeriodFilter(string filter)
+    {
+        periodFilter = filter;
+        
+        // При зміні фільтра - центруємо на сьогодні
+        if (filter != "all")
+        {
+            periodStart = DateTime.Today;
+        }
+        
+        StateHasChanged();
+    }
+    
+    private void MovePeriodBack()
+    {
+        int days = periodFilter switch
+        {
+            "week" => 7,
+            "2weeks" => 14,
+            "month" => 31,
+            _ => 7
+        };
+        
+        periodStart = periodStart.AddDays(-days);
+        StateHasChanged();
+    }
+    
+    private void MovePeriodForward()
+    {
+        int days = periodFilter switch
+        {
+            "week" => 7,
+            "2weeks" => 14,
+            "month" => 31,
+            _ => 7
+        };
+        
+        periodStart = periodStart.AddDays(days);
+        StateHasChanged();
+    }
+    
+    private void MovePeriodToday()
+    {
+        periodStart = DateTime.Today;
+        StateHasChanged();
+    }
 
     protected override async Task OnInitializedAsync()
     {
