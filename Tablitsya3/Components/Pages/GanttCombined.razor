@@ -209,53 +209,47 @@ else
                                     <div class="gantt-cell @(isWeekend ? "weekend" : "") @(isToday ? "today" : "")"></div>
                                 }
                                 
-                                <!-- Бари замовлень - пропускаємо вихідні -->
+                                <!-- Бари замовлень - позиціонуємо по реальних датах -->
                                 @{
                                     var dayWidth = 100.0 / filteredCalendarDays.Count;
-                                    
-                                    // Знаходимо перший робочий день для старту
-                                    var firstOrder = workshopOrders.First();
-                                    var firstStartIndex = filteredCalendarDays.FindIndex(d => d.Date == firstOrder.ProductionStartDate.Date);
-                                    if (firstStartIndex == -1) firstStartIndex = 0;
-                                    
-                                    // Накопичувальна позиція (врахуючи вихідні)
-                                    double currentLeft = firstStartIndex * dayWidth;
-                                    int currentDayIndex = firstStartIndex;
                                     
                                     foreach (var order in workshopOrders)
                                     {
                                         // Ширина бара = площа / потужність (в робочих днях)
                                         var daysOfWork = (double)order.SquareMeters / capacity;
                                         
-                                        // Рахуємо скільки календарних днів займе robota (пропускаючи вихідні)
-                                        double calendarDaysNeeded = 0;
-                                        double workDaysRemaining = daysOfWork;
-                                        int tempIndex = currentDayIndex;
-                                        
-                                        while (workDaysRemaining > 0.001 && tempIndex < filteredCalendarDays.Count)
+                                        // ✅ ПОЗИЦІЯ ПО РЕАЛЬНІЙ ДАТІ СТАРТУ
+                                        var startIndex = filteredCalendarDays.FindIndex(d => d.Date == order.ProductionStartDate.Date);
+                                        if (startIndex == -1) 
                                         {
-                                            var date = filteredCalendarDays[tempIndex];
-                                            if (WorkingDays.IsWorkingDay(date))
-                                            {
-                                                var dayPortion = Math.Min(workDaysRemaining, 1.0);
-                                                calendarDaysNeeded += dayPortion;
-                                                workDaysRemaining -= dayPortion;
-                                            }
+                                            // Якщо дата старту за межами фільтра - пропускаємо або показуємо з початку
+                                            if (order.ProductionStartDate.Date < filteredCalendarDays.First().Date)
+                                                startIndex = 0;
                                             else
-                                            {
-                                                // Вихідний день - додаємо до ширини але не віднімаємо робочий час
-                                                calendarDaysNeeded += 1;
-                                            }
-                                            tempIndex++;
+                                                continue; // За межами діапазону
                                         }
                                         
-                                        // Якщо ще залишились робочі дні (вийшли за календар) - додаємо їх
-                                        if (workDaysRemaining > 0.001)
+                                        // ✅ ШИРИНА = тривалість в робочих днях (пропорційно потужності)
+                                        // Але враховуємо вихідні між стартом і фінішем
+                                        var endIndex = filteredCalendarDays.FindIndex(d => d.Date == order.ProductionEndDate.Date);
+                                        if (endIndex == -1)
                                         {
-                                            calendarDaysNeeded += workDaysRemaining;
+                                            // Фініш за межами - рахуємо до кінця фільтра
+                                            endIndex = filteredCalendarDays.Count - 1;
                                         }
-                                      
-                                        var barWidth = Math.Max(calendarDaysNeeded * dayWidth, 0.3); // Мінімальна ширина
+                                        
+                                        // Календарна тривалість (включаючи вихідні)
+                                        var calendarDuration = endIndex - startIndex + 1;
+                                        
+                                        // АЛЕ! Якщо хочемо показати тільки РОБОЧУ тривалість (0.62 дня):
+                                        // barWidth = daysOfWork * dayWidth
+                                        // Якщо хочемо показати КАЛЕНДАРНУ тривалість (з вихідними):
+                                        // barWidth = calendarDuration * dayWidth
+                                        
+                                        // ✅ ВИКОРИСТОВУЄМО РОБОЧУ ТРИВАЛІСТЬ для візуального розміру
+                                        var barWidth = Math.Max(daysOfWork * dayWidth, 0.5); // Мінімальна ширина 0.5%
+                                        
+                                        var currentLeft = startIndex * dayWidth;
                                         
                                         var shipmentIndex = filteredCalendarDays.FindIndex(d => d.Date == order.CompletionDate.Date);
                                         
@@ -278,7 +272,7 @@ else
                                         var barColor = GetWorkshopColor(colorWorkshop);
                                         var isTransferred = colorWorkshop != workshop.Number;
                                         
-                                        var titleText = $"{orderName}: {order.SquareMeters:N0} м² ({daysOfWork:F2} дн.) | Відвантаж: {order.CompletionDate:dd.MM}";
+                                        var titleText = $"{orderName}: {order.SquareMeters:N0} м² ({daysOfWork:F2} роб.дн.) | Відвантаж: {order.CompletionDate:dd.MM}";
                                         if (isTransferred)
                                         {
                                             titleText += $" | З цеху {colorWorkshop}";
@@ -309,7 +303,7 @@ else
                                                 <table class="tooltip-table">
                                                     <tr><td>Площа:</td><td><strong>@order.SquareMeters.ToString("N0") м²</strong></td></tr>
                                                     <tr><td>Потужність цеху:</td><td>@capacity м²/день</td></tr>
-                                                    <tr><td>Тривалість:</td><td><strong>@daysOfWork.ToString("F2") дн.</strong></td></tr>
+                                                    <tr><td>Тривалість:</td><td><strong>@daysOfWork.ToString("F2") роб.дн.</strong></td></tr>
                                                     @if (isTransferred)
                                                     {
                                                         var origName = workshops.FirstOrDefault(w => w.Number == colorWorkshop)?.Name ?? $"Цех {colorWorkshop}";
@@ -335,10 +329,6 @@ else
                                                  title="Відвантаження №@order.Day: @order.CompletionDate.ToString("dd.MM.yyyy")">
                                             </div>
                                         }
-                                        
-                                        // Зсуваємо позицію для наступного замовлення (послідовно)
-                                        currentLeft += barWidth;
-                                        currentDayIndex = tempIndex;
                                     }
                                 }
                             </div>
