@@ -42,17 +42,21 @@ namespace Tablitsya3.Services
                     throw new Exception("XML не містить кореневого елементу 'project'");
                 }
 
-                // Метадані проекту
-                project.ProjectUuid = root.Attribute("project.uuid")?.Value 
-                    ?? root.Attribute("project.externaluuid")?.Value 
+                // Метадані проекту - шукаємо UUID в різних атрибутах
+                project.ProjectUuid = root.Attribute("project.externaluuid")?.Value 
+                    ?? root.Attribute("project.uuid")?.Value 
+                    ?? root.Attribute("externaluuid")?.Value
+                    ?? root.Attribute("externalUuid")?.Value
+                    ?? root.Attribute("uuid")?.Value
                     ?? Guid.NewGuid().ToString();
+                    
                 project.Version = root.Attribute("version")?.Value ?? "";
                 project.Currency = root.Attribute("currency")?.Value ?? "грн";
                 project.TotalCost = ParseDecimal(root.Attribute("cost")?.Value);
                 project.MaterialCost = ParseDecimal(root.Attribute("costMaterial")?.Value);
                 project.OperationCost = ParseDecimal(root.Attribute("costOperation")?.Value);
 
-                _logger.LogInfo($"Парсинг проекту: {project.ProjectUuid}", "ProjectParser");
+                _logger.LogInfo($"Парсинг проекту: UUID={project.ProjectUuid}, File={fileName}", "ProjectParser");
 
                 // Парсинг товарів (goods)
                 var partCounters = new Dictionary<int, int>();

@@ -284,6 +284,72 @@ namespace Tablitsya3.Controllers
                 return StatusCode(500, new { message = ex.Message });
             }
         }
+
+        /// <summary>
+        /// Діагностика - пошук деталі за QR-кодом з детальною інформацією
+        /// </summary>
+        [HttpGet("debug/{qrCode}")]
+        public async Task<ActionResult> DebugPart(string qrCode)
+        {
+            try
+            {
+                var decoded = Uri.UnescapeDataString(qrCode);
+                var parts = decoded.Split('/');
+                
+                if (parts.Length < 3)
+                {
+                    return Ok(new { 
+                        error = "Invalid QR format", 
+                        qrCode = decoded,
+                        expectedFormat = "ProjectExternalUuid/PartId/PartCounter"
+                    });
+                }
+
+                var projectUuid = parts[0];
+                int.TryParse(parts[1], out int partId);
+                int.TryParse(parts[2], out int partCounter);
+
+                // Шукаємо всі проекти
+                var allProjects = await _scanningService.GetProjectsAsync();
+                
+                // Шукаємо деталь
+                var foundPart = await _scanningService.GetPartByQRCodeAsync(decoded);
+                
+                // Шукаємо схожі деталі (тільки по PartId)
+                var similarParts = await _scanningService.GetPartsAsync(1, 10, projectUuid);
+
+                return Ok(new {
+                    qrCode = decoded,
+                    parsed = new { projectUuid, partId, partCounter },
+                    foundPart = foundPart != null ? new { 
+                        foundPart.Id, 
+                        foundPart.ProjectExternalUuid, 
+                        foundPart.PartId, 
+                        foundPart.PartCounter,
+                        foundPart.Name,
+                        foundPart.QRCode
+                    } : null,
+                    projectsInDb = allProjects.Select(p => new { 
+                        p.Id, 
+                        p.ProjectUuid, 
+                        p.FileName,
+                        p.PartsCount
+                    }),
+                    partsWithSameProjectUuid = similarParts.Parts.Take(5).Select(p => new {
+                        p.Id,
+                        p.ProjectExternalUuid,
+                        p.PartId,
+                        p.PartCounter,
+                        p.Name,
+                        p.QRCode
+                    })
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
+            }
+        }
     }
 
     #region Request/Response models
