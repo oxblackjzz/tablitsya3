@@ -355,50 +355,35 @@ WHERE table_schema = 'public'
                 await using var connection = new NpgsqlConnection(connectionString);
                 await connection.OpenAsync();
 
-                // Перевіряємо базові таблиці (без scanning - вони опціональні)
+                // Перевіряємо ВСІ таблиці включно зі scanning
                 var checkScript = @"
 SELECT COUNT(*) 
 FROM information_schema.tables 
 WHERE table_schema = 'public' 
     AND table_name IN ('workshop_data', 'orders', 'workshop_capacities', 
                        'workshop_production_lead_times', 'workshop_days_before_production',
-                       'custom_completion_dates', 'original_workshops');
+                       'custom_completion_dates', 'original_workshops',
+                       'imported_projects', 'parts', 'products', 'scan_logs');
 ";
 
                 await using var command = new NpgsqlCommand(checkScript, connection);
                 var tableCount = (long)(await command.ExecuteScalarAsync() ?? 0L);
 
-                var exists = tableCount >= 7;
+                // Потрібно 11 таблиць (7 базових + 4 scanning)
+                var allTablesExist = tableCount >= 11;
                 
-                if (exists)
+                if (allTablesExist)
                 {
-                    _logger.LogInformation($"✅ Base tables exist ({tableCount})");
-                    Console.WriteLine($"✅ Base tables exist ({tableCount})");
-                    
-                    // Перевіряємо чи є scanning таблиці
-                    var checkScanningScript = @"
-SELECT COUNT(*) 
-FROM information_schema.tables 
-WHERE table_schema = 'public' 
-    AND table_name IN ('imported_projects', 'parts', 'products', 'scan_logs');
-";
-                    await using var scanCommand = new NpgsqlCommand(checkScanningScript, connection);
-                    var scanTableCount = (long)(await scanCommand.ExecuteScalarAsync() ?? 0L);
-                    
-                    if (scanTableCount < 4)
-                    {
-                        _logger.LogInformation($"⚠️ Scanning tables missing ({scanTableCount}/4), will create them");
-                        Console.WriteLine($"⚠️ Scanning tables missing ({scanTableCount}/4), will create them");
-                        return false; // Потрібна міграція для створення scanning таблиць
-                    }
+                    _logger.LogInformation($"✅ All {tableCount} tables exist");
+                    Console.WriteLine($"✅ All {tableCount} tables exist");
                 }
                 else
                 {
-                    _logger.LogInformation($"⚠️ Only {tableCount} out of 7 base tables exist, migration needed");
-                    Console.WriteLine($"⚠️ Only {tableCount} out of 7 base tables exist, migration needed");
+                    _logger.LogInformation($"⚠️ Only {tableCount} out of 11 tables exist, migration needed");
+                    Console.WriteLine($"⚠️ Only {tableCount} out of 11 tables exist, migration needed");
                 }
                 
-                return exists;
+                return allTablesExist;
             }
             catch (Exception ex)
             {
