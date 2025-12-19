@@ -140,6 +140,7 @@ Console.WriteLine("✅ ThemeService registered");
 // ✅ ДОДАЄМО СЕРВІСИ СКАНУВАННЯ ДЕТАЛЕЙ
 builder.Services.AddScoped<ProjectFileParserService>();
 builder.Services.AddScoped<ScanningService>();
+builder.Services.AddScoped<ScanningProgressService>();
 Console.WriteLine("✅ Scanning services registered");
 
 // ✅ ДОДАЄМО SIGNALR

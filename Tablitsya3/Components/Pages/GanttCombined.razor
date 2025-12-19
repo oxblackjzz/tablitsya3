@@ -3,11 +3,13 @@
 @using Tablitsya3.Models
 @using Tablitsya3.Services
 @using Tablitsya3.Components.Shared
+@using Tablitsya3.Models.Scanning
 @inject UnifiedStorageService StorageService
 @inject WorkshopConfigService WorkshopConfigService
 @inject ProductionPlanningService PlanningService
 @inject WorkingDaysService WorkingDays
 @inject UndoRedoService UndoRedo
+@inject ScanningProgressService ScanProgress
 @inject LoggingService Logger
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
@@ -332,6 +334,9 @@ else
                                                 var displayName = segmentWidth > 3 && isFirstSegment ? (orderName.Length > 8 ? orderName.Substring(0, 8) + ".." : orderName) : "";
                                                 var showSquare = segmentWidth > 2 && isFirstSegment;
                                                 
+                                                // Отримуємо прогрес сканування
+                                                var scanProgress = GetOrderProgress(orderName);
+                                                
                                                 <div class="gantt-bar draggable-bar @statusClass @(isTransferred ? "transferred" : "") @(segmentIndex > 0 ? "segment-continuation" : "")" 
                                                      data-order-day="@order.Day"
                                                      data-workshop="@workshop.Number"
@@ -344,6 +349,17 @@ else
                                                     @if (isFirstSegment)
                                                     {
                                                         <span class="drag-handle-bar"><i class="bi bi-grip-vertical"></i></span>
+                                                    }
+                                                    
+                                                    @* Прогрес бар сканування всередині бара *@
+                                                    @if (scanProgress != null && isFirstSegment && segmentWidth > 1.5)
+                                                    {
+                                                        <div class="scan-progress-overlay" style="width: @(scanProgress.ProgressPercent)%;">
+                                                        </div>
+                                                        @if (scanProgress.ProgressPercent > 0 && segmentWidth > 3)
+                                                        {
+                                                            <span class="scan-progress-text">@scanProgress.ProgressPercent%</span>
+                                                        }
                                                     }
                                                     
                                                     @if (!string.IsNullOrEmpty(displayName))
@@ -374,6 +390,26 @@ else
                                                                 <tr><td><i class="bi bi-play-fill text-success"></i> Старт:</td><td><strong>@order.ProductionStartDate.ToString("dd.MM.yyyy")</strong></td></tr>
                                                                 <tr><td><i class="bi bi-stop-fill text-warning"></i> Фініш:</td><td><strong>@order.ProductionEndDate.ToString("dd.MM.yyyy")</strong></td></tr>
                                                                 <tr><td><i class="bi bi-truck text-primary"></i> Відвантаж.:</td><td><strong>@order.CompletionDate.ToString("dd.MM.yyyy")</strong></td></tr>
+                                                                
+                                                                @* Прогрес сканування в tooltip *@
+                                                                @if (scanProgress != null)
+                                                                {
+                                                                    <tr class="divider"><td colspan="2"></td></tr>
+                                                                    <tr><td><i class="bi bi-qr-code-scan text-info"></i> Сканування:</td>
+                                                                        <td>
+                                                                            <strong class="@(scanProgress.Status == OrderScanStatus.Completed ? "text-success" : scanProgress.Status == OrderScanStatus.InProgress ? "text-info" : "text-muted")">
+                                                                                @scanProgress.ProgressPercent%
+                                                                            </strong>
+                                                                            <small>(@scanProgress.CompletedParts/@scanProgress.TotalParts)</small>
+                                                                        </td>
+                                                                    </tr>
+                                                                    @if (scanProgress.CurrentStage.HasValue)
+                                                                    {
+                                                                        <tr><td><i class="bi bi-@scanProgress.CurrentStage.Value.GetIcon()"></i> Етап:</td>
+                                                                            <td><strong>@scanProgress.CurrentStage.Value.GetDisplayName()</strong></td>
+                                                                        </tr>
+                                                                    }
+                                                                }
                                                             </table>
                                                             <div class="tooltip-hint mt-2 text-muted small">
                                                                 <i class="bi bi-arrows-move"></i> Перетягніть на інший цех
@@ -645,6 +681,33 @@ else
         animation: pulse 2s infinite;
     }
     
+    /* Прогрес сканування на барі */
+    .scan-progress-overlay {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        background: linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1));
+        border-radius: 4px 0 0 4px;
+        pointer-events: none;
+        z-index: 1;
+        border-right: 2px solid rgba(255,255,255,0.6);
+        transition: width 0.3s ease;
+    }
+    
+    .scan-progress-text {
+        position: absolute;
+        right: 4px;
+        top: 2px;
+        font-size: 8px;
+        font-weight: bold;
+        color: rgba(255,255,255,0.95);
+        background: rgba(0,0,0,0.4);
+        padding: 1px 4px;
+        border-radius: 3px;
+        z-index: 5;
+    }
+    
     /* Переміщене замовлення - з індикатором */
     .gantt-bar.transferred {
         border: 2px dashed rgba(255,255,255,0.6);
@@ -789,6 +852,9 @@ else
     private Dictionary<int, int> workshopCapacities = new();
     private bool isLoading = true;
     private DotNetObjectReference<GanttCombined>? dotNetHelper;
+    
+    // Прогрес сканування
+    private Dictionary<string, OrderScanProgress> orderProgressMap = new();
     
     // Reorder modal state
     private bool isReorderModalVisible = false;
@@ -1010,6 +1076,9 @@ else
                     .Select(i => minDate.AddDays(i))
                     .ToList();
             }
+            
+            // Завантажуємо прогрес сканування
+            await LoadScanProgressAsync();
         }
         catch (Exception ex)
         {
@@ -1022,284 +1091,32 @@ else
         }
     }
 
-    [JSInvokable]
-    public async Task OnGanttOrderReordered(int workshopNumber, int oldIndex, int newIndex)
+    private async Task LoadScanProgressAsync()
     {
         try
         {
-            Logger.LogInfo($"OnGanttOrderReordered: workshop={workshopNumber}, old={oldIndex}, new={newIndex}", "GanttCombined");
+            // Збираємо всі назви замовлень
+            var orderNames = allOrders
+                .Select(o => o.OrderName)
+                .Where(n => !string.IsNullOrEmpty(n))
+                .Distinct()
+                .ToList();
             
-            if (!workshopData.WorkshopOrders.ContainsKey(workshopNumber)) 
+            if (orderNames.Any())
             {
-                Logger.LogWarning($"Workshop {workshopNumber} not found", "GanttCombined");
-                return;
+                orderProgressMap = await ScanProgress.GetOrdersProgressAsync(orderNames);
             }
-            
-            var orders = workshopData.WorkshopOrders[workshopNumber];
-            if (oldIndex < 0 || oldIndex >= orders.Count || newIndex < 0 || newIndex >= orders.Count) 
-            {
-                Logger.LogWarning($"Invalid indices: old={oldIndex}, new={newIndex}, count={orders.Count}", "GanttCombined");
-                return;
-            }
-            
-            // Зберігаємо стан для Undo
-            var workshopName = workshops.FirstOrDefault(w => w.Number == workshopNumber)?.Name ?? $"Цех {workshopNumber}";
-            UndoRedo.SaveState(workshopData, $"Зміна порядку в {workshopName}");
-            
-            // Переміщуємо замовлення (площу)
-            var orderValue = orders[oldIndex];
-            orders.RemoveAt(oldIndex);
-            orders.Insert(newIndex, orderValue);
-            
-            // Переміщуємо дати
-            if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
-            {
-                var dates = workshopData.WorkshopOrderDates[workshopNumber];
-                if (oldIndex < dates.Count && newIndex <= dates.Count)
-                {
-                    var dateValue = dates[oldIndex];
-                    dates.RemoveAt(oldIndex);
-                    dates.Insert(Math.Min(newIndex, dates.Count), dateValue);
-                }
-            }
-            
-            // Переміщуємо назви
-            if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
-            {
-                var names = workshopData.WorkshopOrderNames[workshopNumber];
-                if (oldIndex < names.Count && newIndex <= names.Count)
-                {
-                    var nameValue = names[oldIndex];
-                    names.RemoveAt(oldIndex);
-                    names.Insert(Math.Min(newIndex, names.Count), nameValue);
-                }
-            }
-            
-            // ✅ ОНОВЛЮЄМО КЛЮЧІ OriginalWorkshops при reorder
-            // Ключі формату "workshop_Day" де Day = index + 1 (1-based)
-            var originalWorkshopsCopy = workshopData.OriginalWorkshops
-                .Where(k => k.Key.StartsWith($"{workshopNumber}_"))
-                .ToDictionary(k => k.Key, k => k.Value);
-            
-            if (originalWorkshopsCopy.Any())
-            {
-                // Видаляємо старі ключі цього цеху
-                foreach (var key in originalWorkshopsCopy.Keys)
-                {
-                    workshopData.OriginalWorkshops.Remove(key);
-                }
-                
-                // Перерахуємо ключі з урахуванням нового порядку
-                // Якщо елемент переміщено з oldIndex на newIndex, всі ключі між ними зсуваються
-                foreach (var kvp in originalWorkshopsCopy)
-                {
-                    var parts = kvp.Key.Split('_');
-                    if (parts.Length == 2 && int.TryParse(parts[1], out int day))
-                    {
-                        int currentIndex = day - 1; // 0-based
-                        int newKeyIndex;
-                        
-                        if (currentIndex == oldIndex)
-                        {
-                            // Це елемент який переміщуємо
-                            newKeyIndex = newIndex;
-                        }
-                        else if (oldIndex < newIndex)
-                        {
-                            // Переміщення вниз: елементи між oldIndex і newIndex зсуваються вгору
-                            if (currentIndex > oldIndex && currentIndex <= newIndex)
-                            {
-                                newKeyIndex = currentIndex - 1;
-                            }
-                            else
-                            {
-                                newKeyIndex = currentIndex;
-                            }
-                        }
-                        else
-                        {
-                            // Переміщення вгору: елементи між newIndex і oldIndex зсуваються вниз
-                            if (currentIndex >= newIndex && currentIndex < oldIndex)
-                            {
-                                newKeyIndex = currentIndex + 1;
-                            }
-                            else
-                            {
-                                newKeyIndex = currentIndex;
-                            }
-                        }
-                        
-                        var newKey = $"{workshopNumber}_{newKeyIndex + 1}"; // 1-based
-                        workshopData.OriginalWorkshops[newKey] = kvp.Value;
-                    }
-                }
-                
-                Logger.LogInfo($"Updated {originalWorkshopsCopy.Count} OriginalWorkshops keys after reorder", "GanttCombined");
-            }
-            
-            workshopData.LastUpdated = DateTime.UtcNow;
-            await StorageService.SaveWorkshopDataAsync(workshopData);
-            await LoadData();
-            
-            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Порядок змінено!", "success");
-            await InvokeAsync(StateHasChanged);
-            
-            Logger.LogInfo("Order reordered successfully", "GanttCombined");
         }
         catch (Exception ex)
         {
-            Logger.LogError($"Помилка зміни порядку: {ex.Message}", ex, "GanttCombined");
-            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
+            Logger.LogWarning($"Помилка завантаження прогресу: {ex.Message}", "GanttCombined");
         }
     }
 
-    [JSInvokable]
-    public async Task OnGanttOrderTransfer(int fromWorkshop, int toWorkshop, int orderDay, double squareMeters)
+    private OrderScanProgress? GetOrderProgress(string orderName)
     {
-        try
-        {
-            Logger.LogInfo($"OnGanttOrderTransfer: from={fromWorkshop}, to={toWorkshop}, day={orderDay}, square={squareMeters}", "GanttCombined");
-            
-            if (!workshopData.WorkshopOrders.ContainsKey(fromWorkshop)) 
-            {
-                Logger.LogWarning($"Source workshop {fromWorkshop} not found", "GanttCombined");
-                return;
-            }
-            
-            var fromOrders = workshopData.WorkshopOrders[fromWorkshop];
-            
-            // orderDay = 1-based index в списку замовлень цеху
-            // Але після сортування може не відповідати реальному індексу
-            // Тому шукаємо по комбінації squareMeters + приблизна позиція
-            var orderIndex = orderDay - 1;
-            
-            // Перевіряємо чи індекс валідний і площа співпадає
-            if (orderIndex < 0 || orderIndex >= fromOrders.Count)
-            {
-                // Шукаємо по площі
-                orderIndex = -1;
-                for (int i = 0; i < fromOrders.Count; i++)
-                {
-                    if (Math.Abs(fromOrders[i] - squareMeters) < 0.01)
-                    {
-                        orderIndex = i;
-                        break;
-                    }
-                }
-            }
-            else if (Math.Abs(fromOrders[orderIndex] - squareMeters) > 0.01)
-            {
-                // Індекс є але площа не співпадає - шукаємо по площі
-                for (int i = 0; i < fromOrders.Count; i++)
-                {
-                    if (Math.Abs(fromOrders[i] - squareMeters) < 0.01)
-                    {
-                        orderIndex = i;
-                        break;
-                    }
-                }
-            }
-            
-            if (orderIndex < 0 || orderIndex >= fromOrders.Count) 
-            {
-                Logger.LogWarning($"Order not found: day={orderDay}, square={squareMeters}", "GanttCombined");
-                return;
-            }
-            
-            // Зберігаємо стан для Undo
-            var fromName = workshops.FirstOrDefault(w => w.Number == fromWorkshop)?.Name ?? $"Цех {fromWorkshop}";
-            var toName = workshops.FirstOrDefault(w => w.Number == toWorkshop)?.Name ?? $"Цех {toWorkshop}";
-            UndoRedo.SaveState(workshopData, $"Переміщення з {fromName} до {toName}");
-            
-            // Зберігаємо оригінальний цех (якщо ще не збережено)
-            // Ключ = workshop_Day, де Day = orderIndex + 1 (1-based)
-            var originalKey = $"{fromWorkshop}_{orderIndex + 1}";
-            int originalWorkshop = fromWorkshop;
-            if (workshopData.OriginalWorkshops.ContainsKey(originalKey))
-            {
-                originalWorkshop = workshopData.OriginalWorkshops[originalKey];
-                workshopData.OriginalWorkshops.Remove(originalKey);
-                Logger.LogInfo($"Retrieved original workshop from key={originalKey}: {originalWorkshop}", "GanttCombined");
-            }
-            
-            // Оновлюємо ключі для замовлень після видаленого (зсуваємо вниз)
-            var keysToUpdate = workshopData.OriginalWorkshops
-                .Where(k => k.Key.StartsWith($"{fromWorkshop}_"))
-                .Select(k => {
-                    var parts = k.Key.Split('_');
-                    if (parts.Length == 2 && int.TryParse(parts[1], out int day) && day > orderIndex + 1)
-                        return (OldKey: k.Key, NewKey: $"{fromWorkshop}_{day - 1}", Value: k.Value);
-                    return (OldKey: (string?)null, NewKey: (string?)null, Value: 0);
-                })
-                .Where(x => x.OldKey != null)
-                .ToList();
-            
-            foreach (var update in keysToUpdate)
-            {
-                workshopData.OriginalWorkshops.Remove(update.OldKey!);
-                workshopData.OriginalWorkshops[update.NewKey!] = update.Value;
-            }
-            
-            // Видаляємо з вихідного цеху
-            var orderValue = fromOrders[orderIndex];
-            fromOrders.RemoveAt(orderIndex);
-
-            DateTime? orderDate = null;
-            if (workshopData.WorkshopOrderDates.ContainsKey(fromWorkshop) && 
-                orderIndex < workshopData.WorkshopOrderDates[fromWorkshop].Count)
-            {
-                orderDate = workshopData.WorkshopOrderDates[fromWorkshop][orderIndex];
-                workshopData.WorkshopOrderDates[fromWorkshop].RemoveAt(orderIndex);
-            }
-            
-            string orderName = "";
-            if (workshopData.WorkshopOrderNames.ContainsKey(fromWorkshop) && 
-                orderIndex < workshopData.WorkshopOrderNames[fromWorkshop].Count)
-            {
-                orderName = workshopData.WorkshopOrderNames[fromWorkshop][orderIndex];
-                workshopData.WorkshopOrderNames[fromWorkshop].RemoveAt(orderIndex);
-            }
-            
-            // Додаємо до нового цеху
-            if (!workshopData.WorkshopOrders.ContainsKey(toWorkshop))
-                workshopData.WorkshopOrders[toWorkshop] = new List<double>();
-            workshopData.WorkshopOrders[toWorkshop].Add(orderValue);
-            
-            // Зберігаємо оригінальний цех для нової позиції
-            // ВАЖЛИВО: ключ має бути workshop_Day, де Day = index + 1 (1-based)
-            var newIndex = workshopData.WorkshopOrders[toWorkshop].Count; // це вже буде Day (1-based)
-            var newKey = $"{toWorkshop}_{newIndex}";
-            workshopData.OriginalWorkshops[newKey] = originalWorkshop;
-            
-            Logger.LogInfo($"Saved original workshop: key={newKey}, originalWorkshop={originalWorkshop}", "GanttCombined");
-            
-            if (orderDate.HasValue)
-            {
-                if (!workshopData.WorkshopOrderDates.ContainsKey(toWorkshop))
-                    workshopData.WorkshopOrderDates[toWorkshop] = new List<DateTime>();
-                workshopData.WorkshopOrderDates[toWorkshop].Add(orderDate.Value);
-            }
-            
-            if (!string.IsNullOrEmpty(orderName))
-            {
-                if (!workshopData.WorkshopOrderNames.ContainsKey(toWorkshop))
-                    workshopData.WorkshopOrderNames[toWorkshop] = new List<string>();
-                workshopData.WorkshopOrderNames[toWorkshop].Add(orderName);
-            }
-            
-            workshopData.LastUpdated = DateTime.UtcNow;
-            await StorageService.SaveWorkshopDataAsync(workshopData);
-            await LoadData();
-            
-            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Переміщено з {fromName} до {toName}", "success");
-            
-            Logger.LogInfo($"Order transferred successfully: {orderValue} м² from {fromName} to {toName}", "GanttCombined");
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError($"Помилка переміщення: {ex.Message}", ex, "GanttCombined");
-            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
-        }
+        if (string.IsNullOrEmpty(orderName)) return null;
+        return orderProgressMap.GetValueOrDefault(orderName);
     }
 
     private string GetWorkshopColor(int workshopNumber)
