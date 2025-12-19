@@ -7,7 +7,7 @@ namespace Tablitsya3.Data
     public class ApplicationDbContext : DbContext
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-     : base(options)
+            : base(options)
         {
             // ✅ ЯВНО ВСТАНОВЛЮЄМО UTF-8 КОДУВАННЯ
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -29,101 +29,115 @@ namespace Tablitsya3.Data
 
         // ✅ АВТОМАТИЧНА КОНВЕРТАЦІЯ В UTC тільки при збереженні
         public override int SaveChanges()
-{
-      ConvertDatesToUtc();
-  return base.SaveChanges();
+        {
+            ConvertDatesToUtc();
+            return base.SaveChanges();
         }
 
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-      {
-   ConvertDatesToUtc();
-   return base.SaveChangesAsync(cancellationToken);
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            ConvertDatesToUtc();
+            return base.SaveChangesAsync(cancellationToken);
         }
 
-   private void ConvertDatesToUtc()
- {
-  // ✅ ТІЛЬКИ для нових або змінених записів
-  var entries = ChangeTracker.Entries()
-     .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified);
+        private void ConvertDatesToUtc()
+        {
+            // ✅ ТІЛЬКИ для нових або змінених записів
+            var entries = ChangeTracker.Entries()
+                .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified);
 
-       foreach (var entry in entries)
-     {
- foreach (var property in entry.Properties)
- {
-    if (property.Metadata.ClrType == typeof(DateTime))
-      {
-  var dateTime = (DateTime)property.CurrentValue!;
-         
-       // ✅ Конвертуємо тільки якщо НЕ UTC
-     if (dateTime.Kind != DateTimeKind.Utc)
-      {
-         // Якщо Local - конвертуємо в UTC зберігаючи час
-   if (dateTime.Kind == DateTimeKind.Local)
-  {
-       property.CurrentValue = dateTime.ToUniversalTime();
-  }
-// Якщо Unspecified - вважаємо це UTC (бо це з БД)
-          else
-  {
-      property.CurrentValue = DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
-         }
-    }
-  }
-       }
-}
- }
+            foreach (var entry in entries)
+            {
+                foreach (var property in entry.Properties)
+                {
+                    if (property.Metadata.ClrType == typeof(DateTime))
+                    {
+                        var dateTime = (DateTime)property.CurrentValue!;
+
+                        // ✅ Конвертуємо тільки якщо НЕ UTC
+                        if (dateTime.Kind != DateTimeKind.Utc)
+                        {
+                            // Якщо Local - конвертуємо в UTC зберігаючи час
+                            if (dateTime.Kind == DateTimeKind.Local)
+                            {
+                                property.CurrentValue = dateTime.ToUniversalTime();
+                            }
+                            // Якщо Unspecified - вважаємо це UTC (бо це з БД)
+                            else
+                            {
+                                property.CurrentValue = DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
-      {
-       base.OnModelCreating(modelBuilder);
+        {
+            base.OnModelCreating(modelBuilder);
 
-  // WorkshopDataEntity - тільки один запис
+            // WorkshopDataEntity - тільки один запис
             modelBuilder.Entity<WorkshopDataEntity>(entity =>
-   {
-     entity.HasKey(e => e.Id);
-  // ❌ ВИДАЛЕНО navigation properties - таблиці незалежні
+            {
+                entity.ToTable("workshop_data");
+                entity.HasKey(e => e.Id);
             });
 
-    // OrderEntity
- modelBuilder.Entity<OrderEntity>(entity =>
- {
-        entity.HasKey(e => e.Id);
-      entity.HasIndex(e => new { e.WorkshopNumber, e.OrderDate });
-    });
-
- // WorkshopCapacityEntity
- modelBuilder.Entity<WorkshopCapacityEntity>(entity =>
-   {
-     entity.HasKey(e => e.Id);
-       entity.HasIndex(e => e.WorkshopNumber);
-     });
-
-            // WorkshopProductionLeadTimeEntity (НОВА!)
-            modelBuilder.Entity<WorkshopProductionLeadTimeEntity>(entity =>
+            // OrderEntity
+            modelBuilder.Entity<OrderEntity>(entity =>
             {
+                entity.ToTable("orders");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => new { e.WorkshopNumber, e.OrderDate });
+            });
+
+            // WorkshopCapacityEntity
+            modelBuilder.Entity<WorkshopCapacityEntity>(entity =>
+            {
+                entity.ToTable("workshop_capacities");
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.WorkshopNumber);
             });
 
-            // WorkshopDaysBeforeProductionEntity (НОВА!)
+            // WorkshopProductionLeadTimeEntity
+            modelBuilder.Entity<WorkshopProductionLeadTimeEntity>(entity =>
+            {
+                entity.ToTable("workshop_production_lead_times");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.WorkshopNumber);
+            });
+
+            // WorkshopDaysBeforeProductionEntity
             modelBuilder.Entity<WorkshopDaysBeforeProductionEntity>(entity =>
             {
+                entity.ToTable("workshop_days_before_production");
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.WorkshopNumber);
             });
 
             // CustomCompletionDateEntity
-      modelBuilder.Entity<CustomCompletionDateEntity>(entity =>
-    {
-           entity.HasKey(e => e.Id);
-            entity.HasIndex(e => e.OrderKey).IsUnique();
-       });
+            modelBuilder.Entity<CustomCompletionDateEntity>(entity =>
+            {
+                entity.ToTable("custom_completion_dates");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.OrderKey).IsUnique();
+            });
+
+            // OriginalWorkshopEntity
+            modelBuilder.Entity<OriginalWorkshopEntity>(entity =>
+            {
+                entity.ToTable("original_workshops");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.OrderKey).IsUnique();
+            });
 
             // === Scanning entities ===
 
             // ImportedProjectEntity
             modelBuilder.Entity<ImportedProjectEntity>(entity =>
             {
+                entity.ToTable("imported_projects");
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.ProjectUuid).IsUnique();
                 entity.HasIndex(e => e.FileName);
@@ -132,6 +146,7 @@ namespace Tablitsya3.Data
             // PartEntity
             modelBuilder.Entity<PartEntity>(entity =>
             {
+                entity.ToTable("parts");
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => new { e.ProjectExternalUuid, e.PartId, e.PartCounter }).IsUnique();
                 entity.HasIndex(e => e.SourceFileName);
@@ -142,6 +157,7 @@ namespace Tablitsya3.Data
             // ProductEntity
             modelBuilder.Entity<ProductEntity>(entity =>
             {
+                entity.ToTable("products");
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => new { e.ProjectUuid, e.ProductId });
                 entity.HasIndex(e => e.Name);
@@ -150,6 +166,7 @@ namespace Tablitsya3.Data
             // ScanLogEntity
             modelBuilder.Entity<ScanLogEntity>(entity =>
             {
+                entity.ToTable("scan_logs");
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.QRCode);
                 entity.HasIndex(e => e.ScanDate);
