@@ -1,0 +1,546 @@
+﻿@page "/scanning"
+@using Tablitsya3.Models.Scanning
+@using Tablitsya3.Services
+@inject ScanningService ScanningService
+@inject LoggingService Logger
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Сканування деталей</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="mb-1">
+            <i class="bi bi-qr-code-scan text-primary"></i> Сканування деталей
+        </h1>
+        <p class="text-secondary mb-0">Відстеження виробництва по етапах</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/scanning/import" class="btn btn-outline-primary">
+            <i class="bi bi-upload"></i> Імпорт
+        </a>
+        <button class="btn btn-primary" @onclick="LoadData">
+            <i class="bi bi-arrow-clockwise"></i> Оновити
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(scanMessage))
+{
+    <div class="alert alert-@scanMessageClass alert-dismissible fade show mb-4" role="alert">
+        <i class="bi bi-@scanMessageIcon me-2"></i>
+        @scanMessage
+        <button type="button" class="btn-close" @onclick="ClearScanMessage"></button>
+    </div>
+}
+
+<div class="row">
+    <!-- Панель сканування -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-qr-code"></i> Сканування
+            </div>
+            <div class="card-body">
+                <!-- Поле QR-коду -->
+                <div class="mb-3">
+                    <label class="form-label">QR-код деталі</label>
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
+                        <input type="text" 
+                               class="form-control" 
+                               @bind="qrCode" 
+                               @bind:event="oninput"
+                               @onkeypress="OnQRKeyPress"
+                               placeholder="Відскануйте QR-код..."
+                               @ref="qrInput" />
+                        <button class="btn btn-outline-secondary" @onclick="ClearQR" title="Очистити">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Режим сканування -->
+                <div class="mb-3">
+                    <label class="form-label">Режим</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="scanMode" id="modeAuto" 
+                               checked="@(selectedStage == null)" @onchange="() => selectedStage = null">
+                        <label class="btn btn-outline-primary" for="modeAuto">
+                            <i class="bi bi-lightning"></i> Авто
+                        </label>
+
+                        <input type="radio" class="btn-check" name="scanMode" id="modeManual"
+                               checked="@(selectedStage != null)" @onchange="() => selectedStage = ProductionStage.Cutting">
+                        <label class="btn btn-outline-primary" for="modeManual">
+                            <i class="bi bi-hand-index"></i> Вручну
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Вибір етапу (якщо ручний режим) -->
+                @if (selectedStage != null)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Етап</label>
+                        <select class="form-select" @bind="selectedStage">
+                            @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+                            {
+                                <option value="@stage">@stage.GetDisplayName()</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                <!-- Кнопка сканування -->
+                <button class="btn btn-success btn-lg w-100" @onclick="ProcessScan" disabled="@(isScanning || string.IsNullOrEmpty(qrCode))">
+                    @if (isScanning)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <span>Обробка...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-check-lg me-2"></i>
+                        <span>Сканувати</span>
+                    }
+                </button>
+            </div>
+        </div>
+
+        <!-- Інформація про останню деталь -->
+        @if (lastScannedPart != null)
+        {
+            <div class="card mt-3">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-info-circle"></i> Остання деталь
+                </div>
+                <div class="card-body">
+                    <h6 class="card-title mb-3">@lastScannedPart.Name</h6>
+                    
+                    <table class="table table-sm mb-3">
+                        <tr>
+                            <td class="text-muted">Код:</td>
+                            <td><code>@lastScannedPart.Code</code></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Розміри:</td>
+                            <td>@lastScannedPart.Dimensions мм</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Замовлення:</td>
+                            <td>@lastScannedPart.OrderName</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Прогрес:</td>
+                            <td>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar bg-success" style="width: @(lastScannedPart.ProgressPercent)%">
+                                        @lastScannedPart.ProgressPercent%
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <!-- Етапи -->
+                    <div class="d-flex gap-2 flex-wrap">
+                        @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+                        {
+                            var isRequired = lastScannedPart.IsStageRequired(stage);
+                            var isCompleted = lastScannedPart.IsStageCompleted(stage);
+                            var badgeClass = !isRequired ? "bg-secondary" : isCompleted ? "bg-success" : "bg-warning text-dark";
+                            
+                            <span class="badge @badgeClass">
+                                @if (isCompleted)
+                                {
+                                    <i class="bi bi-check-lg me-1"></i>
+                                }
+                                @stage.GetDisplayName()
+                                @if (stage == ProductionStage.EdgeBanding && lastScannedPart.EdgeBandingSidesRequired > 0)
+                                {
+                                    <span class="ms-1">(@lastScannedPart.EdgeBandingSidesCompleted/@lastScannedPart.EdgeBandingSidesRequired)</span>
+                                }
+                            </span>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Таблиця деталей -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-table"></i> Деталі</span>
+                <div class="d-flex gap-2 align-items-center">
+                    <!-- Фільтр по файлу -->
+                    <select class="form-select form-select-sm" style="width: 200px;" @bind="filterFileName" @bind:after="LoadData">
+                        <option value="">Всі файли</option>
+                        @foreach (var file in fileNames)
+                        {
+                            <option value="@file">@file</option>
+                        }
+                    </select>
+
+                    <!-- Фільтр по статусу -->
+                    <select class="form-select form-select-sm" style="width: 150px;" @bind="filterCompleted" @bind:after="LoadData">
+                        <option value="">Всі</option>
+                        <option value="false">В роботі</option>
+                        <option value="true">Завершені</option>
+                    </select>
+
+                    <span class="badge bg-primary">@totalParts деталей</span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if (isLoading)
+                {
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary"></div>
+                        <p class="mt-2 text-muted">Завантаження...</p>
+                    </div>
+                }
+                else if (!parts.Any())
+                {
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-inbox display-1"></i>
+                        <p class="mt-3">Немає деталей</p>
+                        <a href="/scanning/import" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> Імпортувати проект
+                        </a>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>№</th>
+                                    <th>Назва</th>
+                                    <th>Код</th>
+                                    <th>Розміри</th>
+                                    <th>Замовлення</th>
+                                    <th class="text-center">Прогрес</th>
+                                    <th class="text-center" title="Порізка">
+                                        <i class="bi bi-scissors"></i>
+                                    </th>
+                                    <th class="text-center" title="Поклейка">
+                                        <i class="bi bi-bounding-box"></i>
+                                    </th>
+                                    <th class="text-center" title="Свердління">
+                                        <i class="bi bi-gear"></i>
+                                    </th>
+                                    <th class="text-center" title="Сортування">
+                                        <i class="bi bi-sort-alpha-down"></i>
+                                    </th>
+                                    <th class="text-center" title="Пакування">
+                                        <i class="bi bi-box-seam"></i>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{ var rowNum = (currentPage - 1) * pageSize; }
+                                @foreach (var part in parts)
+                                {
+                                    rowNum++;
+                                    var rowClass = part.IsFullyCompleted ? "table-success" : "";
+                                    
+                                    <tr class="@rowClass">
+                                        <td class="text-muted">@rowNum</td>
+                                        <td>
+                                            <span title="@part.QRCode">@TruncateName(part.Name, 25)</span>
+                                        </td>
+                                        <td><code class="small">@part.Code</code></td>
+                                        <td class="small">@part.Dimensions</td>
+                                        <td class="small">@TruncateName(part.OrderName, 20)</td>
+                                        <td class="text-center">
+                                            <div class="progress" style="height: 16px; min-width: 60px;">
+                                                <div class="progress-bar @(part.IsFullyCompleted ? "bg-success" : "bg-primary")" 
+                                                     style="width: @(part.ProgressPercent)%">
+                                                    <small>@(part.ProgressPercent)%</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="text-center">@GetStageIcon(part, ProductionStage.Cutting)</td>
+                                        <td class="text-center">@GetEdgeBandingStatus(part)</td>
+                                        <td class="text-center">@GetStageIcon(part, ProductionStage.Drilling)</td>
+                                        <td class="text-center">@GetStageIcon(part, ProductionStage.Sorting)</td>
+                                        <td class="text-center">@GetStageIcon(part, ProductionStage.Packing)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Пагінація -->
+                    <div class="card-footer d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted">
+                                Сторінка @currentPage з @totalPages (@totalParts деталей)
+                            </span>
+                        </div>
+                        <nav>
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => GoToPage(1)">
+                                        <i class="bi bi-chevron-double-left"></i>
+                                    </button>
+                                </li>
+                                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => GoToPage(currentPage - 1)">
+                                        <i class="bi bi-chevron-left"></i>
+                                    </button>
+                                </li>
+                                
+                                @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                                {
+                                    var pageNum = i;
+                                    <li class="page-item @(pageNum == currentPage ? "active" : "")">
+                                        <button class="page-link" @onclick="() => GoToPage(pageNum)">@pageNum</button>
+                                    </li>
+                                }
+                                
+                                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => GoToPage(currentPage + 1)">
+                                        <i class="bi bi-chevron-right"></i>
+                                    </button>
+                                </li>
+                                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => GoToPage(totalPages)">
+                                        <i class="bi bi-chevron-double-right"></i>
+                                    </button>
+                                </li>
+                            </ul>
+                        </nav>
+                        <div>
+                            <select class="form-select form-select-sm" style="width: 80px;" @bind="pageSize" @bind:after="LoadData">
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                                <option value="250">250</option>
+                            </select>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? Project { get; set; }
+
+    private ElementReference qrInput;
+    private string qrCode = "";
+    private ProductionStage? selectedStage;
+    private bool isScanning = false;
+    private bool isLoading = true;
+
+    private Part? lastScannedPart;
+    private string? scanMessage;
+    private string scanMessageClass = "info";
+    private string scanMessageIcon = "info-circle";
+
+    // Таблиця
+    private List<Part> parts = new();
+    private List<string> fileNames = new();
+    private int currentPage = 1;
+    private int pageSize = 50;
+    private int totalParts = 0;
+    private int totalPages => (int)Math.Ceiling((double)totalParts / pageSize);
+
+    // Фільтри
+    private string filterFileName = "";
+    private string filterCompleted = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFileNames();
+        await LoadData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await FocusQRInput();
+        }
+    }
+
+    private async Task FocusQRInput()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval", "document.querySelector('input[placeholder*=\"QR\"]')?.focus()");
+        }
+        catch { }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            bool? completed = string.IsNullOrEmpty(filterCompleted) ? null : bool.Parse(filterCompleted);
+            
+            var (loadedParts, total) = await ScanningService.GetPartsAsync(
+                currentPage, 
+                pageSize, 
+                Project,
+                string.IsNullOrEmpty(filterFileName) ? null : filterFileName,
+                null,
+                completed);
+
+            parts = loadedParts;
+            totalParts = total;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка завантаження: {ex.Message}", ex, "ScanningDashboard");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadFileNames()
+    {
+        try
+        {
+            fileNames = await ScanningService.GetUniqueFileNamesAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка завантаження файлів: {ex.Message}", ex, "ScanningDashboard");
+        }
+    }
+
+    private async Task GoToPage(int page)
+    {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        await LoadData();
+    }
+
+    private async Task OnQRKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrEmpty(qrCode))
+        {
+            await ProcessScan();
+        }
+    }
+
+    private async Task ProcessScan()
+    {
+        if (string.IsNullOrEmpty(qrCode)) return;
+
+        isScanning = true;
+        ClearScanMessage();
+        StateHasChanged();
+
+        try
+        {
+            var result = await ScanningService.ScanQRCodeAsync(qrCode, selectedStage);
+
+            if (result.Success)
+            {
+                lastScannedPart = result.Part;
+                ShowScanMessage(result.Message, "success", result.IsFullyCompleted ? "trophy" : "check-circle");
+                
+                // Оновлюємо таблицю
+                await LoadData();
+            }
+            else
+            {
+                ShowScanMessage(result.Message, "danger", "x-circle");
+                
+                // Якщо деталь знайдена але є помилка - показуємо її
+                if (result.Part != null)
+                {
+                    lastScannedPart = result.Part;
+                }
+            }
+
+            // Очищаємо поле
+            qrCode = "";
+            await FocusQRInput();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка сканування: {ex.Message}", ex, "ScanningDashboard");
+            ShowScanMessage($"Помилка: {ex.Message}", "danger", "x-circle");
+        }
+        finally
+        {
+            isScanning = false;
+        }
+    }
+
+    private void ClearQR()
+    {
+        qrCode = "";
+        _ = FocusQRInput();
+    }
+
+    private void ShowScanMessage(string message, string cssClass, string icon)
+    {
+        scanMessage = message;
+        scanMessageClass = cssClass;
+        scanMessageIcon = icon;
+    }
+
+    private void ClearScanMessage()
+    {
+        scanMessage = null;
+    }
+
+    private MarkupString GetStageIcon(Part part, ProductionStage stage)
+    {
+        if (!part.IsStageRequired(stage))
+        {
+            return new MarkupString("<span class='text-muted'>—</span>");
+        }
+
+        if (part.IsStageCompleted(stage))
+        {
+            return new MarkupString("<i class='bi bi-check-circle-fill text-success'></i>");
+        }
+
+        if (part.CurrentStage == stage)
+        {
+            return new MarkupString("<i class='bi bi-circle-fill text-warning'></i>");
+        }
+
+        return new MarkupString("<i class='bi bi-circle text-muted'></i>");
+    }
+
+    private MarkupString GetEdgeBandingStatus(Part part)
+    {
+        if (!part.RequiresEdgeBanding)
+        {
+            return new MarkupString("<span class='text-muted'>—</span>");
+        }
+
+        if (part.EdgeBandingSidesRequired > 0)
+        {
+            var color = part.IsEdgeBandingFullyCompleted() ? "text-success" : "text-warning";
+            return new MarkupString($"<span class='{color}'>{part.EdgeBandingSidesCompleted}/{part.EdgeBandingSidesRequired}</span>");
+        }
+
+        return GetStageIcon(part, ProductionStage.EdgeBanding);
+    }
+
+    private string TruncateName(string name, int maxLength)
+    {
+        if (string.IsNullOrEmpty(name)) return "";
+        return name.Length > maxLength ? name.Substring(0, maxLength) + "..." : name;
+    }
+}

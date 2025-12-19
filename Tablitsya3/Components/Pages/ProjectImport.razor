@@ -1,0 +1,455 @@
+﻿@page "/scanning/import"
+@using Tablitsya3.Models.Scanning
+@using Tablitsya3.Services
+@inject ScanningService ScanningService
+@inject ProjectFileParserService ParserService
+@inject LoggingService Logger
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<PageTitle>Імпорт проектів</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="mb-1">
+            <i class="bi bi-file-earmark-arrow-up text-primary"></i> Імпорт проектів
+        </h1>
+        <p class="text-secondary mb-0">Завантаження .project файлів для сканування деталей</p>
+    </div>
+    <a href="/scanning" class="btn btn-outline-primary">
+        <i class="bi bi-qr-code-scan"></i> До сканування
+    </a>
+</div>
+
+@if (!string.IsNullOrEmpty(statusMessage))
+{
+    <div class="alert alert-@statusClass alert-dismissible fade show" role="alert">
+        <i class="bi bi-@statusIcon me-2"></i>
+        @statusMessage
+        <button type="button" class="btn-close" @onclick="ClearStatus"></button>
+    </div>
+}
+
+<div class="row">
+    <!-- Завантаження файлу -->
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-upload"></i> Завантаження файлу
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Виберіть .project файл</label>
+                    <InputFile OnChange="OnFileSelected" class="form-control" accept=".project,.xml" />
+                    <small class="text-muted">Підтримуються файли .project та .xml</small>
+                </div>
+
+                @if (selectedFile != null)
+                {
+                    <div class="alert alert-info">
+                        <i class="bi bi-file-earmark-code me-2"></i>
+                        <strong>@selectedFile.Name</strong>
+                        <span class="text-muted ms-2">(@FormatFileSize(selectedFile.Size))</span>
+                    </div>
+                }
+
+                @if (previewProject != null)
+                {
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="bi bi-eye"></i> Попередній перегляд
+                            </h6>
+                            <table class="table table-sm mb-0">
+                                <tr>
+                                    <td class="text-muted">UUID проекту:</td>
+                                    <td><code class="small">@previewProject.ProjectUuid</code></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Товарів:</td>
+                                    <td><strong>@previewProject.ProductsCount</strong></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Деталей:</td>
+                                    <td><strong>@previewProject.PartsCount</strong></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Загальна площа:</td>
+                                    <td><strong>@previewProject.TotalSquareMeters.ToString("F2") м²</strong></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Вартість:</td>
+                                    <td><strong>@previewProject.TotalCost.ToString("N2") @previewProject.Currency</strong></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" @bind="clearExisting" id="clearExisting">
+                        <label class="form-check-label" for="clearExisting">
+                            <i class="bi bi-trash text-danger"></i> Очистити існуючі дані проекту перед імпортом
+                        </label>
+                    </div>
+
+                    <button class="btn btn-success w-100" @onclick="ImportProject" disabled="@isImporting">
+                        @if (isImporting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Імпортування...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-cloud-upload me-2"></i>
+                            <span>Імпортувати проект</span>
+                        }
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Статистика -->
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-graph-up"></i> Загальна статистика
+            </div>
+            <div class="card-body">
+                @if (isLoadingStats)
+                {
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary"></div>
+                        <p class="mt-2 text-muted">Завантаження...</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <div class="display-6 text-primary">@totalProjects</div>
+                            <small class="text-muted">Проектів</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="display-6 text-success">@totalParts</div>
+                            <small class="text-muted">Деталей</small>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список імпортованих проектів -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-folder2-open"></i> Імпортовані проекти</span>
+        <button class="btn btn-sm btn-outline-primary" @onclick="LoadProjects">
+            <i class="bi bi-arrow-clockwise"></i> Оновити
+        </button>
+    </div>
+    <div class="card-body p-0">
+        @if (isLoadingProjects)
+        {
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary"></div>
+            </div>
+        }
+        else if (!projects.Any())
+        {
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-inbox display-1"></i>
+                <p class="mt-3">Немає імпортованих проектів</p>
+                <p class="small">Завантажте .project файл щоб почати</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Файл</th>
+                            <th>Дата імпорту</th>
+                            <th class="text-center">Товарів</th>
+                            <th class="text-center">Деталей</th>
+                            <th class="text-end">Площа</th>
+                            <th class="text-end">Вартість</th>
+                            <th class="text-center">Дії</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var project in projects)
+                        {
+                            <tr>
+                                <td>
+                                    <i class="bi bi-file-earmark-code text-primary me-1"></i>
+                                    @project.FileName
+                                </td>
+                                <td>
+                                    <small class="text-muted">@project.ImportedDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-secondary">@project.ProductsCount</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-primary">@project.PartsCount</span>
+                                </td>
+                                <td class="text-end">@project.TotalSquareMeters.ToString("F2") м²</td>
+                                <td class="text-end">@project.TotalCost.ToString("N2") @project.Currency</td>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="/scanning?project=@Uri.EscapeDataString(project.ProjectUuid)" 
+                                           class="btn btn-outline-primary" title="Сканувати">
+                                            <i class="bi bi-qr-code-scan"></i>
+                                        </a>
+                                        <button class="btn btn-outline-danger" 
+                                                @onclick="() => ConfirmDelete(project)"
+                                                title="Видалити">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Модальне вікно підтвердження видалення -->
+@if (projectToDelete != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-exclamation-triangle"></i> Підтвердження видалення
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => projectToDelete = null"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Ви впевнені, що хочете видалити проект?</p>
+                    <div class="alert alert-warning">
+                        <strong>@projectToDelete.FileName</strong><br>
+                        <small>@projectToDelete.PartsCount деталей буде видалено</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => projectToDelete = null">
+                        Скасувати
+                    </button>
+                    <button type="button" class="btn btn-danger" @onclick="DeleteProject" disabled="@isDeleting">
+                        @if (isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Видалити
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IBrowserFile? selectedFile;
+    private string? xmlContent;
+    private ImportedProject? previewProject;
+    private bool clearExisting = false;
+    private bool isImporting = false;
+    private bool isLoadingProjects = true;
+    private bool isLoadingStats = true;
+    private bool isDeleting = false;
+
+    private List<Data.Entities.ImportedProjectEntity> projects = new();
+    private int totalProjects = 0;
+    private int totalParts = 0;
+
+    private string? statusMessage;
+    private string statusClass = "info";
+    private string statusIcon = "info-circle";
+
+    private Data.Entities.ImportedProjectEntity? projectToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProjects();
+        await LoadStats();
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        previewProject = null;
+        ClearStatus();
+
+        try
+        {
+            // Читаємо файл
+            using var stream = selectedFile.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024); // 50MB
+            using var reader = new StreamReader(stream);
+            xmlContent = await reader.ReadToEndAsync();
+
+            // Валідація
+            if (!ParserService.ValidateProjectXml(xmlContent))
+            {
+                ShowStatus("Невалідний .project файл", "danger", "x-circle");
+                selectedFile = null;
+                xmlContent = null;
+                return;
+            }
+
+            // Парсинг для попереднього перегляду
+            previewProject = ParserService.ParseProjectFile(xmlContent, selectedFile.Name);
+
+            ShowStatus($"Файл готовий до імпорту: {previewProject.PartsCount} деталей", "success", "check-circle");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка читання файлу: {ex.Message}", ex, "ProjectImport");
+            ShowStatus($"Помилка: {ex.Message}", "danger", "x-circle");
+            selectedFile = null;
+            xmlContent = null;
+        }
+    }
+
+    private async Task ImportProject()
+    {
+        if (string.IsNullOrEmpty(xmlContent) || selectedFile == null)
+        {
+            ShowStatus("Спочатку виберіть файл", "warning", "exclamation-triangle");
+            return;
+        }
+
+        isImporting = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await ScanningService.ImportProjectAsync(xmlContent, selectedFile.Name, clearExisting);
+
+            if (result.Success)
+            {
+                ShowStatus(result.Message, "success", "check-circle");
+                
+                // Очищаємо форму
+                selectedFile = null;
+                xmlContent = null;
+                previewProject = null;
+                clearExisting = false;
+
+                // Оновлюємо список
+                await LoadProjects();
+                await LoadStats();
+            }
+            else
+            {
+                ShowStatus(result.Message, "danger", "x-circle");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка імпорту: {ex.Message}", ex, "ProjectImport");
+            ShowStatus($"Помилка: {ex.Message}", "danger", "x-circle");
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private async Task LoadProjects()
+    {
+        isLoadingProjects = true;
+        StateHasChanged();
+
+        try
+        {
+            projects = await ScanningService.GetProjectsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка завантаження проектів: {ex.Message}", ex, "ProjectImport");
+        }
+        finally
+        {
+            isLoadingProjects = false;
+        }
+    }
+
+    private async Task LoadStats()
+    {
+        isLoadingStats = true;
+        StateHasChanged();
+
+        try
+        {
+            totalProjects = projects.Count;
+            totalParts = await ScanningService.GetPartsCountAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка завантаження статистики: {ex.Message}", ex, "ProjectImport");
+        }
+        finally
+        {
+            isLoadingStats = false;
+        }
+    }
+
+    private void ConfirmDelete(Data.Entities.ImportedProjectEntity project)
+    {
+        projectToDelete = project;
+    }
+
+    private async Task DeleteProject()
+    {
+        if (projectToDelete == null) return;
+
+        isDeleting = true;
+        StateHasChanged();
+
+        try
+        {
+            var deletedCount = await ScanningService.DeleteProjectDataAsync(projectToDelete.ProjectUuid);
+            ShowStatus($"Видалено {deletedCount} деталей", "success", "check-circle");
+            
+            projectToDelete = null;
+            await LoadProjects();
+            await LoadStats();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка видалення: {ex.Message}", ex, "ProjectImport");
+            ShowStatus($"Помилка: {ex.Message}", "danger", "x-circle");
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+
+    private void ShowStatus(string message, string cssClass, string icon)
+    {
+        statusMessage = message;
+        statusClass = cssClass;
+        statusIcon = icon;
+    }
+
+    private void ClearStatus()
+    {
+        statusMessage = null;
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / 1024.0 / 1024.0:F1} MB";
+    }
+}

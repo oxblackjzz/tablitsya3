@@ -13,13 +13,19 @@ namespace Tablitsya3.Data
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         }
 
-  public DbSet<WorkshopDataEntity> WorkshopData { get; set; }
-   public DbSet<OrderEntity> Orders { get; set; }
-  public DbSet<WorkshopCapacityEntity> WorkshopCapacities { get; set; }
-  public DbSet<WorkshopProductionLeadTimeEntity> WorkshopProductionLeadTimes { get; set; }
-  public DbSet<WorkshopDaysBeforeProductionEntity> WorkshopDaysBeforeProduction { get; set; }
-     public DbSet<CustomCompletionDateEntity> CustomCompletionDates { get; set; }
-  public DbSet<OriginalWorkshopEntity> OriginalWorkshops { get; set; }
+        public DbSet<WorkshopDataEntity> WorkshopData { get; set; }
+        public DbSet<OrderEntity> Orders { get; set; }
+        public DbSet<WorkshopCapacityEntity> WorkshopCapacities { get; set; }
+        public DbSet<WorkshopProductionLeadTimeEntity> WorkshopProductionLeadTimes { get; set; }
+        public DbSet<WorkshopDaysBeforeProductionEntity> WorkshopDaysBeforeProduction { get; set; }
+        public DbSet<CustomCompletionDateEntity> CustomCompletionDates { get; set; }
+        public DbSet<OriginalWorkshopEntity> OriginalWorkshops { get; set; }
+
+        // === Scanning entities ===
+        public DbSet<ImportedProjectEntity> ImportedProjects { get; set; }
+        public DbSet<PartEntity> Parts { get; set; }
+        public DbSet<ProductEntity> Products { get; set; }
+        public DbSet<ScanLogEntity> ScanLogs { get; set; }
 
         // ✅ АВТОМАТИЧНА КОНВЕРТАЦІЯ В UTC тільки при збереженні
         public override int SaveChanges()
@@ -112,6 +118,43 @@ namespace Tablitsya3.Data
            entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.OrderKey).IsUnique();
        });
-      }
+
+            // === Scanning entities ===
+
+            // ImportedProjectEntity
+            modelBuilder.Entity<ImportedProjectEntity>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.ProjectUuid).IsUnique();
+                entity.HasIndex(e => e.FileName);
+            });
+
+            // PartEntity
+            modelBuilder.Entity<PartEntity>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => new { e.ProjectExternalUuid, e.PartId, e.PartCounter }).IsUnique();
+                entity.HasIndex(e => e.SourceFileName);
+                entity.HasIndex(e => e.OrderName);
+                entity.HasIndex(e => new { e.IsCutCompleted, e.IsEdgeBandingCompleted, e.IsDrillingCompleted, e.IsSortingCompleted, e.IsPackingCompleted });
+            });
+
+            // ProductEntity
+            modelBuilder.Entity<ProductEntity>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => new { e.ProjectUuid, e.ProductId });
+                entity.HasIndex(e => e.Name);
+            });
+
+            // ScanLogEntity
+            modelBuilder.Entity<ScanLogEntity>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.QRCode);
+                entity.HasIndex(e => e.ScanDate);
+                entity.HasIndex(e => e.PartId);
+            });
+        }
     }
 }

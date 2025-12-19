@@ -1,0 +1,172 @@
+﻿@using Tablitsya3.Models.Scanning
+
+<div class="part-progress-bar @(Compact ? "compact" : "")">
+    @if (!Compact)
+    {
+        <div class="progress-header d-flex justify-content-between mb-1">
+            <span class="progress-label">@(Part?.ProgressPercent ?? 0)%</span>
+            <span class="progress-stages text-muted small">@(Part?.CompletedStagesCount ?? 0)/@(Part?.TotalRequiredStages ?? 0) етапів</span>
+        </div>
+    }
+    
+    <div class="stages-container d-flex gap-1">
+        @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+        {
+            var isRequired = Part?.IsStageRequired(stage) ?? false;
+            var isCompleted = Part?.IsStageCompleted(stage) ?? false;
+            var isCurrent = Part?.CurrentStage == stage;
+            
+            <div class="stage-indicator @GetStageClass(isRequired, isCompleted, isCurrent)"
+                 title="@GetStageTitle(stage, isRequired, isCompleted)"
+                 style="background-color: @(isCompleted ? stage.GetColor() : "transparent"); border-color: @stage.GetColor();">
+                
+                @if (!Compact)
+                {
+                    <i class="bi bi-@stage.GetIcon()"></i>
+                    @if (stage == ProductionStage.EdgeBanding && Part?.EdgeBandingSidesRequired > 0)
+                    {
+                        <span class="edge-count">@Part.EdgeBandingSidesCompleted/@Part.EdgeBandingSidesRequired</span>
+                    }
+                }
+                else
+                {
+                    @if (isCompleted)
+                    {
+                        <i class="bi bi-check-lg"></i>
+                    }
+                    else if (isCurrent)
+                    {
+                        <i class="bi bi-arrow-right"></i>
+                    }
+                }
+            </div>
+        }
+    </div>
+    
+    @if (ShowLabels && !Compact)
+    {
+        <div class="stages-labels d-flex gap-1 mt-1">
+            @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+            {
+                var isRequired = Part?.IsStageRequired(stage) ?? false;
+                <div class="stage-label small @(isRequired ? "" : "text-muted")">
+                    @stage.GetDisplayName()
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .part-progress-bar {
+        min-width: 200px;
+    }
+    
+    .part-progress-bar.compact {
+        min-width: auto;
+    }
+    
+    .stages-container {
+        display: flex;
+        align-items: center;
+    }
+    
+    .stage-indicator {
+        flex: 1;
+        height: 28px;
+        border: 2px solid;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+    
+    .compact .stage-indicator {
+        height: 20px;
+        width: 20px;
+        flex: none;
+        border-radius: 50%;
+        font-size: 10px;
+    }
+    
+    .stage-indicator i {
+        color: inherit;
+        font-size: 12px;
+    }
+    
+    .compact .stage-indicator i {
+        font-size: 10px;
+    }
+    
+    .stage-indicator.completed {
+        color: white;
+    }
+    
+    .stage-indicator.current {
+        animation: pulse-stage 1.5s infinite;
+        box-shadow: 0 0 8px rgba(var(--bs-warning-rgb), 0.5);
+    }
+    
+    .stage-indicator.not-required {
+        opacity: 0.3;
+        border-style: dashed;
+    }
+    
+    .stage-indicator.pending {
+        background-color: transparent !important;
+    }
+    
+    .edge-count {
+        font-size: 9px;
+        margin-left: 2px;
+    }
+    
+    .stages-labels {
+        font-size: 10px;
+    }
+    
+    .stage-label {
+        flex: 1;
+        text-align: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    @@keyframes pulse-stage {
+        0%, 100% { 
+            box-shadow: 0 0 4px rgba(var(--bs-warning-rgb), 0.5);
+        }
+        50% { 
+            box-shadow: 0 0 12px rgba(var(--bs-warning-rgb), 0.8);
+        }
+    }
+</style>
+
+@code {
+    [Parameter]
+    public Part? Part { get; set; }
+    
+    [Parameter]
+    public bool Compact { get; set; } = false;
+    
+    [Parameter]
+    public bool ShowLabels { get; set; } = false;
+    
+    private string GetStageClass(bool isRequired, bool isCompleted, bool isCurrent)
+    {
+        if (!isRequired) return "not-required";
+        if (isCompleted) return "completed";
+        if (isCurrent) return "current";
+        return "pending";
+    }
+    
+    private string GetStageTitle(ProductionStage stage, bool isRequired, bool isCompleted)
+    {
+        if (!isRequired) return $"{stage.GetDisplayName()} - не потрібно";
+        if (isCompleted) return $"{stage.GetDisplayName()} - завершено";
+        return $"{stage.GetDisplayName()} - очікує";
+    }
+}

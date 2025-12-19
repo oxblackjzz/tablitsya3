@@ -209,47 +209,23 @@ else
                                     <div class="gantt-cell @(isWeekend ? "weekend" : "") @(isToday ? "today" : "")"></div>
                                 }
                                 
-                                <!-- Бари замовлень - позиціонуємо по реальних датах -->
+                                <!-- Бари замовлень - позиціонуємо послідовно, з розривами на вихідні -->
                                 @{
                                     var dayWidth = 100.0 / filteredCalendarDays.Count;
                                     
+                                    // Знаходимо тільки робочі дні в фільтрованому періоді
+                                    var workingDaysInPeriod = filteredCalendarDays
+                                        .Select((date, index) => new { Date = date, Index = index, IsWorking = WorkingDays.IsWorkingDay(date) })
+                                        .Where(d => d.IsWorking)
+                                        .ToList();
+                                    
+                                    // Накопичуємо позицію в робочих днях
+                                    double accumulatedWorkingDays = 0;
+                                    
                                     foreach (var order in workshopOrders)
                                     {
-                                        // Ширина бара = площа / потужність (в робочих днях)
+                                        // Тривалість замовлення в робочих днях
                                         var daysOfWork = (double)order.SquareMeters / capacity;
-                                        
-                                        // ✅ ПОЗИЦІЯ ПО РЕАЛЬНІЙ ДАТІ СТАРТУ
-                                        var startIndex = filteredCalendarDays.FindIndex(d => d.Date == order.ProductionStartDate.Date);
-                                        if (startIndex == -1) 
-                                        {
-                                            // Якщо дата старту за межами фільтра - пропускаємо або показуємо з початку
-                                            if (order.ProductionStartDate.Date < filteredCalendarDays.First().Date)
-                                                startIndex = 0;
-                                            else
-                                                continue; // За межами діапазону
-                                        }
-                                        
-                                        // ✅ ШИРИНА = тривалість в робочих днях (пропорційно потужності)
-                                        // Але враховуємо вихідні між стартом і фінішем
-                                        var endIndex = filteredCalendarDays.FindIndex(d => d.Date == order.ProductionEndDate.Date);
-                                        if (endIndex == -1)
-                                        {
-                                            // Фініш за межами - рахуємо до кінця фільтра
-                                            endIndex = filteredCalendarDays.Count - 1;
-                                        }
-                                        
-                                        // Календарна тривалість (включаючи вихідні)
-                                        var calendarDuration = endIndex - startIndex + 1;
-                                        
-                                        // АЛЕ! Якщо хочемо показати тільки РОБОЧУ тривалість (0.62 дня):
-                                        // barWidth = daysOfWork * dayWidth
-                                        // Якщо хочемо показати КАЛЕНДАРНУ тривалість (з вихідними):
-                                        // barWidth = calendarDuration * dayWidth
-                                        
-                                        // ✅ ВИКОРИСТОВУЄМО РОБОЧУ ТРИВАЛІСТЬ для візуального розміру
-                                        var barWidth = Math.Max(daysOfWork * dayWidth, 0.5); // Мінімальна ширина 0.5%
-                                        
-                                        var currentLeft = startIndex * dayWidth;
                                         
                                         var shipmentIndex = filteredCalendarDays.FindIndex(d => d.Date == order.CompletionDate.Date);
                                         
@@ -258,13 +234,8 @@ else
                                         var statusClass = isCompleted ? "completed" : isInProgress ? "in-progress" : "";
                                         
                                         var orderName = string.IsNullOrWhiteSpace(order.OrderName) ? $"№{order.Day}" : order.OrderName;
-                                        var displayName = barWidth > 3 ? (orderName.Length > 8 ? orderName.Substring(0, 8) + ".." : orderName) : "";
-                                        var showSquare = barWidth > 2;
                                         
-                                        var leftStr = currentLeft.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
-                                        var widthStr = barWidth.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
-                                        
-                                        // Визначаємо колір - оригінальний цех або поточний
+                                        // Визначаємо колір
                                         var orderKey = $"{workshop.Number}_{order.Day}";
                                         var colorWorkshop = workshopData.OriginalWorkshops.ContainsKey(orderKey) 
                                             ? workshopData.OriginalWorkshops[orderKey] 
@@ -278,49 +249,150 @@ else
                                             titleText += $" | З цеху {colorWorkshop}";
                                         }
                                         
-                                        <div class="gantt-bar draggable-bar @statusClass @(isTransferred ? "transferred" : "")" 
-                                             data-order-day="@order.Day"
-                                             data-workshop="@workshop.Number"
-                                             data-original-workshop="@colorWorkshop"
-                                             data-square="@order.SquareMeters"
-                                             style="left: @(leftStr)%; width: @(widthStr)%; background-color: @barColor;"
-                                             title="@titleText">
-                                           
-                                            <span class="drag-handle-bar"><i class="bi bi-grip-vertical"></i></span>
-                                            
-                                            @if (!string.IsNullOrEmpty(displayName))
-                                            {
-                                                <span class="bar-text">@displayName</span>
-                                            }
-                                            @if (showSquare)
-                                            {
-                                                <span class="bar-square">@order.SquareMeters.ToString("N0")</span>
-                                            }
-                                            
-                                            <!-- Tooltip -->
-                                            <div class="bar-tooltip">
-                                                <div class="tooltip-title">@orderName</div>
-                                                <table class="tooltip-table">
-                                                    <tr><td>Площа:</td><td><strong>@order.SquareMeters.ToString("N0") м²</strong></td></tr>
-                                                    <tr><td>Потужність цеху:</td><td>@capacity м²/день</td></tr>
-                                                    <tr><td>Тривалість:</td><td><strong>@daysOfWork.ToString("F2") роб.дн.</strong></td></tr>
-                                                    @if (isTransferred)
-                                                    {
-                                                        var origName = workshops.FirstOrDefault(w => w.Number == colorWorkshop)?.Name ?? $"Цех {colorWorkshop}";
-                                                        <tr class="divider"><td colspan="2"></td></tr>
-                                                        <tr><td><i class="bi bi-arrow-left-right text-info"></i> Оригінал:</td><td><strong style="color: @barColor;">@origName</strong></td></tr>
-                                                    }
-                                                    <tr class="divider"><td colspan="2"></td></tr>
-                                                    <tr><td><i class="bi bi-play-fill text-success"></i> Старт:</td><td><strong>@order.ProductionStartDate.ToString("dd.MM.yyyy")</strong></td></tr>
-                                                    <tr><td><i class="bi bi-stop-fill text-warning"></i> Фініш:</td><td><strong>@order.ProductionEndDate.ToString("dd.MM.yyyy")</strong></td></tr>
-                                                    <tr><td><i class="bi bi-truck text-primary"></i> Відвантаж.:</td><td><strong>@order.CompletionDate.ToString("dd.MM.yyyy")</strong></td></tr>
-                                                </table>
-                                                <div class="tooltip-hint mt-2 text-muted small">
-                                                    <i class="bi bi-arrows-move"></i> Перетягніть на інший цех
-                                                </div>
-                                            </div>
-                                        </div>
+                                        // Розбиваємо замовлення на сегменти по робочих днях
+                                        var remainingWork = daysOfWork;
+                                        var currentWorkPos = accumulatedWorkingDays;
+                                        var segmentIndex = 0;
+                                        var isFirstSegment = true;
                                         
+                                        while (remainingWork > 0.001 && currentWorkPos < workingDaysInPeriod.Count)
+                                        {
+                                            // Знаходимо початковий робочий день для цього сегменту
+                                            var startWorkingDayIdx = (int)Math.Floor(currentWorkPos);
+                                            if (startWorkingDayIdx >= workingDaysInPeriod.Count) break;
+                                            
+                                            var startWorkingDay = workingDaysInPeriod[startWorkingDayIdx];
+                                            var startCalendarIndex = startWorkingDay.Index;
+                                            var startOffset = currentWorkPos - startWorkingDayIdx; // Дробова частина початку
+                                            
+                                            // Визначаємо скільки роботи можна виконати до наступного вихідного
+                                            double segmentWork = 0;
+                                            var endCalendarIndex = startCalendarIndex;
+                                            var endOffset = startOffset;
+                                            
+                                            // Рахуємо послідовні робочі дні
+                                            var workDayIdx = startWorkingDayIdx;
+                                            var prevCalendarIdx = startCalendarIndex;
+                                            
+                                            while (segmentWork < remainingWork && workDayIdx < workingDaysInPeriod.Count)
+                                            {
+                                                var workDay = workingDaysInPeriod[workDayIdx];
+                                                
+                                                // Перевіряємо чи є розрив (більше 1 календарного дня між робочими днями)
+                                                if (workDayIdx > startWorkingDayIdx && workDay.Index - prevCalendarIdx > 1)
+                                                {
+                                                    // Розрив знайдено - завершуємо сегмент
+                                                    break;
+                                                }
+                                                
+                                                // Скільки роботи можемо додати в цей день
+                                                double dayCapacity;
+                                                if (workDayIdx == startWorkingDayIdx)
+                                                {
+                                                    // Перший день - враховуємо offset
+                                                    dayCapacity = 1.0 - startOffset;
+                                                }
+                                                else
+                                                {
+                                                    dayCapacity = 1.0;
+                                                }
+                                                
+                                                var workToAdd = Math.Min(dayCapacity, remainingWork - segmentWork);
+                                                segmentWork += workToAdd;
+                                                
+                                                endCalendarIndex = workDay.Index;
+                                                if (workDayIdx == startWorkingDayIdx)
+                                                {
+                                                    endOffset = startOffset + workToAdd;
+                                                }
+                                                else
+                                                {
+                                                    endOffset = workToAdd;
+                                                }
+                                                
+                                                prevCalendarIdx = workDay.Index;
+                                                workDayIdx++;
+                                                
+                                                if (segmentWork >= remainingWork) break;
+                                            }
+                                            
+                                            if (segmentWork <= 0.001) break;
+                                            
+                                            // Обчислюємо позицію та ширину сегменту
+                                            var segmentLeft = (startCalendarIndex + startOffset) * dayWidth;
+                                            var segmentRight = (endCalendarIndex + endOffset) * dayWidth;
+                                            var segmentWidth = segmentRight - segmentLeft;
+                                            
+                                            if (segmentWidth > 0.1)
+                                            {
+                                                var leftStr = segmentLeft.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
+                                                var widthStr = segmentWidth.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
+                                                
+                                                // Показуємо текст тільки якщо сегмент достатньо широкий
+                                                var displayName = segmentWidth > 3 && isFirstSegment ? (orderName.Length > 8 ? orderName.Substring(0, 8) + ".." : orderName) : "";
+                                                var showSquare = segmentWidth > 2 && isFirstSegment;
+                                                
+                                                <div class="gantt-bar draggable-bar @statusClass @(isTransferred ? "transferred" : "") @(segmentIndex > 0 ? "segment-continuation" : "")" 
+                                                     data-order-day="@order.Day"
+                                                     data-workshop="@workshop.Number"
+                                                     data-original-workshop="@colorWorkshop"
+                                                     data-square="@order.SquareMeters"
+                                                     data-segment="@segmentIndex"
+                                                     style="left: @(leftStr)%; width: @(widthStr)%; background-color: @barColor;"
+                                                     title="@titleText">
+                                                   
+                                                    @if (isFirstSegment)
+                                                    {
+                                                        <span class="drag-handle-bar"><i class="bi bi-grip-vertical"></i></span>
+                                                    }
+                                                    
+                                                    @if (!string.IsNullOrEmpty(displayName))
+                                                    {
+                                                        <span class="bar-text">@displayName</span>
+                                                    }
+                                                    @if (showSquare)
+                                                    {
+                                                        <span class="bar-square">@order.SquareMeters.ToString("N0")</span>
+                                                    }
+                                                    
+                                                    <!-- Tooltip тільки на першому сегменті -->
+                                                    @if (isFirstSegment)
+                                                    {
+                                                        <div class="bar-tooltip">
+                                                            <div class="tooltip-title">@orderName</div>
+                                                            <table class="tooltip-table">
+                                                                <tr><td>Площа:</td><td><strong>@order.SquareMeters.ToString("N0") м²</strong></td></tr>
+                                                                <tr><td>Потужність цеху:</td><td>@capacity м²/день</td></tr>
+                                                                <tr><td>Тривалість:</td><td><strong>@daysOfWork.ToString("F2") роб.дн.</strong></td></tr>
+                                                                @if (isTransferred)
+                                                                {
+                                                                    var origName = workshops.FirstOrDefault(w => w.Number == colorWorkshop)?.Name ?? $"Цех {colorWorkshop}";
+                                                                    <tr class="divider"><td colspan="2"></td></tr>
+                                                                    <tr><td><i class="bi bi-arrow-left-right text-info"></i> Оригінал:</td><td><strong style="color: @barColor;">@origName</strong></td></tr>
+                                                                }
+                                                                <tr class="divider"><td colspan="2"></td></tr>
+                                                                <tr><td><i class="bi bi-play-fill text-success"></i> Старт:</td><td><strong>@order.ProductionStartDate.ToString("dd.MM.yyyy")</strong></td></tr>
+                                                                <tr><td><i class="bi bi-stop-fill text-warning"></i> Фініш:</td><td><strong>@order.ProductionEndDate.ToString("dd.MM.yyyy")</strong></td></tr>
+                                                                <tr><td><i class="bi bi-truck text-primary"></i> Відвантаж.:</td><td><strong>@order.CompletionDate.ToString("dd.MM.yyyy")</strong></td></tr>
+                                                            </table>
+                                                            <div class="tooltip-hint mt-2 text-muted small">
+                                                                <i class="bi bi-arrows-move"></i> Перетягніть на інший цех
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                            
+                                            remainingWork -= segmentWork;
+                                            currentWorkPos += segmentWork;
+                                            segmentIndex++;
+                                            isFirstSegment = false;
+                                        }
+                                        
+                                        // Оновлюємо накопичену позицію для наступного замовлення
+                                        accumulatedWorkingDays += daysOfWork;
+                                        
+                                        // Лінія відвантаження
                                         @if (shipmentIndex >= 0 && shipmentIndex < filteredCalendarDays.Count)
                                         {
                                             var shipLeft = ((shipmentIndex + 0.5) * dayWidth).ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
@@ -529,6 +601,13 @@ else
         z-index: 10;
         overflow: visible;
         min-width: 2px; /* мінімальна ширина для дуже малих замовлень */
+    }
+    
+    /* Сегмент-продовження (після розриву на вихідні) */
+    .gantt-bar.segment-continuation {
+        border-left: 2px dashed rgba(255,255,255,0.5);
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
     }
     
     .gantt-bar:hover {

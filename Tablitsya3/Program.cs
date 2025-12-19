@@ -137,6 +137,16 @@ Console.WriteLine("✅ UndoRedoService registered");
 builder.Services.AddScoped<ThemeService>();
 Console.WriteLine("✅ ThemeService registered");
 
+// ✅ ДОДАЄМО СЕРВІСИ СКАНУВАННЯ ДЕТАЛЕЙ
+builder.Services.AddScoped<ProjectFileParserService>();
+builder.Services.AddScoped<ScanningService>();
+Console.WriteLine("✅ Scanning services registered");
+
+// ✅ ДОДАЄМО SIGNALR
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<Tablitsya3.Hubs.ScanningHubService>();
+Console.WriteLine("✅ SignalR configured");
+
 // ✅ ГЛОБАЛЬНА ОБРОБКА ПОМИЛОК
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -144,6 +154,9 @@ builder.Services.AddProblemDetails();
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// ✅ ДОДАЄМО CONTROLLERS ДЛЯ API
+builder.Services.AddControllers();
 
 builder.Services.AddScoped<ProductionPlanningService>();
 builder.Services.AddSingleton<WorkingDaysService>();
@@ -168,7 +181,7 @@ if (isDatabaseConfigured && !string.IsNullOrEmpty(connectionString))
 
     Console.WriteLine("============================================");
     Console.WriteLine("🔄 STARTING DATABASE INITIALIZATION");
-            Console.WriteLine("============================================");
+    Console.WriteLine("============================================");
    logger.LogInformation("🔄 Starting database initialization");
 
       // ✅ ПЕРЕВІРЯЄМО ЧИ ІСНУЄ БД
@@ -297,6 +310,13 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAntiforgery();
 app.MapStaticAssets();
+
+// ✅ Маппінг API Controllers
+app.MapControllers();
+
+// ✅ Маппінг SignalR Hub
+app.MapHub<Tablitsya3.Hubs.ScanningHub>("/hubs/scanning");
+
 app.MapRazorComponents<App>()
   .AddInteractiveServerRenderMode();
 

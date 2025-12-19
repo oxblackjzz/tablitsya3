@@ -71,7 +71,8 @@
    var sortedOrders = Orders.OrderBy(o => o.Day).ToList();
       var filteredOrders = ApplyViewModeFilter(sortedOrders);
 
-      var ordersToDisplay = filteredOrders.ToList();
+      // Сортуємо для відображення по порядку виробництва (Day = порядок в черзі)
+      var ordersToDisplay = filteredOrders.OrderBy(o => o.Day).ToList();
 
         if (!ordersToDisplay.Any())
      {
@@ -138,6 +139,12 @@
      minWidthPx = allCalendarDates.Count * 80;
    }
    var ganttWidth = Math.Max(minWidthPx, 100);
+    
+    // Обчислення висоти контейнера на основі кількості замовлень
+    var rowHeightCalc = 50; // Висота рядка для кожного замовлення
+    var headerOffsetCalc = 55; // Відступ від верху для заголовків дат
+    var bottomPadding = 60; // Відступ знизу
+    var ganttHeight = headerOffsetCalc + (ordersToDisplay.Count * rowHeightCalc) + bottomPadding;
 
     <div class="alert alert-info mb-3">
            <strong>Ц цех №@WorkshopNumber:</strong> 
@@ -165,7 +172,7 @@
       }
    </div>
     <div class="gantt-wrapper" style="width: 100%; overflow-x: auto; overflow-y: visible;">
-      <div class="gantt-timeline" style="@(minWidthPx == 100 ? "width: 100%; min-width: 100%;" : $"width: {ganttWidth}px; min-width: {ganttWidth}px;")">
+      <div class="gantt-timeline" style="@(minWidthPx == 100 ? "width: 100%; min-width: 100%;" : $"width: {ganttWidth}px; min-width: {ganttWidth}px;") min-height: @(ganttHeight)px;">
         <div class="gantt-grid" style="width: 100%;">
        @for (int calendarIndex = 0; calendarIndex < allCalendarDates.Count; calendarIndex++)
       {
@@ -233,11 +240,15 @@
             data-total-orders="@ordersToDisplay.Count"
            data-calendar-days="@allCalendarDates.Count">
             @{
-             var orderPositions = CalculateOrderPositions(allOrdersSorted, absoluteBaseDate, allWorkingDaysGlobal);
+             var orderPositions = CalculateOrderPositions(allOrdersSorted, firstWorkingDay, allWorkingDaysGlobal);
+             var rowHeight = 50; // Висота рядка для кожного замовлення
+             var headerOffset = 55; // Відступ від верху для заголовків дат
        }
      
-   @foreach (var order in ordersToDisplay)
+   @for (int orderIndex = 0; orderIndex < ordersToDisplay.Count; orderIndex++)
             {
+                var order = ordersToDisplay[orderIndex];
+                var topPosition = headerOffset + (orderIndex * rowHeight); // Позиція зверху для цього рядка
   var color = GetOrderColor(order.Day);
   var isCompleted = IsOrderCompleted(order);
  var isInProgress = IsOrderInProgress(order);
@@ -308,11 +319,11 @@
       }
    else if (widthPercent > 5)
    {
-        barLabel = order.OrderName.Length > 5 ? order.OrderName.Substring(0, 5) : order.OrderName;
+        barLabel = order.OrderName.Length > 5 ? order.OrderName.Substring(0, 5) + "..." : order.OrderName;
       }
       else if (widthPercent > 3)
          {
-       barLabel = order.OrderName.Length > 3 ? order.OrderName.Substring(0, 3) : order.OrderName;
+       barLabel = order.OrderName.Length > 3 ? order.OrderName.Substring(0, 3) + "..." : order.OrderName;
    }
  }
     else
@@ -334,8 +345,10 @@
     var widthPercent4Str = widthPercent.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
           
         <div class="gantt-bar @statusClass" 
-        style="left: @(leftPercentStr)%; width: @(widthPercentStr)%; background-color: @color;"
+        style="left: @(leftPercentStr)%; width: @(widthPercentStr)%; background-color: @color; top: @(topPosition)px;"
   data-order="@order.Day"
+  data-order-index="@orderIndex"
+  data-top-position="@topPosition"
  data-segment="@segments.IndexOf(segment)"
           data-start-index="@startCalendarIndex"
 data-end-index="@endCalendarIndex"
