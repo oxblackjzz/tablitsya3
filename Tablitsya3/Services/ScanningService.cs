@@ -473,6 +473,40 @@ namespace Tablitsya3.Services
         }
 
         /// <summary>
+        /// Отримання загальної статистики по всіх проектах
+        /// </summary>
+        public async Task<ProjectStatistics> GetOverallStatisticsAsync()
+        {
+            var parts = await _context.Parts.ToListAsync();
+
+            var stats = new ProjectStatistics
+            {
+                ProjectUuid = "all",
+                FileName = "Всі проекти",
+                TotalParts = parts.Count,
+                CompletedParts = parts.Count(p => p.IsPackingCompleted),
+                TotalSquareMeters = parts.Sum(p => p.SquareMeters),
+                CompletedSquareMeters = parts.Where(p => p.IsPackingCompleted).Sum(p => p.SquareMeters)
+            };
+
+            // Статистика по етапах
+            foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+            {
+                var stageStats = new StageStatistics
+                {
+                    Stage = stage,
+                    TotalRequired = parts.Count(p => IsStageRequired(p, stage)),
+                    Completed = parts.Count(p => IsStageCompleted(p, stage)),
+                    InProgress = 0
+                };
+
+                stats.StageStats[stage] = stageStats;
+            }
+
+            return stats;
+        }
+
+        /// <summary>
         /// Отримання кількості деталей
         /// </summary>
         public async Task<int> GetPartsCountAsync(string? projectUuid = null)

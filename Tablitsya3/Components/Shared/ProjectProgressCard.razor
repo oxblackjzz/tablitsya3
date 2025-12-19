@@ -1,0 +1,190 @@
+﻿@using Tablitsya3.Models.Scanning
+
+<div class="card project-progress-card @(Compact ? "compact" : "")">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>
+            <i class="bi bi-bar-chart-fill text-primary"></i>
+            @if (!string.IsNullOrEmpty(Title))
+            {
+                @Title
+            }
+            else
+            {
+                <span>Прогрес виробництва</span>
+            }
+        </span>
+        @if (Statistics != null && !Compact)
+        {
+            <span class="badge bg-primary">@Statistics.TotalParts деталей</span>
+        }
+    </div>
+    <div class="card-body">
+        @if (Statistics == null)
+        {
+            <div class="text-center text-muted py-3">
+                <i class="bi bi-hourglass-split"></i> Завантаження...
+            </div>
+        }
+        else
+        {
+            <!-- Загальний прогрес -->
+            <div class="overall-progress mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold">Загальний прогрес</span>
+                    <span class="badge @GetOverallBadgeClass()">
+                        @Statistics.CompletedParts / @Statistics.TotalParts (@OverallPercent%)
+                    </span>
+                </div>
+                <div class="progress" style="height: 25px;">
+                    <div class="progress-bar @GetOverallBarClass()" 
+                         role="progressbar" 
+                         style="width: @OverallPercent%;"
+                         aria-valuenow="@OverallPercent" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100">
+                        @if (OverallPercent >= 10)
+                        {
+                            <span class="progress-text">@OverallPercent%</span>
+                        }
+                    </div>
+                </div>
+                @if (!Compact)
+                {
+                    <div class="d-flex justify-content-between text-muted small mt-1">
+                        <span>@Statistics.CompletedSquareMeters.ToString("F2") м² завершено</span>
+                        <span>@Statistics.TotalSquareMeters.ToString("F2") м² всього</span>
+                    </div>
+                }
+            </div>
+
+            <!-- Прогрес по етапах -->
+            <div class="stages-progress">
+                <h6 class="text-muted mb-3">
+                    <i class="bi bi-list-task"></i> По етапах
+                </h6>
+                
+                @foreach (var stageStat in Statistics.StageStats.Values.OrderBy(s => (int)s.Stage))
+                {
+                    var percent = stageStat.TotalRequired > 0 
+                        ? (int)Math.Round((double)stageStat.Completed / stageStat.TotalRequired * 100) 
+                        : 100;
+                    var stage = stageStat.Stage;
+                    
+                    <div class="stage-row mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="d-flex align-items-center gap-2">
+                                <i class="bi bi-@stage.GetIcon()" style="color: @stage.GetColor();"></i>
+                                <span>@stage.GetDisplayName()</span>
+                            </span>
+                            <span class="small">
+                                <span class="text-success fw-bold">@stageStat.Completed</span>
+                                <span class="text-muted">/ @stageStat.TotalRequired</span>
+                            </span>
+                        </div>
+                        <div class="progress" style="height: @(Compact ? "8px" : "12px");">
+                            <div class="progress-bar" 
+                                 role="progressbar" 
+                                 style="width: @percent%; background-color: @stage.GetColor();"
+                                 aria-valuenow="@percent" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (!Compact && ShowLegend)
+            {
+                <!-- Легенда -->
+                <div class="legend mt-4 pt-3 border-top">
+                    <div class="row g-2">
+                        @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+                        {
+                            <div class="col-auto">
+                                <span class="badge" style="background-color: @stage.GetColor();">
+                                    <i class="bi bi-@stage.GetIcon() me-1"></i>
+                                    @stage.GetDisplayName()
+                                </span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<style>
+    .project-progress-card .progress {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    .project-progress-card .progress-bar {
+        transition: width 0.5s ease-in-out;
+        border-radius: 10px;
+    }
+    
+    .project-progress-card .progress-text {
+        font-weight: bold;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    }
+    
+    .project-progress-card.compact .card-body {
+        padding: 0.75rem;
+    }
+    
+    .project-progress-card.compact .stage-row {
+        margin-bottom: 0.5rem !important;
+    }
+    
+    .project-progress-card.compact .mb-4 {
+        margin-bottom: 1rem !important;
+    }
+    
+    .stage-row .progress {
+        background-color: rgba(0,0,0,0.1);
+    }
+    
+    .overall-progress .progress {
+        background-color: rgba(0,0,0,0.1);
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+    }
+</style>
+
+@code {
+    [Parameter]
+    public ProjectStatistics? Statistics { get; set; }
+    
+    [Parameter]
+    public string? Title { get; set; }
+    
+    [Parameter]
+    public bool Compact { get; set; } = false;
+    
+    [Parameter]
+    public bool ShowLegend { get; set; } = true;
+    
+    private int OverallPercent => Statistics?.TotalParts > 0 
+        ? (int)Math.Round((double)Statistics.CompletedParts / Statistics.TotalParts * 100) 
+        : 0;
+    
+    private string GetOverallBadgeClass()
+    {
+        if (OverallPercent >= 100) return "bg-success";
+        if (OverallPercent >= 75) return "bg-info";
+        if (OverallPercent >= 50) return "bg-primary";
+        if (OverallPercent >= 25) return "bg-warning text-dark";
+        return "bg-secondary";
+    }
+    
+    private string GetOverallBarClass()
+    {
+        if (OverallPercent >= 100) return "bg-success";
+        if (OverallPercent >= 75) return "bg-info";
+        if (OverallPercent >= 50) return "bg-primary";
+        if (OverallPercent >= 25) return "bg-warning";
+        return "bg-secondary";
+    }
+}

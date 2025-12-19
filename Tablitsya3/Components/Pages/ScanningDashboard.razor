@@ -1,6 +1,7 @@
 ﻿@page "/scanning"
 @using Tablitsya3.Models.Scanning
 @using Tablitsya3.Services
+@using Tablitsya3.Components.Shared
 @inject ScanningService ScanningService
 @inject LoggingService Logger
 @inject IJSRuntime JSRuntime
@@ -17,10 +18,20 @@
         <p class="text-secondary mb-0">Відстеження виробництва по етапах</p>
     </div>
     <div class="d-flex gap-2">
+        @if (projects.Any())
+        {
+            <select class="form-select" style="width: 250px;" @bind="selectedProjectUuid" @bind:after="OnProjectChanged">
+                <option value="">Всі проекти</option>
+                @foreach (var project in projects)
+                {
+                    <option value="@project.ProjectUuid">@project.FileName (@project.PartsCount дет.)</option>
+                }
+            </select>
+        }
         <a href="/scanning/import" class="btn btn-outline-primary">
             <i class="bi bi-upload"></i> Імпорт
         </a>
-        <button class="btn btn-primary" @onclick="LoadData">
+        <button class="btn btn-primary" @onclick="LoadAllData">
             <i class="bi bi-arrow-clockwise"></i> Оновити
         </button>
     </div>
@@ -32,6 +43,18 @@
         <i class="bi bi-@scanMessageIcon me-2"></i>
         @scanMessage
         <button type="button" class="btn-close" @onclick="ClearScanMessage"></button>
+    </div>
+}
+
+<!-- Шкала прогресу проекту -->
+@if (projectStatistics != null)
+{
+    <div class="row mb-4">
+        <div class="col-12">
+            <ProjectProgressCard Statistics="projectStatistics" 
+                                 Title="@(string.IsNullOrEmpty(selectedProjectUuid) ? "Загальний прогрес" : $"Прогрес: {GetSelectedProjectName()}")"
+                                 ShowLegend="true" />
+        </div>
     </div>
 }
 
@@ -346,6 +369,11 @@
     private string scanMessageClass = "info";
     private string scanMessageIcon = "info-circle";
 
+    // Проекти та статистика
+    private List<Tablitsya3.Data.Entities.ImportedProjectEntity> projects = new();
+    private string selectedProjectUuid = "";
+    private ProjectStatistics? projectStatistics;
+
     // Таблиця
     private List<Part> parts = new();
     private List<string> fileNames = new();
@@ -360,8 +388,13 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadFileNames();
-        await LoadData();
+        // Якщо є параметр Project з URL - використовуємо його
+        if (!string.IsNullOrEmpty(Project))
+        {
+            selectedProjectUuid = Project;
+        }
+        
+        await LoadAllData();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -370,6 +403,60 @@
         {
             await FocusQRInput();
         }
+    }
+
+    private async Task LoadAllData()
+    {
+        await LoadProjects();
+        await LoadFileNames();
+        await LoadStatistics();
+        await LoadData();
+    }
+
+    private async Task OnProjectChanged()
+    {
+        currentPage = 1;
+        filterFileName = "";
+        await LoadStatistics();
+        await LoadData();
+    }
+
+    private async Task LoadStatistics()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(selectedProjectUuid))
+            {
+                // Загальна статистика по всіх проектах
+                projectStatistics = await ScanningService.GetOverallStatisticsAsync();
+            }
+            else
+            {
+                projectStatistics = await ScanningService.GetProjectStatisticsAsync(selectedProjectUuid);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка завантаження статистики: {ex.Message}", ex, "ScanningDashboard");
+        }
+    }
+
+    private async Task LoadProjects()
+    {
+        try
+        {
+            projects = await ScanningService.GetProjectsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка завантаження проектів: {ex.Message}", ex, "ScanningDashboard");
+        }
+    }
+
+    private string GetSelectedProjectName()
+    {
+        var project = projects.FirstOrDefault(p => p.ProjectUuid == selectedProjectUuid);
+        return project?.FileName ?? selectedProjectUuid;
     }
 
     private async Task FocusQRInput()
@@ -390,10 +477,12 @@
         {
             bool? completed = string.IsNullOrEmpty(filterCompleted) ? null : bool.Parse(filterCompleted);
             
+            var projectFilter = !string.IsNullOrEmpty(selectedProjectUuid) ? selectedProjectUuid : Project;
+            
             var (loadedParts, total) = await ScanningService.GetPartsAsync(
                 currentPage, 
                 pageSize, 
-                Project,
+                projectFilter,
                 string.IsNullOrEmpty(filterFileName) ? null : filterFileName,
                 null,
                 completed);
@@ -455,7 +544,8 @@
                 lastScannedPart = result.Part;
                 ShowScanMessage(result.Message, "success", result.IsFullyCompleted ? "trophy" : "check-circle");
                 
-                // Оновлюємо таблицю
+                // Оновлюємо статистику та таблицю
+                await LoadStatistics();
                 await LoadData();
             }
             else
