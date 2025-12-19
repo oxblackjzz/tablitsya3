@@ -41,6 +41,9 @@ namespace Tablitsya3.Data.Entities
 
         /// <summary>Чи активний проект</summary>
         public bool IsActive { get; set; } = true;
+        
+        /// <summary>Номер цеху</summary>
+        public int WorkshopNumber { get; set; } = 1;
     }
 
     /// <summary>

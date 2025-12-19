@@ -1,8 +1,10 @@
 ﻿@page "/scanning/import"
 @using Tablitsya3.Models.Scanning
+@using Tablitsya3.Models
 @using Tablitsya3.Services
 @inject ScanningService ScanningService
 @inject ProjectFileParserService ParserService
+@inject CachedStorageService StorageService
 @inject LoggingService Logger
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
@@ -75,7 +77,7 @@
                                 </tr>
                                 <tr>
                                     <td class="text-muted">Загальна площа:</td>
-                                    <td><strong>@previewProject.TotalSquareMeters.ToString("F2") м²</strong></td>
+                                    <td><strong class="text-success fs-5">@previewProject.TotalSquareMeters.ToString("F2") м²</strong></td>
                                 </tr>
                                 <tr>
                                     <td class="text-muted">Вартість:</td>
@@ -85,11 +87,51 @@
                         </div>
                     </div>
 
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" @bind="clearExisting" id="clearExisting">
-                        <label class="form-check-label" for="clearExisting">
-                            <i class="bi bi-trash text-danger"></i> Очистити існуючі дані проекту перед імпортом
+                    <!-- Вибір цеху -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-building text-primary"></i> Цех для замовлення
                         </label>
+                        <select class="form-select" @bind="selectedWorkshop">
+                            @for (int i = 1; i <= 6; i++)
+                            {
+                                <option value="@i">Цех @i</option>
+                            }
+                        </select>
+                        <small class="text-muted">Площа буде додана як замовлення в цей цех</small>
+                    </div>
+
+                    <!-- Назва замовлення -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-tag text-primary"></i> Назва замовлення
+                        </label>
+                        <input type="text" class="form-control" @bind="orderName" placeholder="Введіть назву замовлення..." />
+                        <small class="text-muted">Буде показана в діаграмі Ганта</small>
+                    </div>
+
+                    <!-- Дата замовлення -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-calendar text-primary"></i> Дата замовлення
+                        </label>
+                        <input type="date" class="form-control" @bind="orderDate" />
+                    </div>
+
+                    <!-- Опції -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="createOrder" id="createOrder">
+                            <label class="form-check-label" for="createOrder">
+                                <i class="bi bi-plus-circle text-success"></i> Створити замовлення (@previewProject.TotalSquareMeters.ToString("F2") м²)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="clearExisting" id="clearExisting">
+                            <label class="form-check-label" for="clearExisting">
+                                <i class="bi bi-trash text-danger"></i> Очистити існуючі дані проекту перед імпортом
+                            </label>
+                        </div>
                     </div>
 
                     <button class="btn btn-success w-100" @onclick="ImportProject" disabled="@isImporting">
@@ -172,6 +214,7 @@
                         <tr>
                             <th>Файл</th>
                             <th>Дата імпорту</th>
+                            <th class="text-center">Цех</th>
                             <th class="text-center">Товарів</th>
                             <th class="text-center">Деталей</th>
                             <th class="text-end">Площа</th>
@@ -189,6 +232,9 @@
                                 </td>
                                 <td>
                                     <small class="text-muted">@project.ImportedDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-info">Цех @project.WorkshopNumber</span>
                                 </td>
                                 <td class="text-center">
                                     <span class="badge bg-secondary">@project.ProductsCount</span>
@@ -261,6 +307,10 @@
     private string? xmlContent;
     private ImportedProject? previewProject;
     private bool clearExisting = false;
+    private bool createOrder = true;
+    private int selectedWorkshop = 1;
+    private string orderName = "";
+    private DateTime orderDate = DateTime.Today;
     private bool isImporting = false;
     private bool isLoadingProjects = true;
     private bool isLoadingStats = true;
@@ -306,8 +356,11 @@
 
             // Парсинг для попереднього перегляду
             previewProject = ParserService.ParseProjectFile(xmlContent, selectedFile.Name);
+            
+            // Встановлюємо назву замовлення з імені файлу
+            orderName = Path.GetFileNameWithoutExtension(selectedFile.Name);
 
-            ShowStatus($"Файл готовий до імпорту: {previewProject.PartsCount} деталей", "success", "check-circle");
+            ShowStatus($"Файл готовий до імпорту: {previewProject.PartsCount} деталей, {previewProject.TotalSquareMeters:F2} м²", "success", "check-circle");
         }
         catch (Exception ex)
         {
@@ -320,7 +373,7 @@
 
     private async Task ImportProject()
     {
-        if (string.IsNullOrEmpty(xmlContent) || selectedFile == null)
+        if (string.IsNullOrEmpty(xmlContent) || selectedFile == null || previewProject == null)
         {
             ShowStatus("Спочатку виберіть файл", "warning", "exclamation-triangle");
             return;
@@ -331,17 +384,63 @@
 
         try
         {
-            var result = await ScanningService.ImportProjectAsync(xmlContent, selectedFile.Name, clearExisting);
+            // Імпорт деталей
+            var result = await ScanningService.ImportProjectAsync(xmlContent, selectedFile.Name, clearExisting, selectedWorkshop);
 
             if (result.Success)
             {
-                ShowStatus(result.Message, "success", "check-circle");
+                // Якщо потрібно створити замовлення
+                if (createOrder && previewProject.TotalSquareMeters > 0)
+                {
+                    try
+                    {
+                        // Завантажуємо поточні дані
+                        var data = await StorageService.LoadWorkshopDataAsync();
+                        
+                        if (data != null)
+                        {
+                            // Додаємо замовлення в цех
+                            data.EnsureWorkshopExists(selectedWorkshop);
+                            
+                            var newOrder = new OrderData
+                            {
+                                SquareMeters = previewProject.TotalSquareMeters,
+                                OrderDate = orderDate,
+                                Name = string.IsNullOrEmpty(orderName) ? selectedFile.Name : orderName
+                            };
+                            
+                            data.Orders[selectedWorkshop].Add(newOrder);
+                            data.WorkshopOrders[selectedWorkshop].Add(newOrder.SquareMeters);
+                            data.WorkshopOrderDates[selectedWorkshop].Add(newOrder.OrderDate);
+                            data.WorkshopOrderNames[selectedWorkshop].Add(newOrder.Name);
+                            
+                            // Зберігаємо
+                            await StorageService.SaveWorkshopDataAsync(data);
+                            
+                            ShowStatus($"{result.Message}. Замовлення на {previewProject.TotalSquareMeters:F2} м² додано до Цеху {selectedWorkshop}", "success", "check-circle");
+                        }
+                        else
+                        {
+                            ShowStatus($"{result.Message}. Але не вдалося завантажити дані для створення замовлення", "warning", "exclamation-triangle");
+                        }
+                    }
+                    catch (Exception orderEx)
+                    {
+                        Logger.LogError($"Помилка створення замовлення: {orderEx.Message}", orderEx, "ProjectImport");
+                        ShowStatus($"{result.Message}. Але помилка створення замовлення: {orderEx.Message}", "warning", "exclamation-triangle");
+                    }
+                }
+                else
+                {
+                    ShowStatus(result.Message, "success", "check-circle");
+                }
                 
                 // Очищаємо форму
                 selectedFile = null;
                 xmlContent = null;
                 previewProject = null;
                 clearExisting = false;
+                orderName = "";
 
                 // Оновлюємо список
                 await LoadProjects();
@@ -375,6 +474,7 @@
         catch (Exception ex)
         {
             Logger.LogError($"Помилка завантаження проектів: {ex.Message}", ex, "ProjectImport");
+            ShowStatus($"Помилка завантаження: {ex.Message}", "warning", "exclamation-triangle");
         }
         finally
         {

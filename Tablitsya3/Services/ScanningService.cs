@@ -26,7 +26,7 @@ namespace Tablitsya3.Services
         /// <summary>
         /// Імпорт проекту з XML контенту
         /// </summary>
-        public async Task<ImportResult> ImportProjectAsync(string xmlContent, string fileName, bool clearExisting = false)
+        public async Task<ImportResult> ImportProjectAsync(string xmlContent, string fileName, bool clearExisting = false, int workshopNumber = 1)
         {
             var result = new ImportResult();
 
@@ -81,7 +81,8 @@ namespace Tablitsya3.Services
                     ProductsCount = project.ProductsCount,
                     PartsCount = project.PartsCount,
                     TotalSquareMeters = project.TotalSquareMeters,
-                    IsActive = true
+                    IsActive = true,
+                    WorkshopNumber = workshopNumber
                 };
 
                 _context.ImportedProjects.Add(projectEntity);
