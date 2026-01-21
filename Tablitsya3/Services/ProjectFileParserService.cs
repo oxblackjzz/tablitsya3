@@ -282,30 +282,39 @@ namespace Tablitsya3.Services
         private bool DetermineDrillingRequired(Part part, string lowerName, string lowerMaterial)
         {
             // Не потребують свердління:
-            // - Задні стінки (ДВП, ХДФ)
+            // - Задні стінки (ДВП, ХДФ) - але тільки якщо це справді задня стінка
             // - Дзеркала
             // - Профілі
-            // - Дуже маленькі деталі
+            // - Скло
             
-            if (lowerName.Contains("задня стенка") ||
-                lowerName.Contains("двп") ||
-                lowerName.Contains("хдф") ||
-                lowerName.Contains("дзеркало") ||
+            // Явно НЕ потребують свердління
+            if (lowerMaterial == "хдф" ||
+                lowerMaterial == "дзеркало" ||
+                lowerMaterial == "скло" ||
+                lowerMaterial == "профіль")
+            {
+                return false;
+            }
+
+            // Перевіряємо чи це справді задня стінка (а не "Зад стійка")
+            if ((lowerName.Contains("задня") && lowerName.Contains("стінка")) ||
+                (lowerName.Contains("задня") && lowerName.Contains("стенка")) ||
+                lowerName == "задня стінка" ||
+                lowerName == "задня стенка" ||
+                lowerName.StartsWith("задня ст."))
+            {
+                return false;
+            }
+
+            // Дзеркала та профілі по назві
+            if (lowerName.Contains("дзеркало") ||
                 lowerName.Contains("профиль") ||
-                lowerName.Contains("профіль") ||
-                lowerMaterial.Contains("хдф") ||
-                lowerMaterial.Contains("дзеркало"))
+                lowerName.Contains("профіль"))
             {
                 return false;
             }
 
-            // Маленькі деталі
-            if (part.Length < 100 || part.Width < 100)
-            {
-                return false;
-            }
-
-            // За замовчуванням - потрібне
+            // Все інше (Бік, Фасад, Криша, Дно, Полиця, стійки, царги тощо) - потребує свердління
             return true;
         }
 
