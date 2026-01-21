@@ -58,13 +58,17 @@ namespace Tablitsya3.Services
 
                 _logger.LogInfo($"Парсинг проекту: UUID={project.ProjectUuid}, File={fileName}", "ProjectParser");
 
+                // Збираємо всі операції свердління (XNC) та їх деталі
+                var drillingPartIds = GetDrillingPartIds(root);
+                _logger.LogInfo($"Знайдено {drillingPartIds.Count} деталей зі свердлінням", "ProjectParser");
+
                 // Парсинг товарів (goods)
                 var partCounters = new Dictionary<int, int>();
                 var goods = root.Elements("good").Where(g => g.Attribute("typeId")?.Value == "product").ToList();
 
                 foreach (var good in goods)
                 {
-                    var product = ParseProduct(good, project.ProjectUuid, fileName, partCounters);
+                    var product = ParseProduct(good, project.ProjectUuid, fileName, partCounters, drillingPartIds);
                     if (product != null)
                     {
                         project.Products.Add(product);
@@ -88,9 +92,37 @@ namespace Tablitsya3.Services
         }
 
         /// <summary>
+        /// Отримання ID деталей які мають операції свердління (XNC)
+        /// </summary>
+        private HashSet<int> GetDrillingPartIds(XElement root)
+        {
+            var partIds = new HashSet<int>();
+            
+            // Шукаємо всі операції XNC (свердління/фрезерування)
+            var xncOperations = root.Elements("operation")
+                .Where(op => op.Attribute("typeId")?.Value == "XNC");
+            
+            foreach (var operation in xncOperations)
+            {
+                // Кожна операція має вкладені елементи <part id="X"/>
+                var parts = operation.Elements("part");
+                foreach (var part in parts)
+                {
+                    var idStr = part.Attribute("id")?.Value;
+                    if (!string.IsNullOrEmpty(idStr) && int.TryParse(idStr, out int partId))
+                    {
+                        partIds.Add(partId);
+                    }
+                }
+            }
+            
+            return partIds;
+        }
+
+        /// <summary>
         /// Парсинг товару (good)
         /// </summary>
-        private ImportedProduct? ParseProduct(XElement goodElement, string projectUuid, string fileName, Dictionary<int, int> partCounters)
+        private ImportedProduct? ParseProduct(XElement goodElement, string projectUuid, string fileName, Dictionary<int, int> partCounters, HashSet<int> drillingPartIds)
         {
             try
             {
@@ -115,7 +147,7 @@ namespace Tablitsya3.Services
                 {
                     foreach (var partElement in partElements)
                     {
-                        var parts = ParsePartElement(partElement, projectUuid, fileName, product.Name, partCounters);
+                        var parts = ParsePartElement(partElement, projectUuid, fileName, product.Name, partCounters, drillingPartIds);
                         product.Parts.AddRange(parts);
                     }
                 }
@@ -132,7 +164,7 @@ namespace Tablitsya3.Services
         /// <summary>
         /// Парсинг елементу деталі
         /// </summary>
-        private List<Part> ParsePartElement(XElement partElement, string projectUuid, string fileName, string orderName, Dictionary<int, int> partCounters)
+        private List<Part> ParsePartElement(XElement partElement, string projectUuid, string fileName, string orderName, Dictionary<int, int> partCounters, HashSet<int> drillingPartIds)
         {
             var parts = new List<Part>();
 
@@ -147,9 +179,8 @@ namespace Tablitsya3.Services
                 var name = partElement.Attribute("name")?.Value ?? "";
                 var code = partElement.Attribute("part.code")?.Value ?? "";
 
-                // Фільтрація порожніх або службових деталей
+                // Фільтрація порожніх деталей (без розмірів)
                 if (string.IsNullOrWhiteSpace(name) ||
-                    name.Contains("Ящик") ||
                     ParseDouble(partElement.Attribute("l")?.Value) == 0 ||
                     ParseDouble(partElement.Attribute("w")?.Value) == 0)
                 {
@@ -160,6 +191,12 @@ namespace Tablitsya3.Services
                 int count = Math.Max(1, ParseInt(partElement.Attribute("count")?.Value));
                 int usedCount = ParseInt(partElement.Attribute("usedCount")?.Value);
                 int actualCount = Math.Max(count, usedCount);
+                
+                // Якщо count і usedCount обидва 0 - пропускаємо
+                if (actualCount == 0)
+                {
+                    return parts;
+                }
 
                 // Розміри
                 double length = ParseDouble(partElement.Attribute("l")?.Value);
@@ -174,8 +211,8 @@ namespace Tablitsya3.Services
                 // Матеріал
                 string material = DetermineMaterial(name, partElement);
 
-                // Чи потрібен текстовий маркер (txt)
-                bool hasTxt = partElement.Attribute("txt")?.Value?.ToLower() == "true";
+                // Чи потрібне свердління - визначаємо з операцій XNC
+                bool requiresDrilling = drillingPartIds.Contains(partId);
 
                 // Створюємо actualCount деталей
                 for (int i = 1; i <= actualCount; i++)
@@ -202,11 +239,15 @@ namespace Tablitsya3.Services
                         CreatedDate = DateTime.UtcNow,
                         SourceFileName = fileName,
                         OrderName = orderName,
-                        EdgeBandingSidesRequired = edgeBandingSides
+                        EdgeBandingSidesRequired = edgeBandingSides,
+                        
+                        // Етапи виробництва
+                        RequiresCutting = true, // Порізка завжди потрібна
+                        RequiresEdgeBanding = edgeBandingSides > 0,
+                        RequiresDrilling = requiresDrilling, // З операцій XNC
+                        RequiresSorting = true,
+                        RequiresPacking = true
                     };
-
-                    // Встановлюємо вимоги до етапів
-                    SetStageRequirements(part, hasTxt);
 
                     parts.Add(part);
                 }
@@ -252,124 +293,6 @@ namespace Tablitsya3.Services
                 return "Скло";
             
             return "ЛДСП";
-        }
-
-        /// <summary>
-        /// Встановлення вимог до етапів
-        /// </summary>
-        private void SetStageRequirements(Part part, bool hasTxt)
-        {
-            var lowerName = part.Name.ToLower();
-            var lowerMaterial = part.Material.ToLower();
-
-            // Порізка - потрібна завжди
-            part.RequiresCutting = true;
-
-            // Обклейка кромкою - залежить від XML
-            part.RequiresEdgeBanding = part.EdgeBandingSidesRequired > 0;
-
-            // Свердління - визначаємо за типом деталі
-            part.RequiresDrilling = DetermineDrillingRequired(part, lowerName, lowerMaterial);
-
-            // Сортування та пакування - завжди
-            part.RequiresSorting = true;
-            part.RequiresPacking = true;
-        }
-
-        /// <summary>
-        /// Визначення чи потрібне свердління
-        /// </summary>
-        private bool DetermineDrillingRequired(Part part, string lowerName, string lowerMaterial)
-        {
-            // Не потребують свердління:
-            // - Задні стінки (ДВП, ХДФ) - але тільки якщо це справді задня стінка
-            // - Дзеркала
-            // - Профілі
-            // - Скло
-            
-            // Явно НЕ потребують свердління
-            if (lowerMaterial == "хдф" ||
-                lowerMaterial == "дзеркало" ||
-                lowerMaterial == "скло" ||
-                lowerMaterial == "профіль")
-            {
-                return false;
-            }
-
-            // Перевіряємо чи це справді задня стінка (а не "Зад стійка")
-            if ((lowerName.Contains("задня") && lowerName.Contains("стінка")) ||
-                (lowerName.Contains("задня") && lowerName.Contains("стенка")) ||
-                lowerName == "задня стінка" ||
-                lowerName == "задня стенка" ||
-                lowerName.StartsWith("задня ст."))
-            {
-                return false;
-            }
-
-            // Дзеркала та профілі по назві
-            if (lowerName.Contains("дзеркало") ||
-                lowerName.Contains("профиль") ||
-                lowerName.Contains("профіль"))
-            {
-                return false;
-            }
-
-            // Все інше (Бік, Фасад, Криша, Дно, Полиця, стійки, царги тощо) - потребує свердління
-            return true;
-        }
-
-        /// <summary>
-        /// Парсинг дати з формату проекту (дММyyyyHHmmss)
-        /// </summary>
-        private DateTime? ParseProjectDate(string? dateStr)
-        {
-            if (string.IsNullOrEmpty(dateStr)) return null;
-            
-            try
-            {
-                // Формат: dMMyyyyHHmmss (наприклад: 2092025112249)
-                if (dateStr.Length >= 13)
-                {
-                    var day = int.Parse(dateStr.Substring(0, 1));
-                    var month = int.Parse(dateStr.Substring(1, 2));
-                    var year = int.Parse(dateStr.Substring(3, 4));
-                    var hour = int.Parse(dateStr.Substring(7, 2));
-                    var minute = int.Parse(dateStr.Substring(9, 2));
-                    var second = int.Parse(dateStr.Substring(11, 2));
-                    
-                    return new DateTime(year, month, day, hour, minute, second);
-                }
-            }
-            catch
-            {
-                // Ігноруємо помилки парсингу дати
-            }
-            
-            return null;
-        }
-
-        private double ParseDouble(string? value)
-        {
-            if (string.IsNullOrEmpty(value)) return 0;
-            if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out double result))
-                return result;
-            return 0;
-        }
-
-        private int ParseInt(string? value)
-        {
-            if (string.IsNullOrEmpty(value)) return 0;
-            if (int.TryParse(value, out int result))
-                return result;
-            return 0;
-        }
-
-        private decimal ParseDecimal(string? value)
-        {
-            if (string.IsNullOrEmpty(value)) return 0;
-            if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal result))
-                return result;
-            return 0;
         }
 
         /// <summary>
@@ -426,6 +349,60 @@ namespace Tablitsya3.Services
             {
                 return null;
             }
+        }
+
+        private double ParseDouble(string? value)
+        {
+            if (string.IsNullOrEmpty(value)) return 0;
+            if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out double result))
+                return result;
+            return 0;
+        }
+
+        private int ParseInt(string? value)
+        {
+            if (string.IsNullOrEmpty(value)) return 0;
+            if (int.TryParse(value, out int result))
+                return result;
+            return 0;
+        }
+
+        private decimal ParseDecimal(string? value)
+        {
+            if (string.IsNullOrEmpty(value)) return 0;
+            if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal result))
+                return result;
+            return 0;
+        }
+
+        /// <summary>
+        /// Парсинг дати з формату проекту (дММyyyyHHmmss)
+        /// </summary>
+        private DateTime? ParseProjectDate(string? dateStr)
+        {
+            if (string.IsNullOrEmpty(dateStr)) return null;
+            
+            try
+            {
+                // Формат: dMMyyyyHHmmss (наприклад: 2092025112249)
+                if (dateStr.Length >= 13)
+                {
+                    var day = int.Parse(dateStr.Substring(0, 1));
+                    var month = int.Parse(dateStr.Substring(1, 2));
+                    var year = int.Parse(dateStr.Substring(3, 4));
+                    var hour = int.Parse(dateStr.Substring(7, 2));
+                    var minute = int.Parse(dateStr.Substring(9, 2));
+                    var second = int.Parse(dateStr.Substring(11, 2));
+                    
+                    return new DateTime(year, month, day, hour, minute, second);
+                }
+            }
+            catch
+            {
+                // Ігноруємо помилки парсингу дати
+            }
+            
+            return null;
         }
     }
 }
