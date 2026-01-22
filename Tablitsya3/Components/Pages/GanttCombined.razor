@@ -4,6 +4,7 @@
 @using Tablitsya3.Services
 @using Tablitsya3.Components.Shared
 @using Tablitsya3.Models.Scanning
+@using Microsoft.JSInterop
 @inject UnifiedStorageService StorageService
 @inject WorkshopConfigService WorkshopConfigService
 @inject ProductionPlanningService PlanningService
@@ -379,7 +380,7 @@ else
                                                             <table class="tooltip-table">
                                                                 <tr><td>Площа:</td><td><strong>@order.SquareMeters.ToString("N0") м²</strong></td></tr>
                                                                 <tr><td>Потужність цеху:</td><td>@capacity м²/день</td></tr>
-                                                                <tr><td>Тривалість:</td><td><strong>@daysOfWork.ToString("F2") роб.дн.</strong></td></tr>
+                                                                <tr><td>Тривалість:</td><td><strong>@daysOfWork.ToString("F2") робот.дн.</strong></td></tr>
                                                                 @if (isTransferred)
                                                                 {
                                                                     var origName = workshops.FirstOrDefault(w => w.Number == colorWorkshop)?.Name ?? $"Цех {colorWorkshop}";
@@ -1163,6 +1164,186 @@ else
             await StorageService.SaveWorkshopDataAsync(workshopData);
             await LoadData();
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Повторено!", "info");
+        }
+    }
+    
+    // ========== Drag & Drop методи для JS callbacks ==========
+    
+    /// <summary>
+    /// Callback з JavaScript при зміні порядку замовлення в межах цеху
+    /// </summary>
+    [JSInvokable]
+    public async Task OnGanttOrderReordered(int workshopNumber, int oldIndex, int newIndex)
+    {
+        try
+        {
+            Logger.LogInfo($"Gantt: Зміна порядку в цеху {workshopNumber}: {oldIndex} -> {newIndex}", "GanttCombined");
+            
+            if (oldIndex == newIndex || oldIndex < 0 || newIndex < 0)
+            {
+                Logger.LogWarning("Gantt: Невірні індекси, пропускаємо", "GanttCombined");
+                return;
+            }
+            
+            if (!workshopData.WorkshopOrders.ContainsKey(workshopNumber))
+            {
+                Logger.LogWarning($"Gantt: Цех {workshopNumber} не знайдено", "GanttCombined");
+                return;
+            }
+            
+            var orders = workshopData.WorkshopOrders[workshopNumber];
+            if (oldIndex >= orders.Count || newIndex >= orders.Count)
+            {
+                Logger.LogWarning($"Gantt: Індекс за межами списку (count={orders.Count})", "GanttCombined");
+                return;
+            }
+            
+            // Зберігаємо стан для Undo
+            UndoRedo.SaveState(workshopData, $"Зміна порядку в цеху {workshopNumber}");
+            
+            // Переміщуємо площу
+            var orderValue = orders[oldIndex];
+            orders.RemoveAt(oldIndex);
+            orders.Insert(newIndex, orderValue);
+            
+            // Переміщуємо дати
+            if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
+            {
+                var dates = workshopData.WorkshopOrderDates[workshopNumber];
+                if (oldIndex < dates.Count)
+                {
+                    var dateValue = dates[oldIndex];
+                    dates.RemoveAt(oldIndex);
+                    dates.Insert(Math.Min(newIndex, dates.Count), dateValue);
+                }
+            }
+            
+            // Переміщуємо назви
+            if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
+            {
+                var names = workshopData.WorkshopOrderNames[workshopNumber];
+                if (oldIndex < names.Count)
+                {
+                    var nameValue = names[oldIndex];
+                    names.RemoveAt(oldIndex);
+                    names.Insert(Math.Min(newIndex, names.Count), nameValue);
+                }
+            }
+            
+            workshopData.LastUpdated = DateTime.UtcNow;
+            await StorageService.SaveWorkshopDataAsync(workshopData);
+            await LoadData();
+            
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Порядок змінено!", "success");
+            Logger.LogInfo($"Gantt: Порядок в цеху {workshopNumber} збережено", "GanttCombined");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Gantt: Помилка зміни порядку", ex, "GanttCombined");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
+        }
+    }
+    
+    /// <summary>
+    /// Callback з JavaScript при переміщенні замовлення між цехами
+    /// </summary>
+    [JSInvokable]
+    public async Task OnGanttOrderTransfer(int fromWorkshop, int toWorkshop, int orderDay, double squareMeters)
+    {
+        try
+        {
+            Logger.LogInfo($"Gantt: Переміщення замовлення {orderDay} ({squareMeters}м²) з цеху {fromWorkshop} в цех {toWorkshop}", "GanttCombined");
+            
+            if (fromWorkshop == toWorkshop)
+            {
+                Logger.LogWarning("Gantt: Той самий цех, пропускаємо", "GanttCombined");
+                return;
+            }
+            
+            if (!workshopData.WorkshopOrders.ContainsKey(fromWorkshop))
+            {
+                Logger.LogWarning($"Gantt: Цех-джерело {fromWorkshop} не знайдено", "GanttCombined");
+                return;
+            }
+            
+            // Знаходимо індекс замовлення по orderDay (це 1-based Day з Order)
+            var fromOrders = workshopData.WorkshopOrders[fromWorkshop];
+            var orderIndex = orderDay - 1; // Day це 1-based
+            
+            // Або шукаємо по площі якщо індекс невірний
+            if (orderIndex < 0 || orderIndex >= fromOrders.Count || 
+                Math.Abs(fromOrders[orderIndex] - squareMeters) > 0.01)
+            {
+                // Шукаємо по площі
+                orderIndex = fromOrders.FindIndex(o => Math.Abs(o - squareMeters) < 0.01);
+            }
+            
+            if (orderIndex < 0 || orderIndex >= fromOrders.Count)
+            {
+                Logger.LogWarning($"Gantt: Замовлення не знайдено (day={orderDay}, square={squareMeters})", "GanttCombined");
+                return;
+            }
+            
+            // Зберігаємо стан для Undo
+            UndoRedo.SaveState(workshopData, $"Переміщення з цеху {fromWorkshop} в цеху {toWorkshop}");
+            
+            // Забираємо з старого цеху
+            var orderValue = fromOrders[orderIndex];
+            fromOrders.RemoveAt(orderIndex);
+            
+            DateTime? orderDate = null;
+            string? orderName = null;
+            
+            if (workshopData.WorkshopOrderDates.ContainsKey(fromWorkshop) && 
+                orderIndex < workshopData.WorkshopOrderDates[fromWorkshop].Count)
+            {
+                orderDate = workshopData.WorkshopOrderDates[fromWorkshop][orderIndex];
+                workshopData.WorkshopOrderDates[fromWorkshop].RemoveAt(orderIndex);
+            }
+            
+            if (workshopData.WorkshopOrderNames.ContainsKey(fromWorkshop) && 
+                orderIndex < workshopData.WorkshopOrderNames[fromWorkshop].Count)
+            {
+                orderName = workshopData.WorkshopOrderNames[fromWorkshop][orderIndex];
+                workshopData.WorkshopOrderNames[fromWorkshop].RemoveAt(orderIndex);
+            }
+            
+            // Додаємо в новий цех
+            workshopData.EnsureWorkshopExists(toWorkshop);
+            
+            workshopData.WorkshopOrders[toWorkshop].Add(orderValue);
+            
+            if (orderDate.HasValue)
+            {
+                workshopData.WorkshopOrderDates[toWorkshop].Add(orderDate.Value);
+            }
+            
+            if (!string.IsNullOrEmpty(orderName))
+            {
+                workshopData.WorkshopOrderNames[toWorkshop].Add(orderName);
+            }
+            
+            // Зберігаємо оригінальний цех для кольору
+            var newOrderIndex = workshopData.WorkshopOrders[toWorkshop].Count;
+            var originalKey = $"{toWorkshop}_{newOrderIndex}";
+            workshopData.OriginalWorkshops[originalKey] = fromWorkshop;
+            
+            workshopData.LastUpdated = DateTime.UtcNow;
+            await StorageService.SaveWorkshopDataAsync(workshopData);
+            await LoadData();
+            
+            var fromName = workshops.FirstOrDefault(w => w.Number == fromWorkshop)?.Name ?? $"Цех {fromWorkshop}";
+            var toName = workshops.FirstOrDefault(w => w.Number == toWorkshop)?.Name ?? $"Цех {toWorkshop}";
+            
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", 
+                $"Замовлення переміщено з {fromName} в {toName}!", "success");
+            
+            Logger.LogInfo($"Gantt: Замовлення успішно переміщено", "GanttCombined");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Gantt: Помилка переміщення між цехами", ex, "GanttCombined");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
         }
     }
     
