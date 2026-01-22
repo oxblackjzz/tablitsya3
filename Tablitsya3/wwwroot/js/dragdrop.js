@@ -147,6 +147,7 @@ window.DragDropInterop = {
 window.GanttDragDrop = {
     sortableInstances: {},
     dragData: null, // Зберігаємо дані про drag операцію
+    dotNetHelperRef: null, // Зберігаємо посилання на .NET helper
     
     initGanttSortable: function (elementId, dotNetHelper, workshopNumber) {
         const el = document.getElementById(elementId);
@@ -162,29 +163,37 @@ window.GanttDragDrop = {
         }
 
         const self = this;
+        self.dotNetHelperRef = dotNetHelper;
 
         try {
             this.sortableInstances[elementId] = new Sortable(el, {
                 animation: 150,
-                ghostClass: 'sortable-ghost',
-                chosenClass: 'sortable-chosen',
-                dragClass: 'sortable-drag',
-                draggable: '.draggable-bar',
-                filter: '.gantt-cell, .shipment-line',
+                ghostClass: 'gantt-sortable-ghost',
+                chosenClass: 'gantt-sortable-chosen',
+                dragClass: 'gantt-sortable-drag',
+                draggable: '.draggable-bar[data-segment="0"]', // Тільки перші сегменти
+                filter: '.gantt-cell, .shipment-line, .segment-continuation',
                 preventOnFilter: false,
-                group: 'gantt-orders',
+                group: 'gantt-orders', // Група для переміщення між цехами
                 sort: false, // Вимикаємо автоматичне сортування бо бари абсолютно позиціоновані
                 forceFallback: true,
                 fallbackOnBody: true,
+                swapThreshold: 0.65,
                 
                 onStart: function (evt) {
                     document.body.classList.add('is-dragging');
+                    
+                    // Підсвічуємо всі зони для drop
                     document.querySelectorAll('.gantt-dropzone').forEach(zone => {
                         zone.classList.add('drop-target-active');
                     });
                     
-                    // Зберігаємо початкову позицію для розрахунку
-                    const bars = Array.from(evt.from.querySelectorAll('.draggable-bar'));
+                    // Зберігаємо дані про елемент що перетягуємо
+                    const item = evt.item;
+                    const fromContainer = evt.from;
+                    
+                    // Отримуємо всі перші сегменти (головні бари) в порядку left
+                    const bars = Array.from(fromContainer.querySelectorAll('.draggable-bar[data-segment="0"]'));
                     const sortedBars = bars.sort((a, b) => {
                         const leftA = parseFloat(a.style.left) || 0;
                         const leftB = parseFloat(b.style.left) || 0;
@@ -192,48 +201,67 @@ window.GanttDragDrop = {
                     });
                     
                     self.dragData = {
-                        item: evt.item,
-                        fromWorkshop: parseInt(evt.from.dataset.workshop),
-                        orderDay: parseInt(evt.item.dataset.orderDay),
-                        squareMeters: parseFloat(evt.item.dataset.square),
-                        oldIndex: sortedBars.indexOf(evt.item),
+                        item: item,
+                        fromWorkshop: parseInt(fromContainer.dataset.workshop) || workshopNumber,
+                        orderDay: parseInt(item.dataset.orderDay),
+                        squareMeters: parseFloat(item.dataset.square),
+                        oldIndex: sortedBars.indexOf(item),
                         sortedBars: sortedBars
                     };
                     
-                    console.log('Gantt drag started:', {
+                    console.log('🎯 Gantt drag started:', {
                         orderDay: self.dragData.orderDay,
                         workshop: self.dragData.fromWorkshop,
-                        oldIndex: self.dragData.oldIndex
+                        oldIndex: self.dragData.oldIndex,
+                        square: self.dragData.squareMeters
                     });
                 },
                 
                 onEnd: function (evt) {
                     document.body.classList.remove('is-dragging');
+                    
+                    // Прибираємо підсвітку
                     document.querySelectorAll('.gantt-dropzone').forEach(zone => {
                         zone.classList.remove('drop-target-active');
                     });
                     
-                    if (!self.dragData) return;
+                    if (!self.dragData) {
+                        console.warn('No drag data available');
+                        return;
+                    }
                     
                     const fromWorkshop = self.dragData.fromWorkshop;
-                    const toWorkshop = parseInt(evt.to.dataset.workshop);
+                    const toContainer = evt.to;
+                    const toWorkshop = parseInt(toContainer.dataset.workshop) || fromWorkshop;
                     const orderDay = self.dragData.orderDay;
                     const squareMeters = self.dragData.squareMeters;
                     const oldIndex = self.dragData.oldIndex;
                     
+                    console.log('🎯 Gantt drag ended:', {
+                        fromWorkshop,
+                        toWorkshop,
+                        orderDay,
+                        oldIndex
+                    });
+                    
+                    // Повертаємо елемент на місце - Blazor сам оновить DOM
+                    if (evt.from !== evt.to) {
+                        // Переміщення між контейнерами - повертаємо назад
+                        evt.from.appendChild(evt.item);
+                    }
+                    
                     if (fromWorkshop === toWorkshop) {
                         // Переміщення в межах одного цеху
-                        // Визначаємо новий індекс по X-позиції курсора
                         const container = evt.to;
                         const containerRect = container.getBoundingClientRect();
-                        const dropX = evt.originalEvent.clientX - containerRect.left;
+                        const dropX = evt.originalEvent ? evt.originalEvent.clientX - containerRect.left : 0;
                         const containerWidth = containerRect.width;
                         
                         // Отримуємо всі бари крім того що перетягуємо
                         const otherBars = self.dragData.sortedBars.filter(b => b !== evt.item);
                         
-                        // Визначаємо нову позицію
-                        let newIndex = otherBars.length; // За замовчуванням - в кінець
+                        // Визначаємо нову позицію по X-координаті
+                        let newIndex = otherBars.length;
                         
                         for (let i = 0; i < otherBars.length; i++) {
                             const bar = otherBars[i];
@@ -248,38 +276,42 @@ window.GanttDragDrop = {
                             }
                         }
                         
-                        // Коригуємо якщо переміщуємо вправо
+                        // Коригуємо індекс якщо переміщуємо праворуч
                         if (newIndex > oldIndex) {
-                            // Враховуємо що ми видалили елемент зі старої позиції
+                            // newIndex вже правильний
                         }
                         
-                        console.log('Gantt drag ended (same workshop):', {
+                        console.log('📦 Same workshop reorder:', {
                             fromWorkshop, oldIndex, newIndex, dropX, containerWidth
                         });
                         
                         if (oldIndex !== newIndex && oldIndex >= 0 && newIndex >= 0) {
-                            console.log('Reordering within workshop:', fromWorkshop, 'from', oldIndex, 'to', newIndex);
                             dotNetHelper.invokeMethodAsync('OnGanttOrderReordered', 
                                 fromWorkshop,
                                 oldIndex, 
                                 newIndex
                             ).then(() => {
-                                console.log('OnGanttOrderReordered success');
-                            }).catch(err => console.error('Error calling OnGanttOrderReordered:', err));
-                        } else {
-                            console.log('Same position, no reorder needed');
+                                console.log('✅ OnGanttOrderReordered success');
+                            }).catch(err => {
+                                console.error('❌ Error calling OnGanttOrderReordered:', err);
+                                window.DragDropInterop.showToast('Помилка зміни порядку', 'error');
+                            });
                         }
                     } else {
                         // Переміщення між цехами
-                        console.log('Transferring between workshops:', fromWorkshop, '->', toWorkshop);
+                        console.log('🔄 Transfer between workshops:', fromWorkshop, '->', toWorkshop);
+                        
                         dotNetHelper.invokeMethodAsync('OnGanttOrderTransfer',
                             fromWorkshop,
                             toWorkshop,
                             orderDay,
                             squareMeters
                         ).then(() => {
-                            console.log('OnGanttOrderTransfer success');
-                        }).catch(err => console.error('Error calling OnGanttOrderTransfer:', err));
+                            console.log('✅ OnGanttOrderTransfer success');
+                        }).catch(err => {
+                            console.error('❌ Error calling OnGanttOrderTransfer:', err);
+                            window.DragDropInterop.showToast('Помилка переміщення', 'error');
+                        });
                     }
                     
                     self.dragData = null;
@@ -292,6 +324,18 @@ window.GanttDragDrop = {
             console.error('❌ Error initializing Gantt Sortable:', err);
             return false;
         }
+    },
+    
+    // Знищення всіх інстансів
+    destroyAll: function() {
+        for (const elementId in this.sortableInstances) {
+            if (this.sortableInstances[elementId]) {
+                this.sortableInstances[elementId].destroy();
+            }
+        }
+        this.sortableInstances = {};
+        this.dragData = null;
+        console.log('All Gantt Sortable instances destroyed');
     }
 };
 
