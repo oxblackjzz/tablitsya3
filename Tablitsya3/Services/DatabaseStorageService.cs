@@ -306,21 +306,33 @@ catch (Exception ex)
 
         public async Task ClearAllDataAsync()
         {
-       try
-      {
-           var entity = await _context.WorkshopData.FirstOrDefaultAsync();
- if (entity != null)
-     {
-          _context.WorkshopData.Remove(entity);
-      await _context.SaveChangesAsync();
-               _logger.LogInformation("All workshop data cleared from database");
-     }
-       }
+            try
+            {
+                _logger.LogInformation("🗑️ Clearing ALL workshop data from database...");
+                
+                // ✅ Видаляємо всі дані з усіх таблиць
+                await _context.Database.ExecuteSqlRawAsync("DELETE FROM orders");
+                await _context.Database.ExecuteSqlRawAsync("DELETE FROM workshop_capacities");
+                await _context.Database.ExecuteSqlRawAsync("DELETE FROM workshop_production_lead_times");
+                await _context.Database.ExecuteSqlRawAsync("DELETE FROM workshop_days_before_production");
+                await _context.Database.ExecuteSqlRawAsync("DELETE FROM custom_completion_dates");
+                await _context.Database.ExecuteSqlRawAsync("DELETE FROM original_workshops");
+                
+                // Видаляємо головний запис
+                var entity = await _context.WorkshopData.FirstOrDefaultAsync();
+                if (entity != null)
+                {
+                    _context.WorkshopData.Remove(entity);
+                    await _context.SaveChangesAsync();
+                }
+                
+                _logger.LogInformation("✅ All workshop data cleared from database (orders, capacities, original_workshops, etc.)");
+            }
             catch (Exception ex)
             {
-_logger.LogError(ex, "Error clearing workshop data from database");
-    throw;
-        }
+                _logger.LogError(ex, "❌ Error clearing workshop data from database");
+                throw;
+            }
         }
 
         public async Task<bool> HasSavedDataAsync()

@@ -289,8 +289,7 @@ public partial class ProductionPlanning : ComponentBase, IAsyncDisposable
                 if (oldIndex >= 0 && oldIndex < fromOrders.Count)
                 {
                     var orderValue = fromOrders[oldIndex];
-                    fromOrders.RemoveAt(oldIndex);
-
+                    
                     DateTime? orderDate = null;
                     string? orderName = null;
 
@@ -298,13 +297,44 @@ public partial class ProductionPlanning : ComponentBase, IAsyncDisposable
                         oldIndex < workshopData.WorkshopOrderDates[fromWorkshop].Count)
                     {
                         orderDate = workshopData.WorkshopOrderDates[fromWorkshop][oldIndex];
-                        workshopData.WorkshopOrderDates[fromWorkshop].RemoveAt(oldIndex);
                     }
 
                     if (workshopData.WorkshopOrderNames.ContainsKey(fromWorkshop) && 
                         oldIndex < workshopData.WorkshopOrderNames[fromWorkshop].Count)
                     {
                         orderName = workshopData.WorkshopOrderNames[fromWorkshop][oldIndex];
+                    }
+                    
+                    Logger.LogInfo($"Назва замовлення: '{orderName ?? "(пусто)"}'", "ProductionPlanning");
+                    
+                    // Визначаємо СПРАВЖНІЙ оригінальний цех:
+                    // 1. Якщо є запис в OriginalWorkshops - беремо його (замовлення вже переміщувалось раніше)
+                    // 2. Якщо немає запису - fromWorkshop і є оригінальний цех (перше переміщення)
+                    int originalWorkshop;
+                    if (!string.IsNullOrEmpty(orderName) && workshopData.OriginalWorkshops.ContainsKey(orderName))
+                    {
+                        originalWorkshop = workshopData.OriginalWorkshops[orderName];
+                        Logger.LogInfo($"Знайдено збережений оригінальний цех: {originalWorkshop}", "ProductionPlanning");
+                    }
+                    else
+                    {
+                        // Перше переміщення - fromWorkshop і є оригінальний цех
+                        originalWorkshop = fromWorkshop;
+                        Logger.LogInfo($"Перше переміщення, оригінальний цех = fromWorkshop = {originalWorkshop}", "ProductionPlanning");
+                    }
+                    
+                    // Тепер видаляємо з джерела
+                    fromOrders.RemoveAt(oldIndex);
+                    
+                    if (workshopData.WorkshopOrderDates.ContainsKey(fromWorkshop) && 
+                        oldIndex < workshopData.WorkshopOrderDates[fromWorkshop].Count)
+                    {
+                        workshopData.WorkshopOrderDates[fromWorkshop].RemoveAt(oldIndex);
+                    }
+
+                    if (workshopData.WorkshopOrderNames.ContainsKey(fromWorkshop) && 
+                        oldIndex < workshopData.WorkshopOrderNames[fromWorkshop].Count)
+                    {
                         workshopData.WorkshopOrderNames[fromWorkshop].RemoveAt(oldIndex);
                     }
 
@@ -325,6 +355,23 @@ public partial class ProductionPlanning : ComponentBase, IAsyncDisposable
                     {
                         var toNames = workshopData.WorkshopOrderNames[toWorkshop];
                         toNames.Insert(Math.Min(insertIndex, toNames.Count), orderName);
+                        
+                        // Зберігаємо/оновлюємо оригінальний цех для кольору (ключ - назва замовлення)
+                        // Якщо замовлення повертається в свій оригінальний цех - видаляємо запис
+                        if (toWorkshop == originalWorkshop)
+                        {
+                            workshopData.OriginalWorkshops.Remove(orderName);
+                            Logger.LogInfo($"Замовлення '{orderName}' повернуто в оригінальний цех {originalWorkshop}, видаляємо запис", "ProductionPlanning");
+                        }
+                        else
+                        {
+                            workshopData.OriginalWorkshops[orderName] = originalWorkshop;
+                            Logger.LogInfo($"Зберігаємо OriginalWorkshops['{orderName}'] = {originalWorkshop}", "ProductionPlanning");
+                        }
+                    }
+                    else
+                    {
+                        Logger.LogWarning($"Замовлення без назви - колір не буде збережено!", "ProductionPlanning");
                     }
                 }
             }

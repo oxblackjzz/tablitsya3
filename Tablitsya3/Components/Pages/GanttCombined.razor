@@ -238,15 +238,14 @@ else
                                         
                                         var orderName = string.IsNullOrWhiteSpace(order.OrderName) ? $"№{order.Day}" : order.OrderName;
                                         
-                                        // Визначаємо колір
-                                        var orderKey = $"{workshop.Number}_{order.Day}";
-                                        var colorWorkshop = workshopData.OriginalWorkshops.ContainsKey(orderKey) 
-                                            ? workshopData.OriginalWorkshops[orderKey] 
+                                        // Визначаємо колір - використовуємо назву замовлення як ключ
+                                        var colorWorkshop = (!string.IsNullOrEmpty(order.OrderName) && workshopData.OriginalWorkshops.ContainsKey(order.OrderName))
+                                            ? workshopData.OriginalWorkshops[order.OrderName] 
                                             : workshop.Number;
                                         var barColor = GetWorkshopColor(colorWorkshop);
                                         var isTransferred = colorWorkshop != workshop.Number;
                                         
-                                        var titleText = $"{orderName}: {order.SquareMeters:N0} м² ({daysOfWork:F2} роб.дн.) | Відвантаж: {order.CompletionDate:dd.MM}";
+                                        var titleText = $"{orderName}: {order.SquareMeters:N0} м² ({daysOfWork:F2} робот.дн.) | Відвантаж: {order.CompletionDate:dd.MM}";
                                         if (isTransferred)
                                         {
                                             titleText += $" | З цеху {colorWorkshop}";
@@ -1043,7 +1042,7 @@ else
         };
         
         periodStart = periodStart.AddDays(-days);
-        StateHasChanged();
+        StateHasChanges();
     }
     
     private void MovePeriodForward()
@@ -1057,13 +1056,13 @@ else
         };
         
         periodStart = periodStart.AddDays(days);
-        StateHasChanged();
+        StateHasChanges();
     }
     
     private void MovePeriodToday()
     {
         periodStart = DateTime.Today;
-        StateHasChanged();
+        StateHasChanges();
     }
 
     protected override async Task OnInitializedAsync()
@@ -1109,12 +1108,24 @@ else
     private async Task LoadData()
     {
         isLoading = true;
-        StateHasChanged();
+        StateHasChanges();
         
         try
         {
             workshops = await WorkshopConfigService.GetActiveWorkshopsAsync();
             workshopData = await StorageService.LoadWorkshopDataAsync();
+            
+            // Очищаємо застарілі записи OriginalWorkshops
+            var originalCount = workshopData.OriginalWorkshops?.Count ?? 0;
+            CleanupLegacyOriginalWorkshops();
+            var cleanedCount = originalCount - (workshopData.OriginalWorkshops?.Count ?? 0);
+            
+            // Якщо були очищені записи - зберігаємо зміни
+            if (cleanedCount > 0)
+            {
+                Logger.LogInfo($"Очищено {cleanedCount} невалідних записів OriginalWorkshops, зберігаємо...", "GanttCombined");
+                await StorageService.SaveWorkshopDataAsync(workshopData);
+            }
             
             allOrders.Clear();
             workshopCapacities.Clear();
@@ -1167,10 +1178,69 @@ else
         finally
         {
             isLoading = false;
-            StateHasChanged();
+            StateHasChanges();
         }
     }
-
+    
+    /// <summary>
+    /// Очищає застарілі записи OriginalWorkshops:
+    /// 1. Старий формат ключа "workshopNumber_orderIndex"
+    /// 2. Записи для замовлень, які більше не існують
+    /// 3. Записи з оригінальним цехом, якого більше не існує
+    /// </summary>
+    private void CleanupLegacyOriginalWorkshops()
+    {
+        if (workshopData.OriginalWorkshops == null || !workshopData.OriginalWorkshops.Any())
+            return;
+        
+        var keysToRemove = new List<string>();
+        
+        // 1. Знаходимо ключі в старому форматі (число_число)
+        var legacyKeys = workshopData.OriginalWorkshops.Keys
+            .Where(key => System.Text.RegularExpressions.Regex.IsMatch(key, @"^\d+_\d+$"))
+            .ToList();
+        keysToRemove.AddRange(legacyKeys);
+        
+        // 2. Збираємо всі існуючі назви замовлень
+        var existingOrderNames = new HashSet<string>();
+        foreach (var kvp in workshopData.WorkshopOrderNames)
+        {
+            foreach (var name in kvp.Value.Where(n => !string.IsNullOrEmpty(n)))
+            {
+                existingOrderNames.Add(name);
+            }
+        }
+        
+        // 3. Знаходимо записи для замовлень, які більше не існують
+        var orphanedKeys = workshopData.OriginalWorkshops.Keys
+            .Where(key => !legacyKeys.Contains(key) && !existingOrderNames.Contains(key))
+            .ToList();
+        keysToRemove.AddRange(orphanedKeys);
+        
+        // 4. Знаходимо записи з оригінальним цехом, якого більше не існує
+        var existingWorkshops = workshops.Select(w => w.Number).ToHashSet();
+        var invalidWorkshopKeys = workshopData.OriginalWorkshops
+            .Where(kvp => !keysToRemove.Contains(kvp.Key) && !existingWorkshops.Contains(kvp.Value))
+            .Select(kvp => kvp.Key)
+            .ToList();
+        keysToRemove.AddRange(invalidWorkshopKeys);
+        
+        // Видаляємо всі знайдені невалідні записи
+        if (keysToRemove.Any())
+        {
+            Logger.LogWarning($"Знайдено {keysToRemove.Count} невалідних записів OriginalWorkshops, видаляємо...", "GanttCombined");
+            
+            foreach (var key in keysToRemove)
+            {
+                var reason = legacyKeys.Contains(key) ? "старий формат" :
+                             orphanedKeys.Contains(key) ? "замовлення не існує" :
+                             "цех не існує";
+                Logger.LogInfo($"Видалено ключ '{key}' ({reason})", "GanttCombined");
+                workshopData.OriginalWorkshops.Remove(key);
+            }
+        }
+    }
+    
     private async Task LoadScanProgressAsync()
     {
         try
@@ -1366,12 +1436,37 @@ else
             // Зберігаємо стан для Undo
             UndoRedo.SaveState(workshopData, $"Переміщення з цеху {fromWorkshop} в цеху {toWorkshop}");
             
+            // Отримуємо назву замовлення ДО видалення
+            string? orderName = null;
+            if (workshopData.WorkshopOrderNames.ContainsKey(fromWorkshop) && 
+                orderIndex < workshopData.WorkshopOrderNames[fromWorkshop].Count)
+            {
+                orderName = workshopData.WorkshopOrderNames[fromWorkshop][orderIndex];
+            }
+            
+            Logger.LogInfo($"Gantt: Назва замовлення: '{orderName ?? "(пусто)"}'", "GanttCombined");
+            
+            // Визначаємо СПРАВЖНІЙ оригінальний цех:
+            // 1. Якщо є запис в OriginalWorkshops - беремо його (замовлення вже переміщувалось раніше)
+            // 2. Якщо немає запису - fromWorkshop і є оригінальний цех (перше переміщення)
+            int originalWorkshop;
+            if (!string.IsNullOrEmpty(orderName) && workshopData.OriginalWorkshops.ContainsKey(orderName))
+            {
+                originalWorkshop = workshopData.OriginalWorkshops[orderName];
+                Logger.LogInfo($"Gantt: Знайдено збережений оригінальний цех: {originalWorkshop}", "GanttCombined");
+            }
+            else
+            {
+                // Перше переміщення - fromWorkshop і є оригінальний цех
+                originalWorkshop = fromWorkshop;
+                Logger.LogInfo($"Gantt: Перше переміщення, оригінальний цех = fromWorkshop = {originalWorkshop}", "GanttCombined");
+            }
+            
             // Забираємо з старого цеху
             var orderValue = fromOrders[orderIndex];
             fromOrders.RemoveAt(orderIndex);
             
             DateTime? orderDate = null;
-            string? orderName = null;
             
             if (workshopData.WorkshopOrderDates.ContainsKey(fromWorkshop) && 
                 orderIndex < workshopData.WorkshopOrderDates[fromWorkshop].Count)
@@ -1383,7 +1478,6 @@ else
             if (workshopData.WorkshopOrderNames.ContainsKey(fromWorkshop) && 
                 orderIndex < workshopData.WorkshopOrderNames[fromWorkshop].Count)
             {
-                orderName = workshopData.WorkshopOrderNames[fromWorkshop][orderIndex];
                 workshopData.WorkshopOrderNames[fromWorkshop].RemoveAt(orderIndex);
             }
             
@@ -1400,12 +1494,24 @@ else
             if (!string.IsNullOrEmpty(orderName))
             {
                 workshopData.WorkshopOrderNames[toWorkshop].Add(orderName);
+                
+                // Зберігаємо/оновлюємо оригінальний цех для кольору (ключ - назва замовлення)
+                // Якщо замовлення повертається в свій оригінальний цех - видаляємо запис
+                if (toWorkshop == originalWorkshop)
+                {
+                    workshopData.OriginalWorkshops.Remove(orderName);
+                    Logger.LogInfo($"Gantt: Замовлення '{orderName}' повернуто в оригінальний цех {originalWorkshop}, видаляємо запис", "GanttCombined");
+                }
+                else
+                {
+                    workshopData.OriginalWorkshops[orderName] = originalWorkshop;
+                    Logger.LogInfo($"Gantt: Зберігаємо OriginalWorkshops['{orderName}'] = {originalWorkshop}", "GanttCombined");
+                }
             }
-            
-            // Зберігаємо оригінальний цех для кольору
-            var newOrderIndex = workshopData.WorkshopOrders[toWorkshop].Count;
-            var originalKey = $"{toWorkshop}_{newOrderIndex}";
-            workshopData.OriginalWorkshops[originalKey] = fromWorkshop;
+            else
+            {
+                Logger.LogWarning($"Gantt: Замовлення без назви - колір не буде збережено!", "GanttCombined");
+            }
             
             workshopData.LastUpdated = DateTime.UtcNow;
             await StorageService.SaveWorkshopDataAsync(workshopData);
@@ -1424,76 +1530,5 @@ else
             Logger.LogError($"Gantt: Помилка переміщення між цехами", ex, "GanttCombined");
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
         }
-    }
-    
-    // ========== Reorder Modal =========
-    
-    private void OpenReorderModal(int workshopNumber, string workshopName, string color)
-    {
-        reorderWorkshopNumber = workshopNumber;
-        reorderWorkshopName = workshopName;
-        reorderWorkshopColor = color;
-        
-        // Підготовка списку замовлень для редагування
-        if (workshopData.WorkshopOrders.ContainsKey(workshopNumber))
-        {
-            var orders = workshopData.WorkshopOrders[workshopNumber];
-            var dates = workshopData.WorkshopOrderDates.GetValueOrDefault(workshopNumber) 
-                ?? orders.Select((_, i) => workshopData.StartDate.AddDays(i)).ToList();
-            var names = workshopData.WorkshopOrderNames.GetValueOrDefault(workshopNumber) 
-                ?? orders.Select((_, i) => "").ToList();
-            
-            reorderOrders = new List<ReorderModal.ReorderItem>();
-            for (int i = 0; i < orders.Count; i++)
-            {
-                reorderOrders.Add(new ReorderModal.ReorderItem
-                {
-                    SquareMeters = orders[i],
-                    OrderDate = i < dates.Count ? dates[i] : workshopData.StartDate,
-                    Name = i < names.Count ? names[i] : ""
-                });
-            }
-        }
-        else
-        {
-            reorderOrders = new List<ReorderModal.ReorderItem>();
-        }
-        
-        isReorderModalVisible = true;
-        StateHasChanged();
-    }
-    
-    private void CloseReorderModal()
-    {
-        isReorderModalVisible = false;
-        reorderOrders = null;
-        StateHasChanged();
-    }
-    
-    private async Task SaveReorderedOrders(List<ReorderModal.ReorderItem> orders)
-    {
-        if (!workshopData.WorkshopOrders.ContainsKey(reorderWorkshopNumber)) return;
-        
-        // Зберігаємо стан перед зміною
-        UndoRedo.SaveState(workshopData, $"Зміна порядку в {reorderWorkshopName}");
-        
-        // Оновлюємо дані
-        workshopData.WorkshopOrders[reorderWorkshopNumber] = orders.Select(o => o.SquareMeters).ToList();
-        workshopData.WorkshopOrderDates[reorderWorkshopNumber] = orders.Select(o => o.OrderDate).ToList();
-        workshopData.WorkshopOrderNames[reorderWorkshopNumber] = orders.Select(o => o.Name).ToList();
-        
-        workshopData.LastUpdated = DateTime.UtcNow;
-        await StorageService.SaveWorkshopDataAsync(workshopData);
-        
-        isReorderModalVisible = false;
-        await LoadData();
-        
-        await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Порядок змінено!", "success");
-    }
-
-    public void Dispose()
-    {
-        UndoRedo.OnStateChanged -= OnUndoRedoStateChanged;
-        dotNetHelper?.Dispose();
     }
 }

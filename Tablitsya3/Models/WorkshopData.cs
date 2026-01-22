@@ -14,7 +14,7 @@ namespace Tablitsya3.Models
         
         /// <summary>
         /// Оригінальний цех для кожного замовлення (для збереження кольору при переміщенні)
-        /// Ключ: "workshopNumber_orderIndex" (1-based), Значення: оригінальний номер цеху
+        /// Ключ: назва замовлення (OrderName), Значення: оригінальний номер цеху
         /// </summary>
         public Dictionary<string, int> OriginalWorkshops { get; set; } = new();
         

@@ -115,7 +115,7 @@ namespace Tablitsya3.Data.Entities
         public int Id { get; set; }
 
         /// <summary>
-        /// Ключ у форматі "workshopNumber_orderDay" (1-based)
+        /// Ключ - назва замовлення (OrderName)
         /// </summary>
         [Column("order_key")]
         [MaxLength(200)]
