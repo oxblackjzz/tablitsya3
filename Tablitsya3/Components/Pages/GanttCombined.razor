@@ -558,18 +558,18 @@ else
         border-right: 2px solid var(--color-accent, #0d6efd);
     }
     
-    /* Рядок цеху - компактна висота */
+    /* Рядок цеху - збільшена висота */
     .gantt-row {
         display: flex;
         border-bottom: 1px solid var(--border-color, #dee2e6);
-        min-height: 60px;
-        height: 60px;
+        min-height: 80px;
+        height: 80px;
     }
     
     .gantt-row-label {
         width: 130px;
         min-width: 130px;
-        padding: 6px 8px;
+        padding: 8px 10px;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -581,29 +581,29 @@ else
     
     .gantt-row-label .workshop-name {
         font-weight: 700;
-        font-size: 11px;
+        font-size: 12px;
     }
     
     .gantt-row-label small {
-        font-size: 8px;
+        font-size: 9px;
         opacity: 0.9;
     }
     
     .gantt-row-label .capacity {
         background: rgba(255,255,255,0.2);
-        padding: 1px 3px;
+        padding: 1px 4px;
         border-radius: 3px;
-        margin-top: 1px;
+        margin-top: 2px;
         display: inline-block;
-        font-size: 8px;
+        font-size: 9px;
     }
     
     .gantt-row-bars {
         flex: 1;
         display: flex;
         position: relative;
-        min-height: 60px;
-        height: 60px;
+        min-height: 80px;
+        height: 80px;
         align-items: center;
     }
     
@@ -624,12 +624,12 @@ else
         border-right: 2px solid var(--color-accent, #0d6efd);
     }
     
-    /* Бар замовлення - компактніший */
+    /* Бар замовлення - збільшена висота */
     .gantt-bar {
         position: absolute;
         top: 50%;
         transform: translateY(-50%);
-        height: 36px;
+        height: 44px;
         border-radius: 4px;
         display: flex;
         align-items: center;
@@ -759,32 +759,25 @@ else
         opacity: 0.8;
     }
     
-    /* Tooltip - показуємо зверху, без скролу */
+    /* Tooltip - показується справа від бара, позиціонується через JS */
     .bar-tooltip {
         display: none;
         position: absolute;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        margin-bottom: 8px;
+        left: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        margin-left: 10px;
         background: var(--bg-card, #fff);
         border: 1px solid var(--border-color, #dee2e6);
         border-radius: 8px;
-        padding: 10px;
-        min-width: 220px;
-        max-width: 280px;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-        z-index: 1000;
-        font-size: 11px;
+        padding: 12px;
+        min-width: 240px;
+        max-width: 300px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+        z-index: 9999;
+        font-size: 12px;
         white-space: nowrap;
-    }
-    
-    /* Показуємо tooltip знизу якщо він перший в ряду */
-    .gantt-row:first-of-type .bar-tooltip {
-        bottom: auto;
-        top: 100%;
-        margin-bottom: 0;
-        margin-top: 8px;
+        pointer-events: none;
     }
     
     .gantt-bar:hover .bar-tooltip {
@@ -793,7 +786,7 @@ else
     
     .bar-tooltip .tooltip-title {
         font-weight: 700;
-        font-size: 12px;
+        font-size: 13px;
         margin-bottom: 8px;
         padding-bottom: 6px;
         border-bottom: 1px solid var(--border-color, #dee2e6);
@@ -805,7 +798,7 @@ else
     }
     
     .bar-tooltip .tooltip-table td {
-        padding: 2px 0;
+        padding: 3px 0;
         color: var(--text-secondary, #6c757d);
     }
     
@@ -819,6 +812,12 @@ else
         border-bottom: 1px dashed var(--border-color, #dee2e6);
     }
     
+    .tooltip-hint {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed var(--border-color, #dee2e6);
+    }
+
     /* Індикатор завантаження */
     .load-indicator {
         margin-top: 8px;
