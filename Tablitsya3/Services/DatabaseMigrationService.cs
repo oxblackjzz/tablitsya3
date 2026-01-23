@@ -321,6 +321,39 @@ CREATE TABLE IF NOT EXISTS defects (
                 _logger.LogInformation("✅ Database tables created successfully");
                 Console.WriteLine("✅ Database tables created successfully");
 
+                // =============================================
+                // ДОДАВАННЯ НОВИХ КОЛОНОК ДО ІСНУЮЧИХ ТАБЛИЦЬ
+                // =============================================
+                var alterTablesScript = @"
+-- Додаємо колонки worker_id, workstation_id, session_id до scan_logs якщо їх немає
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'scan_logs' AND column_name = 'worker_id') THEN
+        ALTER TABLE scan_logs ADD COLUMN worker_id INTEGER;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'scan_logs' AND column_name = 'workstation_id') THEN
+        ALTER TABLE scan_logs ADD COLUMN workstation_id INTEGER;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'scan_logs' AND column_name = 'session_id') THEN
+        ALTER TABLE scan_logs ADD COLUMN session_id INTEGER;
+    END IF;
+END $$;
+";
+
+                _logger.LogInformation("🔧 Altering tables to add new columns...");
+                Console.WriteLine("🔧 Altering tables to add new columns...");
+                
+                await using (var command = new NpgsqlCommand(alterTablesScript, connection))
+                {
+                    command.CommandTimeout = 60;
+                    await command.ExecuteNonQueryAsync();
+                }
+                
+                _logger.LogInformation("✅ Table alterations completed successfully");
+                Console.WriteLine("✅ Table alterations completed successfully");
+
                 // SQL скрипт для створення індексів
                 var createIndexesScript = @"
 -- Індекс для workshop_capacities
