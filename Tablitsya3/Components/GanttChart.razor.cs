@@ -1,11 +1,12 @@
 ﻿using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 using Tablitsya3.Models;
 using Tablitsya3.Services;
 using System.Collections.Concurrent;
 
 namespace Tablitsya3.Components;
 
-public partial class GanttChart
+public partial class GanttChart : IAsyncDisposable
 {
     [Parameter]
     public List<Order>? Orders { get; set; }
@@ -16,20 +17,40 @@ public partial class GanttChart
     [Parameter]
     public int DailyCapacity { get; set; } = 1000;
 
-  [Parameter]
+    [Parameter]
     public int WorkshopNumber { get; set; } = 1;
 
     [Parameter]
     public DateTime? StartDate { get; set; }
 
     [Parameter]
- public DateTime? FilterFromDate { get; set; }
+    public DateTime? FilterFromDate { get; set; }
 
     [Parameter]
     public DateTime? FilterToDate { get; set; }
+    
+    /// <summary>
+    /// Callback when order is reordered within the same workshop
+    /// </summary>
+    [Parameter]
+    public EventCallback<(int workshopNumber, int oldIndex, int newIndex)> OnOrderReordered { get; set; }
+    
+    /// <summary>
+    /// Callback when order is transferred between workshops
+    /// </summary>
+    [Parameter]
+    public EventCallback<(int fromWorkshop, int toWorkshop, int orderDay, double squareMeters)> OnOrderTransfer { get; set; }
   
     [Inject]
     protected WorkingDaysService WorkingDays { get; set; } = default!;
+    
+    [Inject]
+    protected IJSRuntime JSRuntime { get; set; } = default!;
+
+    // Drag & Drop
+    private DotNetObjectReference<GanttChart>? _dotNetHelper;
+    private bool _dragDropInitialized = false;
+    private string GanttContainerId => $"gantt-bars-{WorkshopNumber}";
 
     // ✅ КЕШУВАННЯ - зберігаємо розраховані позиції
     private static ConcurrentDictionary<string, List<OrderPosition>> _globalPositionCache = new();
@@ -80,6 +101,73 @@ public partial class GanttChart
  private DateTime? customFromDate = null;
     private DateTime? customToDate = null;
     
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender || !_dragDropInitialized)
+        {
+            await InitializeDragDropAsync();
+        }
+    }
+    
+    private async Task InitializeDragDropAsync()
+    {
+        try
+        {
+            if (Orders == null || !Orders.Any())
+                return;
+                
+            _dotNetHelper ??= DotNetObjectReference.Create(this);
+            
+            // Невелика затримка щоб DOM встиг оновитися
+            await Task.Delay(150);
+            
+            var result = await JSRuntime.InvokeAsync<bool>(
+                "GanttDragDrop.initGanttSortable",
+                GanttContainerId,
+                _dotNetHelper,
+                WorkshopNumber
+            );
+            
+            if (result)
+            {
+                _dragDropInitialized = true;
+                Console.WriteLine($"[GanttChart W#{WorkshopNumber}] ✅ Drag & Drop initialized");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GanttChart W#{WorkshopNumber}] ⚠️ Drag & Drop init error: {ex.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// JSInvokable callback for reordering within workshop
+    /// </summary>
+    [JSInvokable]
+    public async Task OnGanttOrderReordered(int workshopNumber, int oldIndex, int newIndex)
+    {
+        Console.WriteLine($"[GanttChart W#{WorkshopNumber}] OnGanttOrderReordered: {oldIndex} -> {newIndex}");
+        
+        if (OnOrderReordered.HasDelegate)
+        {
+            await OnOrderReordered.InvokeAsync((workshopNumber, oldIndex, newIndex));
+        }
+    }
+    
+    /// <summary>
+    /// JSInvokable callback for transferring order between workshops
+    /// </summary>
+    [JSInvokable]
+    public async Task OnGanttOrderTransfer(int fromWorkshop, int toWorkshop, int orderDay, double squareMeters)
+    {
+        Console.WriteLine($"[GanttChart W#{WorkshopNumber}] OnGanttOrderTransfer: W{fromWorkshop} -> W{toWorkshop}, Day={orderDay}");
+        
+        if (OnOrderTransfer.HasDelegate)
+        {
+            await OnOrderTransfer.InvokeAsync((fromWorkshop, toWorkshop, orderDay, squareMeters));
+        }
+    }
+  
     protected void SetViewMode(ViewMode mode)
     {
       if (mode != ViewMode.CustomDate && mode != currentViewMode)
@@ -573,5 +661,22 @@ var startCalendarIndex = calendarDates.IndexOf(segment.StartDate);
  DayOfWeek.Sunday => "��",
   _ => ""
         };
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_dragDropInitialized)
+            {
+                await JSRuntime.InvokeVoidAsync("GanttDragDrop.destroyAll");
+            }
+        }
+        catch
+        {
+            // Ignore errors during disposal
+        }
+        
+        _dotNetHelper?.Dispose();
     }
 }

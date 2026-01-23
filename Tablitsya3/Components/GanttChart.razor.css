@@ -469,3 +469,96 @@
         font-size: 11px;
     }
 }
+
+/* ============================================ */
+/* DRAG & DROP STYLES */
+/* ============================================ */
+
+/* Draggable bars */
+.gantt-bar.draggable-bar {
+    cursor: grab;
+}
+
+.gantt-bar.draggable-bar:active {
+    cursor: grabbing;
+}
+
+/* Ghost element during drag */
+.gantt-sortable-ghost {
+    opacity: 0.4;
+    filter: blur(1px);
+}
+
+/* Chosen element */
+.gantt-sortable-chosen {
+    box-shadow: 0 0 0 3px var(--color-accent, #0d6efd), 
+                0 8px 24px rgba(0, 0, 0, 0.3) !important;
+    transform: scale(1.02);
+    z-index: 1000 !important;
+}
+
+/* Dragging element */
+.gantt-sortable-drag {
+    opacity: 0.9;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4) !important;
+    z-index: 9999 !important;
+}
+
+/* Active drop zone */
+.gantt-dropzone.drop-target-active {
+    background: rgba(13, 110, 253, 0.05);
+    border: 2px dashed var(--color-accent, #0d6efd);
+    border-radius: 8px;
+}
+
+/* Body during drag */
+body.is-dragging {
+    cursor: grabbing !important;
+}
+
+body.is-dragging * {
+    cursor: grabbing !important;
+}
+
+body.is-dragging .gantt-bar:not(.gantt-sortable-drag) {
+    pointer-events: none;
+}
+
+/* Continuation segments are not draggable */
+.gantt-bar.segment-continuation {
+    cursor: default;
+    pointer-events: none;
+}
+
+/* ============================================ */
+/* DARK THEME SUPPORT */
+/* ============================================ */
+
+[data-theme="dark"] .gantt-chart {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .gantt-timeline {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .day-number {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .order-details-tooltip {
+    background: var(--bg-card);
+    border-color: var(--color-accent);
+}
+
+[data-theme="dark"] .order-details-tooltip::after {
+    border-bottom-color: var(--bg-card);
+}
+
+[data-theme="dark"] .tooltip-value {
+    color: var(--text-primary);
+}

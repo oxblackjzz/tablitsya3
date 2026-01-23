@@ -153,7 +153,214 @@ public partial class ProductionPlanning : ComponentBase, IAsyncDisposable
     }
 
     /// <summary>
-    /// Callback з JavaScript при зміні порядку замовлення
+    /// Обробник зміни порядку на діаграмі Ганта
+    /// </summary>
+    private async Task HandleGanttOrderReordered((int workshopNumber, int oldIndex, int newIndex) args)
+    {
+        await OnGanttOrderReordered(args.workshopNumber, args.oldIndex, args.newIndex);
+    }
+    
+    /// <summary>
+    /// Обробник переміщення замовлення між цехами на діаграмі Ганта
+    /// </summary>
+    private async Task HandleGanttOrderTransfer((int fromWorkshop, int toWorkshop, int orderDay, double squareMeters) args)
+    {
+        await OnGanttOrderTransfer(args.fromWorkshop, args.toWorkshop, args.orderDay, args.squareMeters);
+    }
+
+    /// <summary>
+    /// Callback для зміни порядку на Gantt діаграмі
+    /// </summary>
+    [JSInvokable]
+    public async Task OnGanttOrderReordered(int workshopNumber, int oldIndex, int newIndex)
+    {
+        try
+        {
+            Logger.LogInfo($"Gantt: Зміна порядку в цеху {workshopNumber}: {oldIndex} -> {newIndex}", "ProductionPlanning");
+
+            if (oldIndex == newIndex) return;
+
+            await BackupService.CreateBackupAsync($"Зміна порядку на діаграмі цеху №{workshopNumber}");
+
+            if (!workshopData.WorkshopOrders.ContainsKey(workshopNumber))
+            {
+                Logger.LogWarning($"Цех {workshopNumber} не знайдено", "ProductionPlanning");
+                return;
+            }
+
+            var orders = workshopData.WorkshopOrders[workshopNumber];
+            
+            if (oldIndex < 0 || oldIndex >= orders.Count || newIndex < 0 || newIndex >= orders.Count)
+            {
+                Logger.LogWarning($"Невірні індекси: old={oldIndex}, new={newIndex}, count={orders.Count}", "ProductionPlanning");
+                return;
+            }
+
+            // Переміщуємо площу
+            var item = orders[oldIndex];
+            orders.RemoveAt(oldIndex);
+            orders.Insert(newIndex, item);
+
+            // Переміщуємо дати
+            if (workshopData.WorkshopOrderDates.ContainsKey(workshopNumber))
+            {
+                var dates = workshopData.WorkshopOrderDates[workshopNumber];
+                if (oldIndex < dates.Count)
+                {
+                    var dateItem = dates[oldIndex];
+                    dates.RemoveAt(oldIndex);
+                    var insertIdx = Math.Min(newIndex, dates.Count);
+                    dates.Insert(insertIdx, dateItem);
+                }
+            }
+
+            // Переміщуємо назви
+            if (workshopData.WorkshopOrderNames.ContainsKey(workshopNumber))
+            {
+                var names = workshopData.WorkshopOrderNames[workshopNumber];
+                if (oldIndex < names.Count)
+                {
+                    var nameItem = names[oldIndex];
+                    names.RemoveAt(oldIndex);
+                    var insertIdx = Math.Min(newIndex, names.Count);
+                    names.Insert(insertIdx, nameItem);
+                }
+            }
+
+            CalculateAllSchedules();
+            await SaveAllData();
+
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Порядок замовлень змінено!", "success");
+            
+            ganttChartKey++;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка зміни порядку на Gantt", ex, "ProductionPlanning");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
+        }
+    }
+
+    /// <summary>
+    /// Callback для переміщення між цехами на Gantt діаграмі
+    /// </summary>
+    [JSInvokable]
+    public async Task OnGanttOrderTransfer(int fromWorkshop, int toWorkshop, int orderDay, double squareMeters)
+    {
+        try
+        {
+            Logger.LogInfo($"Gantt: Переміщення з цеху {fromWorkshop} в цех {toWorkshop}, Day={orderDay}", "ProductionPlanning");
+
+            await BackupService.CreateBackupAsync($"Переміщення замовлення з цеху №{fromWorkshop} в цех №{toWorkshop}");
+
+            // Знаходимо замовлення за orderDay
+            var schedule = GetSchedule(fromWorkshop);
+            if (schedule == null)
+            {
+                Logger.LogWarning($"Графік цеху {fromWorkshop} не знайдено", "ProductionPlanning");
+                return;
+            }
+
+            var orderToMove = schedule.Orders.FirstOrDefault(o => o.Day == orderDay);
+            if (orderToMove == null)
+            {
+                Logger.LogWarning($"Замовлення Day={orderDay} не знайдено", "ProductionPlanning");
+                return;
+            }
+
+            var oldIndex = schedule.Orders.IndexOf(orderToMove);
+            if (oldIndex < 0) return;
+
+            // Забираємо з старого цеху
+            if (workshopData.WorkshopOrders.ContainsKey(fromWorkshop))
+            {
+                var fromOrders = workshopData.WorkshopOrders[fromWorkshop];
+                if (oldIndex < fromOrders.Count)
+                {
+                    var orderValue = fromOrders[oldIndex];
+                    
+                    DateTime? orderDate = null;
+                    string? orderName = null;
+
+                    if (workshopData.WorkshopOrderDates.ContainsKey(fromWorkshop) && 
+                        oldIndex < workshopData.WorkshopOrderDates[fromWorkshop].Count)
+                    {
+                        orderDate = workshopData.WorkshopOrderDates[fromWorkshop][oldIndex];
+                    }
+
+                    if (workshopData.WorkshopOrderNames.ContainsKey(fromWorkshop) && 
+                        oldIndex < workshopData.WorkshopOrderNames[fromWorkshop].Count)
+                    {
+                        orderName = workshopData.WorkshopOrderNames[fromWorkshop][oldIndex];
+                    }
+
+                    // Визначаємо оригінальний цех
+                    int originalWorkshop = fromWorkshop;
+                    if (!string.IsNullOrEmpty(orderName) && workshopData.OriginalWorkshops.ContainsKey(orderName))
+                    {
+                        originalWorkshop = workshopData.OriginalWorkshops[orderName];
+                    }
+
+                    // Видаляємо з джерела
+                    fromOrders.RemoveAt(oldIndex);
+                    
+                    if (workshopData.WorkshopOrderDates.ContainsKey(fromWorkshop) && 
+                        oldIndex < workshopData.WorkshopOrderDates[fromWorkshop].Count)
+                    {
+                        workshopData.WorkshopOrderDates[fromWorkshop].RemoveAt(oldIndex);
+                    }
+
+                    if (workshopData.WorkshopOrderNames.ContainsKey(fromWorkshop) && 
+                        oldIndex < workshopData.WorkshopOrderNames[fromWorkshop].Count)
+                    {
+                        workshopData.WorkshopOrderNames[fromWorkshop].RemoveAt(oldIndex);
+                    }
+
+                    // Додаємо в новий цех
+                    workshopData.EnsureWorkshopExists(toWorkshop);
+                    
+                    workshopData.WorkshopOrders[toWorkshop].Add(orderValue);
+
+                    if (orderDate.HasValue)
+                    {
+                        workshopData.WorkshopOrderDates[toWorkshop].Add(orderDate.Value);
+                    }
+
+                    if (!string.IsNullOrEmpty(orderName))
+                    {
+                        workshopData.WorkshopOrderNames[toWorkshop].Add(orderName);
+                        
+                        if (toWorkshop == originalWorkshop)
+                        {
+                            workshopData.OriginalWorkshops.Remove(orderName);
+                        }
+                        else
+                        {
+                            workshopData.OriginalWorkshops[orderName] = originalWorkshop;
+                        }
+                    }
+                }
+            }
+
+            CalculateAllSchedules();
+            await SaveAllData();
+
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", 
+                $"Замовлення переміщено з цеху №{fromWorkshop} в цех №{toWorkshop}!", "success");
+            
+            ganttChartKey++;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка переміщення на Gantt", ex, "ProductionPlanning");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
+        }
+    }
+
+    /// <summary>
+    /// Callback з JavaScript при зміні порядку замовлення (для таблиць)
     /// </summary>
     [JSInvokable]
     public async Task OnOrderReordered(int workshopNumber, int oldIndex, int newIndex)
@@ -629,24 +836,41 @@ public partial class ProductionPlanning : ComponentBase, IAsyncDisposable
 
     private async Task ClearAllData()
     {
-        if (!await JSRuntime.InvokeAsync<bool>("confirm", "Видалити всі дані? Цю дію неможливо відмінити."))
+        var totalOrders = workshopData.WorkshopOrders.Sum(x => x.Value.Count);
+        
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"⚠️ УВАГА! Видалити ВСІ {totalOrders} замовлень?\n\nЦю дію можна відмінити тільки через відновлення з бекапу."))
+            return;
+
+        // Друге підтвердження для безпеки
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", 
+            "Ви впевнені? Натисніть OK щоб підтвердити ПОВНЕ ВИДАЛЕННЯ всіх даних."))
             return;
 
         try
         {
             // Бекап перед очищенням
-            await BackupService.CreateBackupAsync("Перед очищенням всіх даних");
+            await BackupService.CreateBackupAsync("Автоматичний бекап перед очищенням всіх даних");
+            Logger.LogInfo($"Бекап створено перед очищенням {totalOrders} замовлень", "ProductionPlanning");
 
             await StorageService.ClearAllDataAsync();
             workshopData = new WorkshopData();
+            workshopData.EnsureDefaultWorkshops();
             schedules.Clear();
             hasSchedules = false;
-            statusMessage = "✅ Дані очищено!";
+            
+            statusMessage = $"✅ Усі дані очищено! ({totalOrders} замовлень видалено)";
+            Logger.LogInfo($"Всі дані очищено: {totalOrders} замовлень", "ProductionPlanning");
+            
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", 
+                $"Видалено {totalOrders} замовлень. Бекап збережено.", "success");
+            
             StateHasChanged();
         }
         catch (Exception ex)
         {
             statusMessage = $"❌ Помилка очищення: {ex.Message}";
+            Logger.LogError("Помилка очищення даних", ex, "ProductionPlanning");
         }
     }
 

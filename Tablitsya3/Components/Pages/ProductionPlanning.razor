@@ -45,8 +45,11 @@
             <a href="/workshop-settings" class="btn btn-outline-secondary">
                 <i class="bi bi-sliders"></i> Налаштування цехів
             </a>
-            <button class="btn btn-outline-danger" @onclick="ClearAllData">
-                <i class="bi bi-trash"></i> Очистити все
+            <a href="/backup-management" class="btn btn-outline-warning">
+                <i class="bi bi-clock-history"></i> Відновити з бекапу
+            </a>
+            <button class="btn btn-danger" @onclick="ClearAllData">
+                <i class="bi bi-trash-fill"></i> Видалити все
             </button>
         </div>
     </div>
@@ -54,7 +57,7 @@
 
 @if (!string.IsNullOrEmpty(statusMessage))
 {
-    <div class="alert @(statusMessage.Contains("❌") ? "alert-danger" : "alert-success") alert-dismissible fade show">
+    <div class="alert @(statusMessage.Contains("❌") ? "alert-danger" : statusMessage.Contains("⚠️") ? "alert-warning" : "alert-success") alert-dismissible fade show">
         @statusMessage
         <button type="button" class="btn-close" @onclick="() => statusMessage = string.Empty"></button>
     </div>
@@ -150,7 +153,9 @@
                             WorkshopNumber="@workshop.Number" 
                             Orders="@filteredOrders" 
                             StartDate="@workshopData.StartDate"
-                            DailyCapacity="@workshopData.GetCapacity(workshop.Number)" />
+                            DailyCapacity="@workshopData.GetCapacity(workshop.Number)"
+                            OnOrderReordered="HandleGanttOrderReordered"
+                            OnOrderTransfer="HandleGanttOrderTransfer" />
                     </div>
                 </div>
             }

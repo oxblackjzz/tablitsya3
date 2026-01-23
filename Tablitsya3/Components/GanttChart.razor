@@ -3,471 +3,467 @@
 
 <div class="gantt-chart" data-workshop="@WorkshopNumber">
     <div class="gantt-title">
-    <h4>Цех №@WorkshopNumber - Відображення завантаження виробництва (Діаграма Ганта)</h4>
-@if (StartDate != null)
+        <h4>Цех №@WorkshopNumber - Відображення завантаження виробництва (Діаграма Ганта)</h4>
+        @if (StartDate != null)
         {
-     <small class="text-muted">
-     Початкова дата: @StartDate.Value.ToString("dd.MM.yyyy") 
-    (виробництво почне роботу через оголошення)
-        </small>
-      }
+            <small class="text-muted">
+                Початкова дата: @StartDate.Value.ToString("dd.MM.yyyy") 
+                (виробництво почне роботу через оголошення)
+            </small>
+        }
     </div>
   
     <div class="gantt-filter-panel mb-3">
-  <div class="row g-3 align-items-end">
-    <div class="col-auto">
- <label class="form-label fw-bold mb-1">
-  <i class="bi bi-calendar-range"></i> Період:
-   </label>
-<div class="input-group input-group-sm">
-      <span class="input-group-text">Від:</span>
-       <input type="date" class="form-control" @bind="customFromDate" style="width: 140px;" />
-          <span class="input-group-text">До:</span>
-  <input type="date" class="form-control" @bind="customToDate" style="width: 140px;" />
-       <button class="btn btn-primary" @onclick="ApplyCustomDateRange">
-           <i class="bi bi-funnel-fill"></i> Застосувати
-      </button>
-     @if (customFromDate.HasValue || customToDate.HasValue)
-     {
-      <button class="btn btn-outline-secondary" @onclick="ClearCustomDateRange" title="Очистити">
- <i class="bi bi-x-lg"></i>
-            </button>
-   }
-          </div>
+        <div class="row g-3 align-items-end">
+            <div class="col-auto">
+                <label class="form-label fw-bold mb-1">
+                    <i class="bi bi-calendar-range"></i> Період:
+                </label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text">Від:</span>
+                    <input type="date" class="form-control" @bind="customFromDate" style="width: 140px;" />
+                    <span class="input-group-text">До:</span>
+                    <input type="date" class="form-control" @bind="customToDate" style="width: 140px;" />
+                    <button class="btn btn-primary" @onclick="ApplyCustomDateRange">
+                        <i class="bi bi-funnel-fill"></i> Застосувати
+                    </button>
+                    @if (customFromDate.HasValue || customToDate.HasValue)
+                    {
+                        <button class="btn btn-outline-secondary" @onclick="ClearCustomDateRange" title="Очистити">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    }
+                </div>
             </div>
-    <div class="col-auto">
-     <label class="form-label fw-bold mb-1">Режим показу:</label>
- <div class="btn-group btn-group-sm" role="group">
-      <button class="btn @(currentViewMode == ViewMode.Pending ? "btn-warning" : "btn-outline-warning")" 
-         @onclick="() => SetViewMode(ViewMode.Pending)">
-      <i class="bi bi-hourglass-split"></i> Незавершені
-           </button>
-     <button class="btn @(currentViewMode == ViewMode.InProduction ? "btn-success" : "btn-outline-success")" 
-@onclick="() => SetViewMode(ViewMode.InProduction)">
-   <i class="bi bi-gear-fill"></i> В роботі
-    </button>
-  <button class="btn @(currentViewMode == ViewMode.All ? "btn-secondary" : "btn-outline-secondary")" 
-     @onclick="() => SetViewMode(ViewMode.All)">
-<i class="bi bi-list-ul"></i> Усі
-  </button>
-      </div>
-  </div>
+            <div class="col-auto">
+                <label class="form-label fw-bold mb-1">Режим показу:</label>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button class="btn @(currentViewMode == ViewMode.Pending ? "btn-warning" : "btn-outline-warning")" 
+                        @onclick="() => SetViewMode(ViewMode.Pending)">
+                        <i class="bi bi-hourglass-split"></i> Незавершені
+                    </button>
+                    <button class="btn @(currentViewMode == ViewMode.InProduction ? "btn-success" : "btn-outline-success")" 
+                        @onclick="() => SetViewMode(ViewMode.InProduction)">
+                        <i class="bi bi-gear-fill"></i> В роботі
+                    </button>
+                    <button class="btn @(currentViewMode == ViewMode.All ? "btn-secondary" : "btn-outline-secondary")" 
+                        @onclick="() => SetViewMode(ViewMode.All)">
+                        <i class="bi bi-list-ul"></i> Усі
+                    </button>
+                </div>
+            </div>
             <div class="col-auto ms-auto">
-<small class="text-muted">
-        <i class="bi bi-info-circle"></i> Відображено: <strong>@GetCurrentViewDescription()</strong>
-    </small>
-        </div>
-        </div>
-    </div>
-
-    @if (Orders == null || !Orders.Any())
-{
- <div class="alert alert-warning">
-   <strong>Немає даних!</strong> Замовлення не знайдено для цеху №@WorkshopNumber.
-</div>
- }
-    else
-    {
-   var sortedOrders = Orders.OrderBy(o => o.Day).ToList();
-      var filteredOrders = ApplyViewModeFilter(sortedOrders);
-
-      // Сортуємо для відображення по порядку виробництва (Day = порядок в черзі)
-      var ordersToDisplay = filteredOrders.OrderBy(o => o.Day).ToList();
-
-        if (!ordersToDisplay.Any())
-     {
-   <div class="alert alert-info">
-  <i class="bi bi-funnel"></i>
- <strong>Немає результатів у вибраному періоді!</strong>
-         @if (customFromDate.HasValue || customToDate.HasValue)
-     {
-    <br/>
-            <small>
-     Фільтр: @(customFromDate?.ToString("dd.MM.yyyy") ?? "Початок") - @(customToDate?.ToString("dd.MM.yyyy") ?? "Кінець")
-   </small>
-       }
-     <br/>
-     <small>Режим перегляду: <strong>@GetCurrentViewDescription()</strong></small>
-    </div>
-        }
-        else
-        {
-  var allOrdersSorted = sortedOrders;
-      var (calendarStartDate, calendarEndDate) = CalculateOptimalDateRange(allOrdersSorted, ordersToDisplay);
-
-  var actualFirstOrderDate = allOrdersSorted.Min(o => o.StartDate);
-        var absoluteBaseDate = actualFirstOrderDate;
-
-            var earliestOrderDate = allOrdersSorted.Min(o => o.StartDate);
-       var latestOrderDate = allOrdersSorted.Max(o => o.CompletionDate);
-  var totalProductionDays = Orders.Sum(o => o.SquareMeters / DailyCapacity);
-
-  var firstWorkingDay = absoluteBaseDate;
-            while (!WorkingDays.IsWorkingDay(firstWorkingDay))
-          {
-   firstWorkingDay = firstWorkingDay.AddDays(1);
-  }
-    firstWorkingDay = firstWorkingDay.AddDays(5);
-   while (!WorkingDays.IsWorkingDay(firstWorkingDay))
-      {
-     firstWorkingDay = firstWorkingDay.AddDays(1);
-      }
-
-       var allWorkingDaysGlobal = GenerateCalendarDatesRange(firstWorkingDay, latestOrderDate.AddDays((int)Math.Ceiling(totalProductionDays * 0.2)))
-          .Where(d => WorkingDays.IsWorkingDay(d))
-        .ToList();
-
-            var orderPositionsTemp = CalculateOrderPositions(allOrdersSorted, firstWorkingDay, allWorkingDaysGlobal);
-
-            // Завжди показуємо ВСІ календарні дні (включаючи вихідні)
-            var allCalendarDates = GenerateCalendarDatesRange(calendarStartDate, calendarEndDate);
-     var workingDaysOnly = allCalendarDates.Where(d => WorkingDays.IsWorkingDay(d)).ToList();
-          var totalWorkingDays = workingDaysOnly.Count;
-
-  int minWidthPx;
- if (currentViewMode == ViewMode.Pending && allCalendarDates.Count <= 30)
-   {
-        minWidthPx = 100;
-  }
-            else if (currentViewMode == ViewMode.InProduction)
-  {
-             // 🆕 Для режиму "В роботі" завжди розтягуємо на 100% ширини
-      minWidthPx = 100;
-         }
-       else
-  {
-     minWidthPx = allCalendarDates.Count * 80;
-   }
-   var ganttWidth = Math.Max(minWidthPx, 100);
-    
-    // Обчислення висоти контейнера на основі кількості замовлень
-    var rowHeightCalc = 50; // Висота рядка для кожного замовлення
-    var headerOffsetCalc = 55; // Відступ від верху для заголовків дат
-    var bottomPadding = 60; // Відступ знизу
-    var ganttHeight = headerOffsetCalc + (ordersToDisplay.Count * rowHeightCalc) + bottomPadding;
-
-    <div class="alert alert-info mb-3">
-           <strong>Ц цех №@WorkshopNumber:</strong> 
-                Замовлень: @ordersToDisplay.Count @(currentViewMode != ViewMode.All ? "(відфільтровано з " + Orders.Count + ")" : "") | 
- Виробничі дні: @totalProductionDays.ToString("F1") |
-    Робочих днів: @totalWorkingDays |
-    Календарних днів: @allCalendarDates.Count |
-      Потужність цеху: @DailyCapacity м? |
-     Період: @allCalendarDates.First().ToString("dd.MM.yyyy") - @allCalendarDates.Last().ToString("dd.MM.yyyy")
-   @if (customFromDate.HasValue || customToDate.HasValue)
-         {
-    <br/>
-   <small class="text-primary">
-   <i class="bi bi-funnel-fill"></i> Фільтр застосовано: 
-@(customFromDate?.ToString("dd.MM.yyyy") ?? "Початок") - 
-      @(customToDate?.ToString("dd.MM.yyyy") ?? "Кінець")
-   </small>
-    }
-   @if (allCalendarDates.Count > 30)
-  {
-         <br/>
-  <small class="text-info">
-          <i class="bi bi-arrows-expand"></i> Використовуйте горизонтальну прокрутку для перегляду повного періоду
-    </small>
-      }
-   </div>
-    <div class="gantt-wrapper" style="width: 100%; overflow-x: auto; overflow-y: visible;">
-      <div class="gantt-timeline" style="@(minWidthPx == 100 ? "width: 100%; min-width: 100%;" : $"width: {ganttWidth}px; min-width: {ganttWidth}px;") min-height: @(ganttHeight)px;">
-        <div class="gantt-grid" style="width: 100%;">
-       @for (int calendarIndex = 0; calendarIndex < allCalendarDates.Count; calendarIndex++)
-      {
-  var calendarDate = allCalendarDates[calendarIndex];
-  var isNonWorking = !WorkingDays.IsWorkingDay(calendarDate);
-      var leftPercent = (calendarIndex * 100.0) / allCalendarDates.Count;
-             var ordersStartingThisDay = ordersToDisplay.Where(o => o.StartDate.Date == calendarDate.Date).ToList();
-          var isToday = calendarDate.Date == DateTime.Today;
- var leftPercentFormatted = leftPercent.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
-             var calendarDateFormatted = calendarDate.ToString("dd.MM.yyyy");
-              var calendarDateShort = calendarDate.ToString("dd.MM");
-
-             <div class="day-separator @(isNonWorking ? "non-working" : "") @(isToday ? "today" : "")" 
-     style="left: @(leftPercentFormatted)%;"
-           data-day="@calendarIndex"
-   data-date="@calendarDateFormatted"
-               data-is-working="@(!isNonWorking)">
-               <span class="day-number @(isToday ? "today-marker" : "")">
-                 @if (isToday)
-        {
-      <i class="bi bi-star-fill"></i>
-         }
-   @calendarDateShort
-   <br/>
-   <small class="day-of-week">@GetDayOfWeekShort(calendarDate)</small>
-         @if (ordersStartingThisDay.Any())
-                 {
-       <br/>
-         <small style="font-size: 8px; color: #fff; opacity: 0.9;">Початок:</small>
-           @foreach (var order in ordersStartingThisDay)
-       {
-     var orderStartDateStr = order.StartDate.ToString("dd.MM.yyyy");
-     var hasValidName = !string.IsNullOrWhiteSpace(order.OrderName) && 
-         !order.OrderName.Contains("?") && 
-     !order.OrderName.Contains("?");
-         var orderTitle = hasValidName 
- ? $"{order.OrderName} (№{order.Day})" 
-       : $"Замовлення №{order.Day}";
-          var orderDisplay = hasValidName
-        ? (order.OrderName.Length > 10 ? order.OrderName.Substring(0, 10) + "..." : order.OrderName)
-          : $"№{order.Day}";
-              
-   <small class="order-badge" style="background-color: @GetOrderColor(order.Day);" 
-           title="@orderTitle від @orderStartDateStr">
- @orderDisplay
-          </small>
-           }
-    }
-   @if (isToday)
-              {
-       <br/>
-   <small class="today-badge">СЬОГОДНІ</small>
-        }
-    @if (isNonWorking)
-     {
-        <br/>
-      <small class="holiday-badge">@WorkingDays.GetNonWorkingDayReason(calendarDate)</small>
-       }
-        </span>
-         </div>
-     }
-          </div>
-    
-          <div class="gantt-bars-container" style="width: 100%;" 
-            data-total-orders="@ordersToDisplay.Count"
-           data-calendar-days="@allCalendarDates.Count">
-            @{
-             var orderPositions = CalculateOrderPositions(allOrdersSorted, firstWorkingDay, allWorkingDaysGlobal);
-             var rowHeight = 50; // Висота рядка для кожного замовлення
-             var headerOffset = 55; // Відступ від верху для заголовків дат
-       }
-     
-   @for (int orderIndex = 0; orderIndex < ordersToDisplay.Count; orderIndex++)
-            {
-                var order = ordersToDisplay[orderIndex];
-                var topPosition = headerOffset + (orderIndex * rowHeight); // Позиція зверху для цього рядка
-  var color = GetOrderColor(order.Day);
-  var isCompleted = IsOrderCompleted(order);
- var isInProgress = IsOrderInProgress(order);
-    var productionDays = order.SquareMeters / (double)DailyCapacity;
-    
-              var position = orderPositions.FirstOrDefault(p => p.OrderDay == order.Day);
-   if (position == null)
-      {
-          continue;
-             }
-   
-      var segments = GetOrderSegmentsFromAbsoluteDates(
-                 position.ProductionStartDate, 
-  position.ProductionEndDate, 
-             allCalendarDates,
-       position.StartWorkingDayIndex,
-                 position.EndWorkingDayIndex,
-      allWorkingDaysGlobal);
-      
-            if (!segments.Any())
-           {
-            continue;
- }
-   
-     var statusClass = isCompleted ? "completed" : isInProgress ? "in-progress" : "pending";
-      var statusLabel = isCompleted ? "Виробництво завершено" : isInProgress ? "Виробляється зараз" : "Очікує виробництва";
-
-      // ЗнаходимоlargestSegment522 найбільший сегмент для відображення назви
-   var largestSegment = GetLargestSegment(segments);
-
-  @foreach (var segment in segments)
-              {
-   var startCalendarIndex = allCalendarDates.IndexOf(segment.StartDate);
-           var endCalendarIndex = allCalendarDates.IndexOf(segment.EndDate);
-    
-       if (startCalendarIndex == -1 || endCalendarIndex == -1)
-      {
-        continue;
-         }
-
-       var dayWidth = 100.0 / allCalendarDates.Count;
-        var leftPercent = (startCalendarIndex + segment.StartOffset) * dayWidth;
-  var rightPercent = (endCalendarIndex + segment.EndOffset) * dayWidth;
-      var widthPercent = rightPercent - leftPercent;
-          
-    if (widthPercent <= 0)
-    {
-  continue;
-     }
-
-        var isFirstSegment = segment == segments.First();
-       var isLastSegment = segment == segments.Last();
-        var isLargestSegment = segment == largestSegment; // Чи це найбільший сегмент?
-        
-      var hasValidName = !string.IsNullOrWhiteSpace(order.OrderName) && 
-    !order.OrderName.Contains("?") && 
-   !order.OrderName.Contains("?");
-   var orderNameOrNumber = hasValidName ? order.OrderName : $"№{order.Day}";
-   
-       string barLabel = "";
-            if (isLargestSegment) // Показуємо назву тільки на найбільшому сегменті
-     {
-        if (hasValidName)
-  {
-        if (widthPercent > 10)
-  {
-    barLabel = order.OrderName;
-      }
-   else if (widthPercent > 5)
-   {
-        barLabel = order.OrderName.Length > 5 ? order.OrderName.Substring(0, 5) + "..." : order.OrderName;
-      }
-      else if (widthPercent > 3)
-         {
-       barLabel = order.OrderName.Length > 3 ? order.OrderName.Substring(0, 3) + "..." : order.OrderName;
-   }
- }
-    else
-   {
-    barLabel = $"№{order.Day}";
-     }
-  }
-       
-           var orderCompDateStr = order.CompletionDate.ToString("dd.MM.yyyy");
-   var orderCompDayStr = GetDayOfWeekShort(order.CompletionDate);
-        var productionStartStr = position.ProductionStartDate.ToString("dd.MM.yyyy");
-       var productionEndStr = position.ProductionEndDate.ToString("dd.MM.yyyy");
-
-   var leftPercentStr = leftPercent.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
-        var widthPercentStr = widthPercent.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
- var startOffsetStr = segment.StartOffset.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
-                var endOffsetStr = segment.EndOffset.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
-    var leftPercent4Str = leftPercent.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
-    var widthPercent4Str = widthPercent.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
-          
-        <div class="gantt-bar @statusClass" 
-        style="left: @(leftPercentStr)%; width: @(widthPercentStr)%; background-color: @color; top: @(topPosition)px;"
-  data-order="@order.Day"
-  data-order-index="@orderIndex"
-  data-top-position="@topPosition"
- data-segment="@segments.IndexOf(segment)"
-          data-start-index="@startCalendarIndex"
-data-end-index="@endCalendarIndex"
-          data-start-offset="@startOffsetStr"
-     data-end-offset="@endOffsetStr"
-data-left-percent="@leftPercent4Str"
-         data-width-percent="@widthPercent4Str"
-             data-status="@statusClass">
-        <div class="bar-label">
- @if (!string.IsNullOrWhiteSpace(barLabel))
-       {
-       <text>@barLabel</text>
-  }
-   </div>
-
-      <div class="order-details-tooltip">
-    <div class="tooltip-header">
-   <strong>@orderNameOrNumber</strong>
-    <span class="order-number">№@order.Day</span>
-</div>
-<div class="tooltip-body">
-   <div class="tooltip-row">
-      <span class="tooltip-label">Площа:</span>
-    <span class="tooltip-value">@order.SquareMeters.ToString("N0") м²</span>
-   </div>
-     <div class="tooltip-row">
-    <span class="tooltip-label">Замовлення:</span>
-  <span class="tooltip-value">@order.StartDate.ToString("dd.MM.yyyy")</span>
-   </div>
-    <div class="tooltip-row">
-        <span class="tooltip-label">Старт:</span>
-    <span class="tooltip-value">@order.ProductionStartDate.ToString("dd.MM.yyyy")</span>
-</div>
-   <div class="tooltip-row">
-         <span class="tooltip-label">Фініш:</span>
-     <span class="tooltip-value">@order.ProductionEndDate.ToString("dd.MM.yyyy")</span>
-     </div>
-    <div class="tooltip-row">
-    <span class="tooltip-label">Відвантаж.:</span>
-  <span class="tooltip-value">@order.CompletionDate.ToString("dd.MM.yyyy")</span>
-             </div>
-         <div class="tooltip-row">
-<span class="tooltip-label">Днів:</span>
-  <span class="tooltip-value">@order.ProductionDuration.ToString("F1")</span>
-        </div>
-      <div class="tooltip-row">
-   <span class="tooltip-label">Статус:</span>
-      <span class="tooltip-value">@statusLabel</span>
-      </div>
-     </div>
-</div>
-
-         @if (isLastSegment)
-       {
-        var prodEndTitle = $"Кінець виробництва: {orderCompDateStr}";
-           var compDateTitle = $"Дата завершення виробництва: {orderCompDateStr} ({orderCompDayStr})";
-   
-      <div class="production-end-marker" title="@prodEndTitle">
-        <span class="end-flag"></span>
-     <div class="end-line"></div>
-        </div>
- 
-  <div class="completion-date-arrow" title="@compDateTitle">
-    <div class="arrow-line"></div>
-            <div class="arrow-head"></div>
-            <div class="completion-date-badge @(isCompleted ? "completed" : isInProgress ? "in-progress" : "pending")">
-       <div class="date-text">
-        <strong>@orderCompDateStr</strong>
-   <small>@orderCompDayStr</small>
-    @if (isCompleted)
-       {
-          <small class="status-text">Виробництво завершено</small>
-       }
-       else if (isInProgress)
-   {
-  <small class="status-text">Виробляється зараз</small>
-    }
-   else
-    {
-   <small class="status-text">Очікує виробництва</small>
-     }
-  </div>
- </div>
-        </div>
-     }
-    </div>
-              }
-    }
-          </div>
-        </div>
-  </div>
-    }
-
-    <!-- Спрощена легенда -->
-    <div class="gantt-legend mt-3">
-        <div class="alert alert-light border">
-            <div class="d-flex gap-4 flex-wrap align-items-center">
-                <div class="legend-status-item">
-                    <div class="legend-status-box pending"></div>
-                    <span>Очікує</span>
-                </div>
-                <div class="legend-status-item">
-                    <div class="legend-status-box in-progress"></div>
-                    <span>В роботі</span>
-                </div>
-                <div class="legend-status-item">
-                    <div class="legend-status-box completed"></div>
-                    <span>Завершено</span>
-                </div>
-                <div class="legend-status-item">
-                    <div class="legend-status-box weekend-pattern"></div>
-                    <span>Вихідні</span>
-                </div>
-                <small class="text-muted ms-auto">
-                    <i class="bi bi-mouse"></i> Наведіть на замовлення для деталей
+                <small class="text-muted">
+                    <i class="bi bi-info-circle"></i> Відображено: <strong>@GetCurrentViewDescription()</strong>
                 </small>
             </div>
         </div>
     </div>
-      }
+
+    @if (Orders == null || !Orders.Any())
+    {
+        <div class="alert alert-warning">
+            <strong>Немає даних!</strong> Замовлення не знайдено для цеху №@WorkshopNumber.
+        </div>
+    }
+    else
+    {
+        var sortedOrders = Orders.OrderBy(o => o.Day).ToList();
+        var filteredOrders = ApplyViewModeFilter(sortedOrders);
+        var ordersToDisplay = filteredOrders.OrderBy(o => o.Day).ToList();
+
+        if (!ordersToDisplay.Any())
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-funnel"></i>
+                <strong>Немає результатів у вибраному періоді!</strong>
+                @if (customFromDate.HasValue || customToDate.HasValue)
+                {
+                    <br/>
+                    <small>
+                        Фільтр: @(customFromDate?.ToString("dd.MM.yyyy") ?? "Початок") - @(customToDate?.ToString("dd.MM.yyyy") ?? "Кінець")
+                    </small>
+                }
+                <br/>
+                <small>Режим перегляду: <strong>@GetCurrentViewDescription()</strong></small>
+            </div>
+        }
+        else
+        {
+            var allOrdersSorted = sortedOrders;
+            var (calendarStartDate, calendarEndDate) = CalculateOptimalDateRange(allOrdersSorted, ordersToDisplay);
+            var actualFirstOrderDate = allOrdersSorted.Min(o => o.StartDate);
+            var absoluteBaseDate = actualFirstOrderDate;
+            var earliestOrderDate = allOrdersSorted.Min(o => o.StartDate);
+            var latestOrderDate = allOrdersSorted.Max(o => o.CompletionDate);
+            var totalProductionDays = Orders.Sum(o => o.SquareMeters / DailyCapacity);
+
+            var firstWorkingDay = absoluteBaseDate;
+            while (!WorkingDays.IsWorkingDay(firstWorkingDay))
+            {
+                firstWorkingDay = firstWorkingDay.AddDays(1);
+            }
+            firstWorkingDay = firstWorkingDay.AddDays(5);
+            while (!WorkingDays.IsWorkingDay(firstWorkingDay))
+            {
+                firstWorkingDay = firstWorkingDay.AddDays(1);
+            }
+
+            var allWorkingDaysGlobal = GenerateCalendarDatesRange(firstWorkingDay, latestOrderDate.AddDays((int)Math.Ceiling(totalProductionDays * 0.2)))
+                .Where(d => WorkingDays.IsWorkingDay(d))
+                .ToList();
+
+            var orderPositionsTemp = CalculateOrderPositions(allOrdersSorted, firstWorkingDay, allWorkingDaysGlobal);
+            var allCalendarDates = GenerateCalendarDatesRange(calendarStartDate, calendarEndDate);
+            var workingDaysOnly = allCalendarDates.Where(d => WorkingDays.IsWorkingDay(d)).ToList();
+            var totalWorkingDays = workingDaysOnly.Count;
+
+            int minWidthPx;
+            if (currentViewMode == ViewMode.Pending && allCalendarDates.Count <= 30)
+            {
+                minWidthPx = 100;
+            }
+            else if (currentViewMode == ViewMode.InProduction)
+            {
+                minWidthPx = 100;
+            }
+            else
+            {
+                minWidthPx = allCalendarDates.Count * 80;
+            }
+            var ganttWidth = Math.Max(minWidthPx, 100);
+    
+            var rowHeightCalc = 50;
+            var headerOffsetCalc = 55;
+            var bottomPadding = 60;
+            var ganttHeight = headerOffsetCalc + (ordersToDisplay.Count * rowHeightCalc) + bottomPadding;
+
+            <div class="alert alert-info mb-3">
+                <strong>Цех №@WorkshopNumber:</strong> 
+                Замовлень: @ordersToDisplay.Count @(currentViewMode != ViewMode.All ? "(відфільтровано з " + Orders.Count + ")" : "") | 
+                Виробничі дні: @totalProductionDays.ToString("F1") |
+                Робочих днів: @totalWorkingDays |
+                Календарних днів: @allCalendarDates.Count |
+                Потужність цеху: @DailyCapacity м² |
+                Період: @allCalendarDates.First().ToString("dd.MM.yyyy") - @allCalendarDates.Last().ToString("dd.MM.yyyy")
+                @if (customFromDate.HasValue || customToDate.HasValue)
+                {
+                    <br/>
+                    <small class="text-primary">
+                        <i class="bi bi-funnel-fill"></i> Фільтр застосовано: 
+                        @(customFromDate?.ToString("dd.MM.yyyy") ?? "Початок") - 
+                        @(customToDate?.ToString("dd.MM.yyyy") ?? "Кінець")
+                    </small>
+                }
+                @if (allCalendarDates.Count > 30)
+                {
+                    <br/>
+                    <small class="text-info">
+                        <i class="bi bi-arrows-expand"></i> Використовуйте горизонтальну прокрутку для перегляду повного періоду
+                    </small>
+                }
+            </div>
+            
+            <div class="gantt-wrapper" style="width: 100%; overflow-x: auto; overflow-y: visible;">
+                <div class="gantt-timeline" style="@(minWidthPx == 100 ? "width: 100%; min-width: 100%;" : $"width: {ganttWidth}px; min-width: {ganttWidth}px;") min-height: @(ganttHeight)px;">
+                    <div class="gantt-grid" style="width: 100%;">
+                        @for (int calendarIndex = 0; calendarIndex < allCalendarDates.Count; calendarIndex++)
+                        {
+                            var calendarDate = allCalendarDates[calendarIndex];
+                            var isNonWorking = !WorkingDays.IsWorkingDay(calendarDate);
+                            var leftPercent = (calendarIndex * 100.0) / allCalendarDates.Count;
+                            var ordersStartingThisDay = ordersToDisplay.Where(o => o.StartDate.Date == calendarDate.Date).ToList();
+                            var isToday = calendarDate.Date == DateTime.Today;
+                            var leftPercentFormatted = leftPercent.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+                            var calendarDateFormatted = calendarDate.ToString("dd.MM.yyyy");
+                            var calendarDateShort = calendarDate.ToString("dd.MM");
+
+                            <div class="day-separator @(isNonWorking ? "non-working" : "") @(isToday ? "today" : "")" 
+                                style="left: @(leftPercentFormatted)%;"
+                                data-day="@calendarIndex"
+                                data-date="@calendarDateFormatted"
+                                data-is-working="@(!isNonWorking)">
+                                <span class="day-number @(isToday ? "today-marker" : "")">
+                                    @if (isToday)
+                                    {
+                                        <i class="bi bi-star-fill"></i>
+                                    }
+                                    @calendarDateShort
+                                    <br/>
+                                    <small class="day-of-week">@GetDayOfWeekShort(calendarDate)</small>
+                                    @if (ordersStartingThisDay.Any())
+                                    {
+                                        <br/>
+                                        <small style="font-size: 8px; color: #fff; opacity: 0.9;">Початок:</small>
+                                        @foreach (var order in ordersStartingThisDay)
+                                        {
+                                            var orderStartDateStr = order.StartDate.ToString("dd.MM.yyyy");
+                                            var hasValidName = !string.IsNullOrWhiteSpace(order.OrderName) && 
+                                                !order.OrderName.Contains("?") && 
+                                                !order.OrderName.Contains("?", StringComparison.OrdinalIgnoreCase);
+                                            var orderTitle = hasValidName 
+                                                ? $"{order.OrderName} (№{order.Day})" 
+                                                : $"Замовлення №{order.Day}";
+                                            var orderDisplay = hasValidName
+                                                ? (order.OrderName.Length > 10 ? order.OrderName.Substring(0, 10) + "..." : order.OrderName)
+                                                : $"№{order.Day}";
+              
+                                            <small class="order-badge" style="background-color: @GetOrderColor(order.Day);" 
+                                                title="@orderTitle від @orderStartDateStr">
+                                                @orderDisplay
+                                            </small>
+                                        }
+                                    }
+                                    @if (isToday)
+                                    {
+                                        <br/>
+                                        <small class="today-badge">СЬОГОДНІ</small>
+                                    }
+                                    @if (isNonWorking)
+                                    {
+                                        <br/>
+                                        <small class="holiday-badge">@WorkingDays.GetNonWorkingDayReason(calendarDate)</small>
+                                    }
+                                </span>
+                            </div>
+                        }
+                    </div>
+    
+                    <div id="@GanttContainerId" 
+                         class="gantt-bars-container gantt-dropzone" 
+                         style="width: 100%;" 
+                         data-workshop="@WorkshopNumber"
+                         data-total-orders="@ordersToDisplay.Count"
+                         data-calendar-days="@allCalendarDates.Count">
+                        @{
+                            var orderPositions = CalculateOrderPositions(allOrdersSorted, firstWorkingDay, allWorkingDaysGlobal);
+                            var rowHeight = 50;
+                            var headerOffset = 55;
+                        }
+     
+                        @for (int orderIndex = 0; orderIndex < ordersToDisplay.Count; orderIndex++)
+                        {
+                            var order = ordersToDisplay[orderIndex];
+                            var topPosition = headerOffset + (orderIndex * rowHeight);
+                            var color = GetOrderColor(order.Day);
+                            var isCompleted = IsOrderCompleted(order);
+                            var isInProgress = IsOrderInProgress(order);
+                            var productionDays = order.SquareMeters / (double)DailyCapacity;
+    
+                            var position = orderPositions.FirstOrDefault(p => p.OrderDay == order.Day);
+                            if (position == null)
+                            {
+                                continue;
+                            }
+   
+                            var segments = GetOrderSegmentsFromAbsoluteDates(
+                                position.ProductionStartDate, 
+                                position.ProductionEndDate, 
+                                allCalendarDates,
+                                position.StartWorkingDayIndex,
+                                position.EndWorkingDayIndex,
+                                allWorkingDaysGlobal);
+      
+                            if (!segments.Any())
+                            {
+                                continue;
+                            }
+   
+                            var statusClass = isCompleted ? "completed" : isInProgress ? "in-progress" : "pending";
+                            var statusLabel = isCompleted ? "Виробництво завершено" : isInProgress ? "Виробляється зараз" : "Очікує виробництва";
+                            var largestSegment = GetLargestSegment(segments);
+
+                            @foreach (var segment in segments)
+                            {
+                                var startCalendarIndex = allCalendarDates.IndexOf(segment.StartDate);
+                                var endCalendarIndex = allCalendarDates.IndexOf(segment.EndDate);
+    
+                                if (startCalendarIndex == -1 || endCalendarIndex == -1)
+                                {
+                                    continue;
+                                }
+
+                                var dayWidth = 100.0 / allCalendarDates.Count;
+                                var leftPercent = (startCalendarIndex + segment.StartOffset) * dayWidth;
+                                var rightPercent = (endCalendarIndex + segment.EndOffset) * dayWidth;
+                                var widthPercent = rightPercent - leftPercent;
+          
+                                if (widthPercent <= 0)
+                                {
+                                    continue;
+                                }
+
+                                var isFirstSegment = segment == segments.First();
+                                var isLastSegment = segment == segments.Last();
+                                var isLargestSegment = segment == largestSegment;
+        
+                                var hasValidName = !string.IsNullOrWhiteSpace(order.OrderName) && 
+                                    !order.OrderName.Contains("?") && 
+                                    !order.OrderName.Contains("?", StringComparison.OrdinalIgnoreCase);
+                                var orderNameOrNumber = hasValidName ? order.OrderName : $"№{order.Day}";
+   
+                                string barLabel = "";
+                                if (isLargestSegment)
+                                {
+                                    if (hasValidName)
+                                    {
+                                        if (widthPercent > 10)
+                                        {
+                                            barLabel = order.OrderName;
+                                        }
+                                        else if (widthPercent > 5)
+                                        {
+                                            barLabel = order.OrderName.Length > 5 ? order.OrderName.Substring(0, 5) + "..." : order.OrderName;
+                                        }
+                                        else if (widthPercent > 3)
+                                        {
+                                            barLabel = order.OrderName.Length > 3 ? order.OrderName.Substring(0, 3) + "..." : order.OrderName;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        barLabel = $"№{order.Day}";
+                                    }
+                                }
+       
+                                var orderCompDateStr = order.CompletionDate.ToString("dd.MM.yyyy");
+                                var orderCompDayStr = GetDayOfWeekShort(order.CompletionDate);
+                                var productionStartStr = position.ProductionStartDate.ToString("dd.MM.yyyy");
+                                var productionEndStr = position.ProductionEndDate.ToString("dd.MM.yyyy");
+
+                                var leftPercentStr = leftPercent.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+                                var widthPercentStr = widthPercent.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+                                var startOffsetStr = segment.StartOffset.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
+                                var endOffsetStr = segment.EndOffset.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
+                                var leftPercent4Str = leftPercent.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
+                                var widthPercent4Str = widthPercent.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
+          
+                                <div class="gantt-bar @statusClass @(isFirstSegment ? "draggable-bar" : "segment-continuation")" 
+                                    style="left: @(leftPercentStr)%; width: @(widthPercentStr)%; background-color: @color; top: @(topPosition)px;"
+                                    data-order="@order.Day"
+                                    data-order-index="@orderIndex"
+                                    data-order-day="@order.Day"
+                                    data-square="@order.SquareMeters"
+                                    data-top-position="@topPosition"
+                                    data-segment="@segments.IndexOf(segment)"
+                                    data-start-index="@startCalendarIndex"
+                                    data-end-index="@endCalendarIndex"
+                                    data-start-offset="@startOffsetStr"
+                                    data-end-offset="@endOffsetStr"
+                                    data-left-percent="@leftPercent4Str"
+                                    data-width-percent="@widthPercent4Str"
+                                    data-status="@statusClass">
+                                    <div class="bar-label">
+                                        @if (!string.IsNullOrWhiteSpace(barLabel))
+                                        {
+                                            <text>@barLabel</text>
+                                        }
+                                    </div>
+
+                                    <div class="order-details-tooltip">
+                                        <div class="tooltip-header">
+                                            <strong>@orderNameOrNumber</strong>
+                                            <span class="order-number">№@order.Day</span>
+                                        </div>
+                                        <div class="tooltip-body">
+                                            <div class="tooltip-row">
+                                                <span class="tooltip-label">Площа:</span>
+                                                <span class="tooltip-value">@order.SquareMeters.ToString("N0") м²</span>
+                                            </div>
+                                            <div class="tooltip-row">
+                                                <span class="tooltip-label">Замовлення:</span>
+                                                <span class="tooltip-value">@order.StartDate.ToString("dd.MM.yyyy")</span>
+                                            </div>
+                                            <div class="tooltip-row">
+                                                <span class="tooltip-label">Старт:</span>
+                                                <span class="tooltip-value">@order.ProductionStartDate.ToString("dd.MM.yyyy")</span>
+                                            </div>
+                                            <div class="tooltip-row">
+                                                <span class="tooltip-label">Фініш:</span>
+                                                <span class="tooltip-value">@order.ProductionEndDate.ToString("dd.MM.yyyy")</span>
+                                            </div>
+                                            <div class="tooltip-row">
+                                                <span class="tooltip-label">Відвантаж.:</span>
+                                                <span class="tooltip-value">@order.CompletionDate.ToString("dd.MM.yyyy")</span>
+                                            </div>
+                                            <div class="tooltip-row">
+                                                <span class="tooltip-label">Днів:</span>
+                                                <span class="tooltip-value">@order.ProductionDuration.ToString("F1")</span>
+                                            </div>
+                                            <div class="tooltip-row">
+                                                <span class="tooltip-label">Статус:</span>
+                                                <span class="tooltip-value">@statusLabel</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    @if (isLastSegment)
+                                    {
+                                        var prodEndTitle = $"Кінець виробництва: {orderCompDateStr}";
+                                        var compDateTitle = $"Дата завершення виробництва: {orderCompDateStr} ({orderCompDayStr})";
+   
+                                        <div class="production-end-marker" title="@prodEndTitle">
+                                            <span class="end-flag"></span>
+                                            <div class="end-line"></div>
+                                        </div>
+ 
+                                        <div class="completion-date-arrow" title="@compDateTitle">
+                                            <div class="arrow-line"></div>
+                                            <div class="arrow-head"></div>
+                                            <div class="completion-date-badge @(isCompleted ? "completed" : isInProgress ? "in-progress" : "pending")">
+                                                <div class="date-text">
+                                                    <strong>@orderCompDateStr</strong>
+                                                    <small>@orderCompDayStr</small>
+                                                    @if (isCompleted)
+                                                    {
+                                                        <small class="status-text">Виробництво завершено</small>
+                                                    }
+                                                    else if (isInProgress)
+                                                    {
+                                                        <small class="status-text">Виробляється зараз</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <small class="status-text">Очікує виробництва</small>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Спрощена легенда -->
+        <div class="gantt-legend mt-3">
+            <div class="alert alert-light border">
+                <div class="d-flex gap-4 flex-wrap align-items-center">
+                    <div class="legend-status-item">
+                        <div class="legend-status-box pending"></div>
+                        <span>Очікує</span>
+                    </div>
+                    <div class="legend-status-item">
+                        <div class="legend-status-box in-progress"></div>
+                        <span>В роботі</span>
+                    </div>
+                    <div class="legend-status-item">
+                        <div class="legend-status-box completed"></div>
+                        <span>Завершено</span>
+                    </div>
+                    <div class="legend-status-item">
+                        <div class="legend-status-box weekend-pattern"></div>
+                        <span>Вихідні</span>
+                    </div>
+                    <small class="text-muted ms-auto">
+                        <i class="bi bi-mouse"></i> Наведіть на замовлення для деталей | 
+                        <i class="bi bi-grip-vertical"></i> Перетягніть для зміни порядку
+                    </small>
+                </div>
+            </div>
+        </div>
     }
 </div>

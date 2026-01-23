@@ -1531,4 +1531,82 @@ else
             await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
         }
     }
+    
+    private void StateHasChanges()
+    {
+        StateHasChanged();
+    }
+    
+    // ========== Reorder Modal ==========
+    
+    private void OpenReorderModal(int workshopNumber, string workshopName, string workshopColor)
+    {
+        reorderWorkshopNumber = workshopNumber;
+        reorderWorkshopName = workshopName;
+        reorderWorkshopColor = workshopColor;
+        
+        // Готуємо список замовлень для модалки - використовуємо правильні поля ReorderItem
+        var workshopOrders = GetFilteredOrders(workshopNumber).OrderBy(o => o.ProductionStartDate).ToList();
+        
+        reorderOrders = workshopOrders.Select(o => new ReorderModal.ReorderItem
+        {
+            SquareMeters = o.SquareMeters,
+            OrderDate = o.StartDate,
+            Name = string.IsNullOrWhiteSpace(o.OrderName) ? $"№{o.Day}" : o.OrderName
+        }).ToList();
+        
+        isReorderModalVisible = true;
+        StateHasChanged();
+    }
+    
+    private void CloseReorderModal()
+    {
+        isReorderModalVisible = false;
+        StateHasChanged();
+    }
+    
+    private async Task SaveReorderedOrders(List<ReorderModal.ReorderItem> reorderedItems)
+    {
+        try
+        {
+            Logger.LogInfo($"Збереження нового порядку для цеху {reorderWorkshopNumber}", "GanttCombined");
+            
+            if (!workshopData.WorkshopOrders.ContainsKey(reorderWorkshopNumber))
+            {
+                Logger.LogWarning($"Цех {reorderWorkshopNumber} не знайдено", "GanttCombined");
+                return;
+            }
+            
+            // Зберігаємо стан для Undo
+            UndoRedo.SaveState(workshopData, $"Зміна порядку в цеху {reorderWorkshopNumber}");
+            
+            // Оновлюємо дані відповідно до нового порядку
+            var newOrders = reorderedItems.Select(r => r.SquareMeters).ToList();
+            var newDates = reorderedItems.Select(r => r.OrderDate).ToList();
+            var newNames = reorderedItems.Select(r => r.Name ?? "").ToList();
+            
+            workshopData.WorkshopOrders[reorderWorkshopNumber] = newOrders;
+            workshopData.WorkshopOrderDates[reorderWorkshopNumber] = newDates;
+            workshopData.WorkshopOrderNames[reorderWorkshopNumber] = newNames;
+            
+            workshopData.LastUpdated = DateTime.UtcNow;
+            await StorageService.SaveWorkshopDataAsync(workshopData);
+            
+            isReorderModalVisible = false;
+            await LoadData();
+            
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", "Порядок збережено!", "success");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка збереження порядку: {ex.Message}", ex, "GanttCombined");
+            await JSRuntime.InvokeVoidAsync("DragDropInterop.showToast", $"Помилка: {ex.Message}", "error");
+        }
+    }
+    
+    public void Dispose()
+    {
+        UndoRedo.OnStateChanged -= OnUndoRedoStateChanged;
+        dotNetHelper?.Dispose();
+    }
 }
