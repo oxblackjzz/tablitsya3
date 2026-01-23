@@ -133,10 +133,6 @@ Console.WriteLine("✅ DragDropInterop registered");
 builder.Services.AddScoped<UndoRedoService>();
 Console.WriteLine("✅ UndoRedoService registered");
 
-// ✅ ДОДАЄМО СЕРВІС ТЕМИ
-builder.Services.AddScoped<ThemeService>();
-Console.WriteLine("✅ ThemeService registered");
-
 // ✅ ДОДАЄМО СЕРВІСИ СКАНУВАННЯ ДЕТАЛЕЙ
 builder.Services.AddScoped<ProjectFileParserService>();
 builder.Services.AddScoped<ScanningService>();
@@ -161,6 +157,7 @@ builder.Services.AddProblemDetails();
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
 
 // ✅ ДОДАЄМО CONTROLLERS ДЛЯ API
 builder.Services.AddControllers();
