@@ -230,7 +230,8 @@ namespace Tablitsya3.Services
                 if (partEntity == null)
                 {
                     result.Message = "Деталь не знайдена в базі даних";
-                    await LogScanAsync(0, qrCode, stage, false, result.Message, workerId, workstationId, sessionId, userId, deviceId);
+                    // Не логуємо з PartId=0, використовуємо nullable
+                    await LogScanAsync(null, qrCode, stage, false, result.Message, workerId, workstationId, sessionId, userId, deviceId);
                     return result;
                 }
 
@@ -276,6 +277,25 @@ namespace Tablitsya3.Services
 
                 // Завершуємо етап
                 CompleteStageOnEntity(partEntity, stage.Value);
+                
+                // Створюємо лог запис в рамках тієї ж транзакції
+                var log = new ScanLogEntity
+                {
+                    PartId = partEntity.Id,
+                    QRCode = qrCode,
+                    Stage = stage.HasValue ? (int)stage.Value : 0,
+                    ScanDate = DateTime.UtcNow,
+                    UserId = userId,
+                    WorkerId = workerId,
+                    WorkstationId = workstationId,
+                    SessionId = sessionId,
+                    DeviceId = deviceId,
+                    Success = true,
+                    Message = null // Буде оновлено після збереження
+                };
+                _context.ScanLogs.Add(log);
+                
+                // Зберігаємо всі зміни в одній транзакції
                 await _context.SaveChangesAsync();
 
                 // Оновлюємо модель
@@ -307,8 +327,17 @@ namespace Tablitsya3.Services
                     result.Message += " 🎉 Деталь повністю завершена!";
                 }
 
-                await LogScanAsync(partEntity.Id, qrCode, stage, true, result.Message, workerId, workstationId, sessionId, userId, deviceId);
+                // Оновлюємо повідомлення в логу
+                log.Message = result.Message;
+                await _context.SaveChangesAsync();
 
+                return result;
+            }
+            catch (DbUpdateException dbEx)
+            {
+                var innerMessage = dbEx.InnerException?.Message ?? dbEx.Message;
+                _logger.LogError($"Помилка збереження в БД: {innerMessage}", dbEx, "ScanningService");
+                result.Message = $"Помилка збереження: {innerMessage}";
                 return result;
             }
             catch (Exception ex)
@@ -344,23 +373,37 @@ namespace Tablitsya3.Services
         private async Task LogScanAsync(int partId, string qrCode, ProductionStage? stage, bool success, string? message, 
             int? workerId, int? workstationId, int? sessionId, string? userId, string? deviceId)
         {
-            var log = new ScanLogEntity
-            {
-                PartId = partId,
-                QRCode = qrCode,
-                Stage = stage.HasValue ? (int)stage.Value : 0,
-                ScanDate = DateTime.UtcNow,
-                UserId = userId,
-                WorkerId = workerId,
-                WorkstationId = workstationId,
-                SessionId = sessionId,
-                DeviceId = deviceId,
-                Success = success,
-                Message = message
-            };
+            await LogScanAsync((int?)partId, qrCode, stage, success, message, workerId, workstationId, sessionId, userId, deviceId);
+        }
 
-            _context.ScanLogs.Add(log);
-            await _context.SaveChangesAsync();
+        private async Task LogScanAsync(int? partId, string qrCode, ProductionStage? stage, bool success, string? message, 
+            int? workerId, int? workstationId, int? sessionId, string? userId, string? deviceId)
+        {
+            try
+            {
+                var log = new ScanLogEntity
+                {
+                    PartId = partId ?? 0, // 0 якщо деталь не знайдена
+                    QRCode = qrCode,
+                    Stage = stage.HasValue ? (int)stage.Value : 0,
+                    ScanDate = DateTime.UtcNow,
+                    UserId = userId,
+                    WorkerId = workerId,
+                    WorkstationId = workstationId,
+                    SessionId = sessionId,
+                    DeviceId = deviceId,
+                    Success = success,
+                    Message = message
+                };
+
+                _context.ScanLogs.Add(log);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                // Логування помилки не повинно переривати основний процес
+                _logger.LogError($"Помилка логування сканування: {ex.Message}", ex, "ScanningService");
+            }
         }
 
         #endregion

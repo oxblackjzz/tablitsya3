@@ -4,6 +4,7 @@
 @using Tablitsya3.Services
 @inject WorkstationService WorkstationService
 @inject WorkerAuthService WorkerAuthService
+@inject WorkshopConfigService WorkshopConfigService
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
@@ -40,9 +41,9 @@
                         <label class="form-label">Цех</label>
                         <select class="form-select" @bind="selectedWorkshop" @bind:after="LoadStations">
                             <option value="0">Всі цехи</option>
-                            @for (int i = 1; i <= 5; i++)
+                            @foreach (var workshopNum in workshopNumbers)
                             {
-                                <option value="@i">Цех @i</option>
+                                <option value="@workshopNum">Цех @workshopNum</option>
                             }
                         </select>
                     </div>
@@ -266,9 +267,9 @@
                         <div class="col-md-6">
                             <label class="form-label">Цех *</label>
                             <select class="form-select" @bind="editingStation.WorkshopNumber">
-                                @for (int i = 1; i <= 5; i++)
+                                @foreach (var workshopNum in workshopNumbers)
                                 {
-                                    <option value="@i">Цех @i</option>
+                                    <option value="@workshopNum">Цех @workshopNum</option>
                                 }
                             </select>
                         </div>
@@ -352,9 +353,9 @@
                     <div class="mb-3">
                         <label class="form-label">Виберіть цех</label>
                         <select class="form-select" @bind="createDefaultWorkshop">
-                            @for (int i = 1; i <= 5; i++)
+                            @foreach (var workshopNum in workshopNumbers)
                             {
-                                <option value="@i">Цех @i</option>
+                                <option value="@workshopNum">Цех @workshopNum</option>
                             }
                         </select>
                     </div>
@@ -385,6 +386,7 @@
 @code {
     private List<WorkstationEntity> stations = new();
     private List<(WorkstationEntity Workstation, WorkerSessionEntity Session, WorkerEntity Worker)> activeSessions = new();
+    private List<int> workshopNumbers = new();
     
     private bool isLoading = true;
     private bool isSaving = false;
@@ -411,7 +413,33 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadWorkshopNumbers();
         await LoadStations();
+    }
+
+    private async Task LoadWorkshopNumbers()
+    {
+        try
+        {
+            var workshops = await WorkshopConfigService.GetAllWorkshopsAsync();
+            workshopNumbers = workshops.Select(w => w.Number).OrderBy(n => n).ToList();
+            
+            // Якщо немає налаштованих цехів, використовуємо за замовчуванням
+            if (!workshopNumbers.Any())
+            {
+                workshopNumbers = new List<int> { 1, 3, 6, 9 };
+            }
+            
+            // Встановлюємо перший цех як значення за замовчуванням для створення
+            if (workshopNumbers.Any())
+            {
+                createDefaultWorkshop = workshopNumbers.First();
+            }
+        }
+        catch
+        {
+            workshopNumbers = new List<int> { 1, 3, 6, 9 };
+        }
     }
 
     private async Task LoadStations()
@@ -436,7 +464,7 @@
     {
         editingStation = new WorkstationEntity 
         { 
-            WorkshopNumber = 1, 
+            WorkshopNumber = workshopNumbers.FirstOrDefault(1), 
             ProductionStage = (int)ProductionStage.Cutting,
             RequiresWorkerAuth = true,
             SessionTimeoutMinutes = 60,
@@ -539,7 +567,7 @@
 
     private void ShowCreateDefaultModal()
     {
-        createDefaultWorkshop = 1;
+        createDefaultWorkshop = workshopNumbers.FirstOrDefault(1);
         showCreateDefaultModal = true;
     }
 

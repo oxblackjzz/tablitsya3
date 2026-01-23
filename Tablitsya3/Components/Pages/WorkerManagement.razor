@@ -3,6 +3,7 @@
 @using Tablitsya3.Models.Scanning
 @using Tablitsya3.Services
 @inject WorkerService WorkerService
+@inject WorkshopConfigService WorkshopConfigService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
@@ -40,9 +41,9 @@
                         <label class="form-label">Цех</label>
                         <select class="form-select" @bind="selectedWorkshop" @bind:after="LoadWorkers">
                             <option value="0">Всі цехи</option>
-                            @for (int i = 1; i <= 5; i++)
+                            @foreach (var workshopNum in workshopNumbers)
                             {
-                                <option value="@i">Цех @i</option>
+                                <option value="@workshopNum">Цех @workshopNum</option>
                             }
                         </select>
                     </div>
@@ -225,9 +226,9 @@
                         <div class="col-md-4">
                             <label class="form-label">Цех *</label>
                             <select class="form-select" @bind="editingWorker.WorkshopNumber">
-                                @for (int i = 1; i <= 5; i++)
+                                @foreach (var workshopNum in workshopNumbers)
                                 {
-                                    <option value="@i">Цех @i</option>
+                                    <option value="@workshopNum">Цех @workshopNum</option>
                                 }
                             </select>
                         </div>
@@ -370,6 +371,7 @@
 @code {
     private List<WorkerEntity> workers = new();
     private Dictionary<int, int> workshopCounts = new();
+    private List<int> workshopNumbers = new();
     
     private bool isLoading = true;
     private bool isSaving = false;
@@ -402,7 +404,27 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadWorkshopNumbers();
         await LoadWorkers();
+    }
+
+    private async Task LoadWorkshopNumbers()
+    {
+        try
+        {
+            var workshops = await WorkshopConfigService.GetAllWorkshopsAsync();
+            workshopNumbers = workshops.Select(w => w.Number).OrderBy(n => n).ToList();
+            
+            // Якщо немає налаштованих цехів, використовуємо за замовчуванням
+            if (!workshopNumbers.Any())
+            {
+                workshopNumbers = new List<int> { 1, 3, 6, 9 };
+            }
+        }
+        catch
+        {
+            workshopNumbers = new List<int> { 1, 3, 6, 9 };
+        }
     }
 
     private async Task LoadWorkers()
@@ -438,7 +460,7 @@
 
     private void ShowAddWorkerModal()
     {
-        editingWorker = new WorkerEntity { WorkshopNumber = 1, IsActive = true };
+        editingWorker = new WorkerEntity { WorkshopNumber = workshopNumbers.FirstOrDefault(1), IsActive = true };
         selectedStages.Clear();
         newPin = string.Empty;
         showWorkerModal = true;
