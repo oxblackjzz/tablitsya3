@@ -1,8 +1,11 @@
 ﻿@page "/scanning"
+@page "/scanning/{WorkstationId:int}"
 @using Tablitsya3.Models.Scanning
+@using Tablitsya3.Data.Entities
 @using Tablitsya3.Services
 @using Tablitsya3.Components.Shared
 @inject ScanningService ScanningService
+@inject WorkstationService WorkstationService
 @inject LoggingService Logger
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
@@ -10,354 +13,402 @@
 
 <PageTitle>Сканування деталей</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h1 class="mb-1">
-            <i class="bi bi-qr-code-scan text-primary"></i> Сканування деталей
-        </h1>
-        <p class="text-secondary mb-0">Відстеження виробництва по етапах</p>
-    </div>
-    <div class="d-flex gap-2">
-        @if (projects.Any())
-        {
-            <select class="form-select" style="width: 250px;" @bind="selectedProjectUuid" @bind:after="OnProjectChanged">
-                <option value="">Всі проекти</option>
-                @foreach (var project in projects)
-                {
-                    <option value="@project.ProjectUuid">@project.FileName (@project.PartsCount дет.)</option>
-                }
-            </select>
-        }
-        <a href="/scanning/import" class="btn btn-outline-primary">
-            <i class="bi bi-upload"></i> Імпорт
-        </a>
-        <button class="btn btn-primary" @onclick="LoadAllData">
-            <i class="bi bi-arrow-clockwise"></i> Оновити
-        </button>
-    </div>
-</div>
-
-@if (!string.IsNullOrEmpty(scanMessage))
-{
-    <div class="alert alert-@scanMessageClass alert-dismissible fade show mb-4" role="alert">
-        <i class="bi bi-@scanMessageIcon me-2"></i>
-        @scanMessage
-        <button type="button" class="btn-close" @onclick="ClearScanMessage"></button>
-    </div>
-}
-
-<!-- Шкала прогресу проекту -->
-@if (projectStatistics != null)
-{
-    <div class="row mb-4">
-        <div class="col-12">
-            <ProjectProgressCard Statistics="projectStatistics" 
-                                 Title="@(string.IsNullOrEmpty(selectedProjectUuid) ? "Загальний прогрес" : $"Прогрес: {GetSelectedProjectName()}")"
-                                 ShowLegend="true" />
-        </div>
-    </div>
-}
-
 <div class="row">
-    <!-- Панель сканування -->
-    <div class="col-lg-4 mb-4">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <i class="bi bi-qr-code"></i> Сканування
+    <!-- Панель працівника (ліва колонка) -->
+    <div class="col-lg-3 mb-4">
+        <!-- Вибір станції якщо не вказана в URL -->
+        @if (WorkstationId == 0)
+        {
+            <div class="card mb-3">
+                <div class="card-header bg-info text-white">
+                    <i class="bi bi-pc-display-horizontal me-2"></i>Виберіть станцію
+                </div>
+                <div class="card-body">
+                    <select class="form-select" @bind="selectedWorkstationId" @bind:after="OnWorkstationSelected">
+                        <option value="0">-- Оберіть станцію --</option>
+                        @foreach (var ws in workstations)
+                        {
+                            <option value="@ws.Id">@ws.Name (@ws.StageName)</option>
+                        }
+                    </select>
+                    @if (!workstations.Any())
+                    {
+                        <div class="alert alert-warning mt-3 mb-0 py-2">
+                            <small><i class="bi bi-exclamation-triangle me-1"></i>Немає станцій. <a href="/workstations">Створіть станцію</a></small>
+                        </div>
+                    }
+                </div>
             </div>
-            <div class="card-body">
-                <!-- Поле QR-коду -->
-                <div class="mb-3">
-                    <label class="form-label">QR-код деталі</label>
-                    <div class="input-group input-group-lg">
-                        <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
-                        <input type="text" 
-                               class="form-control" 
-                               @bind="qrCode" 
-                               @bind:event="oninput"
-                               @onkeypress="OnQRKeyPress"
-                               placeholder="Відскануйте QR-код..."
-                               @ref="qrInput" />
-                        <button class="btn btn-outline-secondary" @onclick="ClearQR" title="Очистити">
-                            <i class="bi bi-x-lg"></i>
-                        </button>
-                    </div>
+        }
+
+        <!-- Компонент авторизації працівника -->
+        @if (selectedWorkstationId > 0)
+        {
+            <WorkerLogin WorkstationId="@selectedWorkstationId" 
+                         OnAuthenticated="OnWorkerAuthenticated"
+                         OnLoggedOut="OnWorkerLoggedOut"
+                         @ref="workerLoginRef" />
+        }
+
+        <!-- Інформація про станцію -->
+        @if (currentWorkstation != null)
+        {
+            <div class="card mt-3">
+                <div class="card-header" style="background-color: @currentWorkstation.Stage.GetColor(); color: white;">
+                    <i class="bi bi-@currentWorkstation.Stage.GetIcon() me-2"></i>@currentWorkstation.StageName
                 </div>
-
-                <!-- Режим сканування -->
-                <div class="mb-3">
-                    <label class="form-label">Режим</label>
-                    <div class="btn-group w-100" role="group">
-                        <input type="radio" class="btn-check" name="scanMode" id="modeAuto" 
-                               checked="@(selectedStage == null)" @onchange="() => selectedStage = null">
-                        <label class="btn btn-outline-primary" for="modeAuto">
-                            <i class="bi bi-lightning"></i> Авто
-                        </label>
-
-                        <input type="radio" class="btn-check" name="scanMode" id="modeManual"
-                               checked="@(selectedStage != null)" @onchange="() => selectedStage = ProductionStage.Cutting">
-                        <label class="btn btn-outline-primary" for="modeManual">
-                            <i class="bi bi-hand-index"></i> Вручну
-                        </label>
-                    </div>
+                <div class="card-body py-2">
+                    <small class="text-muted d-block">Станція: <strong>@currentWorkstation.Name</strong></small>
+                    @if (!string.IsNullOrEmpty(currentWorkstation.Location))
+                    {
+                        <small class="text-muted d-block">Локація: @currentWorkstation.Location</small>
+                    }
                 </div>
+            </div>
+        }
+    </div>
 
-                <!-- Вибір етапу (якщо ручний режим) -->
-                @if (selectedStage != null)
+    <!-- Основна панель -->
+    <div class="col-lg-9">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="mb-1">
+                    <i class="bi bi-qr-code-scan text-primary"></i> Сканування деталей
+                </h1>
+                <p class="text-secondary mb-0">
+                    @if (workerContext != null)
+                    {
+                        <span class="badge bg-success me-2">
+                            <i class="bi bi-person-check me-1"></i>@workerContext.WorkerName
+                        </span>
+                    }
+                    Відстеження виробництва по етапах
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                @if (projects.Any())
                 {
-                    <div class="mb-3">
-                        <label class="form-label">Етап</label>
-                        <select class="form-select" @bind="selectedStage">
-                            @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
-                            {
-                                <option value="@stage">@stage.GetDisplayName()</option>
-                            }
-                        </select>
-                    </div>
+                    <select class="form-select" style="width: 250px;" @bind="selectedProjectUuid" @bind:after="OnProjectChanged">
+                        <option value="">Всі проекти</option>
+                        @foreach (var project in projects)
+                        {
+                            <option value="@project.ProjectUuid">@project.FileName (@project.PartsCount дет.)</option>
+                        }
+                    </select>
                 }
-
-                <!-- Кнопка сканування -->
-                <button class="btn btn-success btn-lg w-100" @onclick="ProcessScan" disabled="@(isScanning || string.IsNullOrEmpty(qrCode))">
-                    @if (isScanning)
-                    {
-                        <span class="spinner-border spinner-border-sm me-2"></span>
-                        <span>Обробка...</span>
-                    }
-                    else
-                    {
-                        <i class="bi bi-check-lg me-2"></i>
-                        <span>Сканувати</span>
-                    }
+                <a href="/scanning/import" class="btn btn-outline-primary">
+                    <i class="bi bi-upload"></i> Імпорт
+                </a>
+                <button class="btn btn-primary" @onclick="LoadAllData">
+                    <i class="bi bi-arrow-clockwise"></i> Оновити
                 </button>
             </div>
         </div>
 
-        <!-- Інформація про останню деталь -->
-        @if (lastScannedPart != null)
+        @if (!string.IsNullOrEmpty(scanMessage))
         {
-            <div class="card mt-3">
-                <div class="card-header bg-success text-white">
-                    <i class="bi bi-info-circle"></i> Остання деталь
-                </div>
-                <div class="card-body">
-                    <h6 class="card-title mb-3">@lastScannedPart.Name</h6>
-                    
-                    <table class="table table-sm mb-3">
-                        <tr>
-                            <td class="text-muted">Код:</td>
-                            <td><code>@lastScannedPart.Code</code></td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Розміри:</td>
-                            <td>@lastScannedPart.Dimensions мм</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Замовлення:</td>
-                            <td>@lastScannedPart.OrderName</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Прогрес:</td>
-                            <td>
-                                <div class="progress" style="height: 20px;">
-                                    <div class="progress-bar bg-success" style="width: @(lastScannedPart.ProgressPercent)%">
-                                        @lastScannedPart.ProgressPercent%
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
-                    </table>
+            <div class="alert alert-@scanMessageClass alert-dismissible fade show mb-4" role="alert">
+                <i class="bi bi-@scanMessageIcon me-2"></i>
+                @scanMessage
+                <button type="button" class="btn-close" @onclick="ClearScanMessage"></button>
+            </div>
+        }
 
-                    <!-- Етапи -->
-                    <div class="d-flex gap-2 flex-wrap">
-                        @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
-                        {
-                            var isRequired = lastScannedPart.IsStageRequired(stage);
-                            var isCompleted = lastScannedPart.IsStageCompleted(stage);
-                            var badgeClass = !isRequired ? "bg-secondary" : isCompleted ? "bg-success" : "bg-warning text-dark";
-                            
-                            <span class="badge @badgeClass">
-                                @if (isCompleted)
-                                {
-                                    <i class="bi bi-check-lg me-1"></i>
-                                }
-                                @stage.GetDisplayName()
-                                @if (stage == ProductionStage.EdgeBanding && lastScannedPart.EdgeBandingSidesRequired > 0)
-                                {
-                                    <span class="ms-1">(@lastScannedPart.EdgeBandingSidesCompleted/@lastScannedPart.EdgeBandingSidesRequired)</span>
-                                }
-                            </span>
-                        }
-                    </div>
+        <!-- Шкала прогресу проекту -->
+        @if (projectStatistics != null)
+        {
+            <div class="row mb-4">
+                <div class="col-12">
+                    <ProjectProgressCard Statistics="projectStatistics" 
+                                         Title="@(string.IsNullOrEmpty(selectedProjectUuid) ? "Загальний прогрес" : $"Прогрес: {GetSelectedProjectName()}")"
+                                         ShowLegend="true" />
                 </div>
             </div>
         }
-    </div>
 
-    <!-- Таблиця деталей -->
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-table"></i> Деталі</span>
-                <div class="d-flex gap-2 align-items-center">
-                    <!-- Фільтр по файлу -->
-                    <select class="form-select form-select-sm" style="width: 200px;" @bind="filterFileName" @bind:after="LoadData">
-                        <option value="">Всі файли</option>
-                        @foreach (var file in fileNames)
+        <div class="row">
+            <!-- Панель сканування -->
+            <div class="col-lg-5 mb-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-qr-code"></i> Сканування
+                    </div>
+                    <div class="card-body">
+                        @if (!CanScan)
                         {
-                            <option value="@file">@file</option>
+                            <div class="alert alert-warning mb-0">
+                                <i class="bi bi-lock me-2"></i>
+                                @if (selectedWorkstationId == 0)
+                                {
+                                    <span>Виберіть станцію для початку роботи</span>
+                                }
+                                else if (workerContext == null && currentWorkstation?.RequiresWorkerAuth == true)
+                                {
+                                    <span>Авторизуйтесь для початку сканування</span>
+                                }
+                            </div>
                         }
-                    </select>
+                        else
+                        {
+                            <!-- Поле QR-коду -->
+                            <div class="mb-3">
+                                <label class="form-label">QR-код деталі</label>
+                                <div class="input-group input-group-lg">
+                                    <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           @bind="qrCode" 
+                                           @bind:event="oninput"
+                                           @onkeypress="OnQRKeyPress"
+                                           placeholder="Відскануйте QR-код..."
+                                           @ref="qrInput" />
+                                    <button class="btn btn-outline-secondary" @onclick="ClearQR" title="Очистити">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                            </div>
 
-                    <!-- Фільтр по статусу -->
-                    <select class="form-select form-select-sm" style="width: 150px;" @bind="filterCompleted" @bind:after="LoadData">
-                        <option value="">Всі</option>
-                        <option value="false">В роботі</option>
-                        <option value="true">Завершені</option>
-                    </select>
+                            <!-- Автоматичний режим для станції -->
+                            @if (currentWorkstation != null)
+                            {
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="autoStageSwitch" @bind="useStationStage">
+                                        <label class="form-check-label" for="autoStageSwitch">
+                                            Автоматично: <strong style="color: @currentWorkstation.Stage.GetColor()">@currentWorkstation.StageName</strong>
+                                        </label>
+                                    </div>
+                                </div>
+                            }
 
-                    <span class="badge bg-primary">@totalParts деталей</span>
+                            <!-- Вибір етапу (якщо ручний режим) -->
+                            @if (!useStationStage)
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Етап</label>
+                                    <select class="form-select" @bind="selectedStage">
+                                        <option value="">Автоматично</option>
+                                        @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+                                        {
+                                            <option value="@stage">@stage.GetDisplayName()</option>
+                                        }
+                                    </select>
+                                </div>
+                            }
+
+                            <!-- Кнопка сканування -->
+                            <button class="btn btn-success btn-lg w-100" @onclick="ProcessScan" disabled="@(isScanning || string.IsNullOrEmpty(qrCode))">
+                                @if (isScanning)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                    <span>Обробка...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-check-lg me-2"></i>
+                                    <span>Сканувати</span>
+                                }
+                            </button>
+                        }
+                    </div>
                 </div>
-            </div>
-            <div class="card-body p-0">
-                @if (isLoading)
-                {
-                    <div class="text-center py-5">
-                        <div class="spinner-border text-primary"></div>
-                        <p class="mt-2 text-muted">Завантаження...</p>
-                    </div>
-                }
-                else if (!parts.Any())
-                {
-                    <div class="text-center py-5 text-muted">
-                        <i class="bi bi-inbox display-1"></i>
-                        <p class="mt-3">Немає деталей</p>
-                        <a href="/scanning/import" class="btn btn-primary">
-                            <i class="bi bi-upload"></i> Імпортувати проект
-                        </a>
-                    </div>
-                }
-                else
-                {
-                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                        <table class="table table-hover table-sm mb-0">
-                            <thead class="table-light sticky-top">
-                                <tr>
-                                    <th>№</th>
-                                    <th>Назва</th>
-                                    <th>Код</th>
-                                    <th>Розміри</th>
-                                    <th>Замовлення</th>
-                                    <th class="text-center">Прогрес</th>
-                                    <th class="text-center" title="Порізка">
-                                        <i class="bi bi-scissors"></i>
-                                    </th>
-                                    <th class="text-center" title="Поклейка">
-                                        <i class="bi bi-bounding-box"></i>
-                                    </th>
-                                    <th class="text-center" title="Свердління">
-                                        <i class="bi bi-gear"></i>
-                                    </th>
-                                    <th class="text-center" title="Сортування">
-                                        <i class="bi bi-sort-alpha-down"></i>
-                                    </th>
-                                    <th class="text-center" title="Пакування">
-                                        <i class="bi bi-box-seam"></i>
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @{ var rowNum = (currentPage - 1) * pageSize; }
-                                @foreach (var part in parts)
-                                {
-                                    rowNum++;
-                                    var rowClass = part.IsFullyCompleted ? "table-success" : "";
-                                    
-                                    <tr class="@rowClass">
-                                        <td class="text-muted">@rowNum</td>
-                                        <td>
-                                            <span title="@part.QRCode">@TruncateName(part.Name, 25)</span>
-                                        </td>
-                                        <td><code class="small">@part.Code</code></td>
-                                        <td class="small">@part.Dimensions</td>
-                                        <td class="small">@TruncateName(part.OrderName, 20)</td>
-                                        <td class="text-center">
-                                            <div class="progress" style="height: 16px; min-width: 60px;">
-                                                <div class="progress-bar @(part.IsFullyCompleted ? "bg-success" : "bg-primary")" 
-                                                     style="width: @(part.ProgressPercent)%">
-                                                    <small>@(part.ProgressPercent)%</small>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="text-center">@GetStageIcon(part, ProductionStage.Cutting)</td>
-                                        <td class="text-center">@GetEdgeBandingStatus(part)</td>
-                                        <td class="text-center">@GetStageIcon(part, ProductionStage.Drilling)</td>
-                                        <td class="text-center">@GetStageIcon(part, ProductionStage.Sorting)</td>
-                                        <td class="text-center">@GetStageIcon(part, ProductionStage.Packing)</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
 
-                    <!-- Пагінація -->
-                    <div class="card-footer d-flex justify-content-between align-items-center">
-                        <div>
-                            <span class="text-muted">
-                                Сторінка @currentPage з @totalPages (@totalParts деталей)
-                            </span>
+                <!-- Інформація про останню деталь -->
+                @if (lastScannedPart != null)
+                {
+                    <div class="card mt-3">
+                        <div class="card-header bg-success text-white">
+                            <i class="bi bi-info-circle"></i> Остання деталь
                         </div>
-                        <nav>
-                            <ul class="pagination pagination-sm mb-0">
-                                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
-                                    <button class="page-link" @onclick="() => GoToPage(1)">
-                                        <i class="bi bi-chevron-double-left"></i>
-                                    </button>
-                                </li>
-                                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
-                                    <button class="page-link" @onclick="() => GoToPage(currentPage - 1)">
-                                        <i class="bi bi-chevron-left"></i>
-                                    </button>
-                                </li>
-                                
-                                @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                        <div class="card-body">
+                            <h6 class="card-title mb-3">@lastScannedPart.Name</h6>
+                            
+                            <table class="table table-sm mb-3">
+                                <tr>
+                                    <td class="text-muted">Код:</td>
+                                    <td><code>@lastScannedPart.Code</code></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Розміри:</td>
+                                    <td>@lastScannedPart.Dimensions мм</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Замовлення:</td>
+                                    <td>@lastScannedPart.OrderName</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Прогрес:</td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-success" style="width: @(lastScannedPart.ProgressPercent)%">
+                                                @lastScannedPart.ProgressPercent%
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Етапи -->
+                            <div class="d-flex gap-2 flex-wrap">
+                                @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
                                 {
-                                    var pageNum = i;
-                                    <li class="page-item @(pageNum == currentPage ? "active" : "")">
-                                        <button class="page-link" @onclick="() => GoToPage(pageNum)">@pageNum</button>
-                                    </li>
+                                    var isRequired = lastScannedPart.IsStageRequired(stage);
+                                    var isCompleted = lastScannedPart.IsStageCompleted(stage);
+                                    var badgeClass = !isRequired ? "bg-secondary" : isCompleted ? "bg-success" : "bg-warning text-dark";
+                                    
+                                    <span class="badge @badgeClass">
+                                        @if (isCompleted)
+                                        {
+                                            <i class="bi bi-check-lg me-1"></i>
+                                        }
+                                        @stage.GetDisplayName()
+                                        @if (stage == ProductionStage.EdgeBanding && lastScannedPart.EdgeBandingSidesRequired > 0)
+                                        {
+                                            <span class="ms-1">(@lastScannedPart.EdgeBandingSidesCompleted/@lastScannedPart.EdgeBandingSidesRequired)</span>
+                                        }
+                                    </span>
                                 }
-                                
-                                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
-                                    <button class="page-link" @onclick="() => GoToPage(currentPage + 1)">
-                                        <i class="bi bi-chevron-right"></i>
-                                    </button>
-                                </li>
-                                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
-                                    <button class="page-link" @onclick="() => GoToPage(totalPages)">
-                                        <i class="bi bi-chevron-double-right"></i>
-                                    </button>
-                                </li>
-                            </ul>
-                        </nav>
-                        <div>
-                            <select class="form-select form-select-sm" style="width: 80px;" @bind="pageSize" @bind:after="LoadData">
-                                <option value="25">25</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                                <option value="250">250</option>
-                            </select>
+                            </div>
                         </div>
                     </div>
                 }
+            </div>
+
+            <!-- Таблиця деталей -->
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-table"></i> Деталі</span>
+                        <div class="d-flex gap-2 align-items-center">
+                            <!-- Фільтр по файлу -->
+                            <select class="form-select form-select-sm" style="width: 150px;" @bind="filterFileName" @bind:after="LoadData">
+                                <option value="">Всі файли</option>
+                                @foreach (var file in fileNames)
+                                {
+                                    <option value="@file">@file</option>
+                                }
+                            </select>
+
+                            <!-- Фільтр по статусу -->
+                            <select class="form-select form-select-sm" style="width: 120px;" @bind="filterCompleted" @bind:after="LoadData">
+                                <option value="">Всі</option>
+                                <option value="false">В роботі</option>
+                                <option value="true">Завершені</option>
+                            </select>
+
+                            <span class="badge bg-primary">@totalParts</span>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (isLoading)
+                        {
+                            <div class="text-center py-5">
+                                <div class="spinner-border text-primary"></div>
+                                <p class="mt-2 text-muted">Завантаження...</p>
+                            </div>
+                        }
+                        else if (!parts.Any())
+                        {
+                            <div class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox display-1"></i>
+                                <p class="mt-3">Немає деталей</p>
+                                <a href="/scanning/import" class="btn btn-primary">
+                                    <i class="bi bi-upload"></i> Імпортувати проект
+                                </a>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table class="table table-hover table-sm mb-0">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>Назва</th>
+                                            <th>Код</th>
+                                            <th class="text-center">Прогрес</th>
+                                            <th class="text-center" title="Порізка"><i class="bi bi-scissors"></i></th>
+                                            <th class="text-center" title="Поклейка"><i class="bi bi-bounding-box"></i></th>
+                                            <th class="text-center" title="Свердління"><i class="bi bi-gear"></i></th>
+                                            <th class="text-center" title="Сортування"><i class="bi bi-sort-alpha-down"></i></th>
+                                            <th class="text-center" title="Пакування"><i class="bi bi-box-seam"></i></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var part in parts)
+                                        {
+                                            var rowClass = part.IsFullyCompleted ? "table-success" : "";
+                                            
+                                            <tr class="@rowClass">
+                                                <td>
+                                                    <span title="@part.QRCode">@TruncateName(part.Name, 20)</span>
+                                                </td>
+                                                <td><code class="small">@part.Code</code></td>
+                                                <td class="text-center">
+                                                    <div class="progress" style="height: 14px; min-width: 50px;">
+                                                        <div class="progress-bar @(part.IsFullyCompleted ? "bg-success" : "bg-primary")" 
+                                                             style="width: @(part.ProgressPercent)%">
+                                                            <small>@(part.ProgressPercent)%</small>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td class="text-center">@GetStageIcon(part, ProductionStage.Cutting)</td>
+                                                <td class="text-center">@GetEdgeBandingStatus(part)</td>
+                                                <td class="text-center">@GetStageIcon(part, ProductionStage.Drilling)</td>
+                                                <td class="text-center">@GetStageIcon(part, ProductionStage.Sorting)</td>
+                                                <td class="text-center">@GetStageIcon(part, ProductionStage.Packing)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Пагінація -->
+                            @if (totalPages > 1)
+                            {
+                                <div class="card-footer d-flex justify-content-between align-items-center py-2">
+                                    <small class="text-muted">@currentPage / @totalPages</small>
+                                    <nav>
+                                        <ul class="pagination pagination-sm mb-0">
+                                            <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                                <button class="page-link" @onclick="() => GoToPage(currentPage - 1)">
+                                                    <i class="bi bi-chevron-left"></i>
+                                                </button>
+                                            </li>
+                                            <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                                <button class="page-link" @onclick="() => GoToPage(currentPage + 1)">
+                                                    <i class="bi bi-chevron-right"></i>
+                                                </button>
+                                            </li>
+                                        </ul>
+                                    </nav>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 @code {
+    [Parameter]
+    public int WorkstationId { get; set; }
+
     [SupplyParameterFromQuery]
     public string? Project { get; set; }
 
+    // Компонент авторизації
+    private WorkerLogin? workerLoginRef;
+    private WorkerScanContext? workerContext;
+    
+    // Станції
+    private List<WorkstationEntity> workstations = new();
+    private int selectedWorkstationId;
+    private WorkstationEntity? currentWorkstation;
+    private bool useStationStage = true;
+
+    // Сканування
     private ElementReference qrInput;
     private string qrCode = "";
     private ProductionStage? selectedStage;
@@ -378,7 +429,7 @@
     private List<Part> parts = new();
     private List<string> fileNames = new();
     private int currentPage = 1;
-    private int pageSize = 50;
+    private int pageSize = 30;
     private int totalParts = 0;
     private int totalPages => (int)Math.Ceiling((double)totalParts / pageSize);
 
@@ -386,9 +437,23 @@
     private string filterFileName = "";
     private string filterCompleted = "";
 
+    // Чи можна сканувати
+    private bool CanScan => selectedWorkstationId > 0 && 
+                            (workerContext != null || currentWorkstation?.RequiresWorkerAuth != true);
+
     protected override async Task OnInitializedAsync()
     {
-        // Якщо є параметр Project з URL - використовуємо його
+        // Завантажуємо список станцій
+        workstations = await WorkstationService.GetAllWorkstationsAsync();
+        
+        // Якщо є WorkstationId в URL - використовуємо
+        if (WorkstationId > 0)
+        {
+            selectedWorkstationId = WorkstationId;
+            await OnWorkstationSelected();
+        }
+        
+        // Якщо є параметр Project з URL
         if (!string.IsNullOrEmpty(Project))
         {
             selectedProjectUuid = Project;
@@ -399,10 +464,40 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (firstRender && CanScan)
         {
             await FocusQRInput();
         }
+    }
+
+    private async Task OnWorkstationSelected()
+    {
+        currentWorkstation = workstations.FirstOrDefault(w => w.Id == selectedWorkstationId);
+        
+        if (currentWorkstation != null)
+        {
+            // Автоматично встановлюємо етап станції
+            useStationStage = true;
+            selectedStage = currentWorkstation.Stage;
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task OnWorkerAuthenticated(WorkerScanContext context)
+    {
+        workerContext = context;
+        Logger.LogInfo($"Працівник {context.WorkerName} авторизувався на станції {context.WorkstationName}", "ScanningDashboard");
+        
+        await FocusQRInput();
+        StateHasChanged();
+    }
+
+    private async Task OnWorkerLoggedOut()
+    {
+        workerContext = null;
+        Logger.LogInfo("Працівник вийшов зі станції", "ScanningDashboard");
+        StateHasChanged();
     }
 
     private async Task LoadAllData()
@@ -427,7 +522,6 @@
         {
             if (string.IsNullOrEmpty(selectedProjectUuid))
             {
-                // Загальна статистика по всіх проектах
                 projectStatistics = await ScanningService.GetOverallStatisticsAsync();
             }
             else
@@ -463,6 +557,7 @@
     {
         try
         {
+            await Task.Delay(100);
             await JSRuntime.InvokeVoidAsync("eval", "document.querySelector('input[placeholder*=\"QR\"]')?.focus()");
         }
         catch { }
@@ -529,7 +624,7 @@
 
     private async Task ProcessScan()
     {
-        if (string.IsNullOrEmpty(qrCode)) return;
+        if (string.IsNullOrEmpty(qrCode) || !CanScan) return;
 
         isScanning = true;
         ClearScanMessage();
@@ -537,12 +632,29 @@
 
         try
         {
-            var result = await ScanningService.ScanQRCodeAsync(qrCode, selectedStage);
+            // Визначаємо етап
+            ProductionStage? stage = useStationStage && currentWorkstation != null 
+                ? currentWorkstation.Stage 
+                : selectedStage;
+            
+            // Сканування з інформацією про працівника
+            var result = await ScanningService.ScanQRCodeAsync(
+                qrCode, 
+                stage,
+                workerContext?.WorkerId,
+                workerContext?.WorkstationId,
+                workerContext?.SessionId);
 
             if (result.Success)
             {
                 lastScannedPart = result.Part;
                 ShowScanMessage(result.Message, "success", result.IsFullyCompleted ? "trophy" : "check-circle");
+                
+                // Оновлюємо активність сесії
+                if (workerLoginRef != null)
+                {
+                    await workerLoginRef.UpdateActivityAsync();
+                }
                 
                 // Оновлюємо статистику та таблицю
                 await LoadStatistics();
@@ -552,7 +664,6 @@
             {
                 ShowScanMessage(result.Message, "danger", "x-circle");
                 
-                // Якщо деталь знайдена але є помилка - показуємо її
                 if (result.Part != null)
                 {
                     lastScannedPart = result.Part;

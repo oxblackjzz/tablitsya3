@@ -3,6 +3,7 @@
 @using Tablitsya3.Models.Scanning
 @using Tablitsya3.Services
 @inject WorkerService WorkerService
+@inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
@@ -608,9 +609,9 @@
 
     private async Task GenerateBadge(WorkerEntity worker)
     {
-        // TODO: Генерація QR-коду для бейджа
+        // Перехід на сторінку друку бейджа
+        Navigation.NavigateTo($"/workers/badge/{worker.Id}");
         await Task.CompletedTask;
-        ShowAlert($"Код для бейджа: {worker.WorkerCode}", "info");
     }
 
     private void ShowAlert(string message, string type)

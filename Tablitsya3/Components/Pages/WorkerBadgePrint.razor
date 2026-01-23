@@ -1,0 +1,259 @@
+﻿@page "/workers/badge/{WorkerId:int}"
+@using Tablitsya3.Data.Entities
+@using Tablitsya3.Services
+@inject WorkerService WorkerService
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<PageTitle>Друк бейджа - @(worker?.FullName ?? "Завантаження...")</PageTitle>
+
+@if (worker == null)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary"></div>
+        <p class="mt-3">Завантаження...</p>
+    </div>
+}
+else
+{
+    <div class="container py-4">
+        <!-- Кнопки управління (не друкуються) -->
+        <div class="d-print-none mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2><i class="bi bi-person-badge me-2"></i>Друк бейджа</h2>
+                    <p class="text-muted">Працівник: @worker.FullName</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="/workers" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i>Назад
+                    </a>
+                    <button class="btn btn-primary" @onclick="PrintBadge">
+                        <i class="bi bi-printer me-1"></i>Друк
+                    </button>
+                </div>
+            </div>
+
+            <!-- Налаштування -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Розмір QR-коду</label>
+                            <select class="form-select" @bind="qrSize">
+                                <option value="100">Малий (100px)</option>
+                                <option value="150">Середній (150px)</option>
+                                <option value="200">Великий (200px)</option>
+                                <option value="250">Дуже великий (250px)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Кількість копій</label>
+                            <select class="form-select" @bind="copies">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="4">4</option>
+                                <option value="6">6</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Показувати</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showName" @bind="showName">
+                                <label class="form-check-label" for="showName">ПІБ</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showPosition" @bind="showPosition">
+                                <label class="form-check-label" for="showPosition">Посада</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Формат QR</label>
+                            <select class="form-select" @bind="qrFormat">
+                                <option value="code">Тільки код (@worker.WorkerCode)</option>
+                                <option value="worker">WORKER:код</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Область друку -->
+        <div class="print-area">
+            <div class="row g-3 justify-content-center">
+                @for (int i = 0; i < copies; i++)
+                {
+                    <div class="col-auto">
+                        <div class="badge-card">
+                            <!-- QR-код -->
+                            <div class="qr-container">
+                                <img src="@GetQRCodeUrl()" alt="QR Code" class="qr-code" style="width: @(qrSize)px; height: @(qrSize)px;" />
+                            </div>
+
+                            <!-- Код працівника -->
+                            <div class="worker-code">@worker.WorkerCode</div>
+
+                            <!-- ПІБ -->
+                            @if (showName)
+                            {
+                                <div class="worker-name">@worker.FullName</div>
+                            }
+
+                            <!-- Посада -->
+                            @if (showPosition && !string.IsNullOrEmpty(worker.Position))
+                            {
+                                <div class="worker-position">@worker.Position</div>
+                            }
+
+                            <!-- Цех -->
+                            <div class="worker-workshop">Цех @worker.WorkshopNumber</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Інструкції (не друкуються) -->
+        <div class="d-print-none mt-4">
+            <div class="alert alert-info">
+                <h6><i class="bi bi-info-circle me-2"></i>Як використовувати бейдж:</h6>
+                <ol class="mb-0">
+                    <li>Надрукуйте бейдж на принтері</li>
+                    <li>Заламінуйте або вставте в бейдж-холдер</li>
+                    <li>Для авторизації - скануйте QR-код або введіть код <code>@worker.WorkerCode</code></li>
+                    @if (!string.IsNullOrEmpty(worker.PinCodeHash))
+                    {
+                        <li>Після сканування коду введіть PIN-код</li>
+                    }
+                </ol>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* Стилі для екрану */
+    .badge-card {
+        background: white;
+        border: 2px solid #dee2e6;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        width: fit-content;
+        min-width: 200px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .qr-container {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 15px;
+    }
+
+    .qr-code {
+        border: 2px solid #333;
+        padding: 5px;
+        background: white;
+    }
+
+    .worker-code {
+        font-size: 1.5rem;
+        font-weight: bold;
+        font-family: 'Courier New', monospace;
+        letter-spacing: 2px;
+        color: #333;
+        margin-bottom: 10px;
+    }
+
+    .worker-name {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #212529;
+        margin-bottom: 5px;
+    }
+
+    .worker-position {
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin-bottom: 5px;
+    }
+
+    .worker-workshop {
+        font-size: 0.85rem;
+        color: #0d6efd;
+        font-weight: 500;
+        padding: 3px 10px;
+        background: #e7f1ff;
+        border-radius: 20px;
+        display: inline-block;
+        margin-top: 5px;
+    }
+
+    /* Стилі для друку */
+    @@media print {
+        body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        .d-print-none {
+            display: none !important;
+        }
+
+        .print-area {
+            margin: 0;
+            padding: 0;
+        }
+
+        .badge-card {
+            border: 2px solid #000 !important;
+            box-shadow: none;
+            page-break-inside: avoid;
+            margin: 10px;
+        }
+
+        .worker-workshop {
+            background: #f0f0f0 !important;
+            color: #000 !important;
+        }
+    }
+</style>
+
+@code {
+    [Parameter]
+    public int WorkerId { get; set; }
+
+    private WorkerEntity? worker;
+    
+    // Налаштування
+    private int qrSize = 150;
+    private int copies = 1;
+    private bool showName = true;
+    private bool showPosition = true;
+    private string qrFormat = "code";
+
+    protected override async Task OnInitializedAsync()
+    {
+        worker = await WorkerService.GetWorkerByIdAsync(WorkerId);
+    }
+
+    private string GetQRCodeUrl()
+    {
+        if (worker == null) return "";
+        
+        var content = qrFormat == "worker" 
+            ? $"WORKER:{worker.WorkerCode}" 
+            : worker.WorkerCode;
+        
+        // Використовуємо Google Charts API для генерації QR-коду
+        // В продакшені краще використовувати локальну бібліотеку
+        var encodedContent = Uri.EscapeDataString(content);
+        return $"https://api.qrserver.com/v1/create-qr-code/?size={qrSize}x{qrSize}&data={encodedContent}";
+    }
+
+    private async Task PrintBadge()
+    {
+        await JSRuntime.InvokeVoidAsync("print");
+    }
+}
