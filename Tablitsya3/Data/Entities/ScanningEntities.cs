@@ -12,7 +12,7 @@ namespace Tablitsya3.Data.Entities
         public int Id { get; set; }
 
         [Required]
-        [MaxLength(100)]
+        [MaxLength(255)]
         public string ProjectUuid { get; set; } = string.Empty;
 
         [MaxLength(255)]
@@ -55,7 +55,7 @@ namespace Tablitsya3.Data.Entities
         public int Id { get; set; }
 
         [Required]
-        [MaxLength(100)]
+        [MaxLength(255)]
         public string ProjectExternalUuid { get; set; } = string.Empty;
 
         public int PartId { get; set; }
@@ -175,7 +175,7 @@ namespace Tablitsya3.Data.Entities
         public int Id { get; set; }
 
         [Required]
-        [MaxLength(100)]
+        [MaxLength(255)]
         public string ProjectUuid { get; set; } = string.Empty;
 
         public int ProductId { get; set; }

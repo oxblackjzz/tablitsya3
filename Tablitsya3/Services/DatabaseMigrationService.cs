@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS original_workshops (
 -- Імпортовані проекти
 CREATE TABLE IF NOT EXISTS imported_projects (
     id SERIAL PRIMARY KEY,
-    project_uuid VARCHAR(100) NOT NULL,
+    project_uuid VARCHAR(255) NOT NULL,
     file_name VARCHAR(255) DEFAULT '',
     imported_date TIMESTAMP WITH TIME ZONE NOT NULL,
     total_cost DECIMAL(18,2) DEFAULT 0,
@@ -150,7 +150,7 @@ CREATE TABLE IF NOT EXISTS imported_projects (
 -- Деталі
 CREATE TABLE IF NOT EXISTS parts (
     id SERIAL PRIMARY KEY,
-    project_external_uuid VARCHAR(100) NOT NULL,
+    project_external_uuid VARCHAR(255) NOT NULL,
     part_id INTEGER NOT NULL,
     part_counter INTEGER NOT NULL,
     name VARCHAR(255) NOT NULL,
@@ -186,7 +186,7 @@ CREATE TABLE IF NOT EXISTS parts (
 -- Товари (products)
 CREATE TABLE IF NOT EXISTS products (
     id SERIAL PRIMARY KEY,
-    project_uuid VARCHAR(100) NOT NULL,
+    project_uuid VARCHAR(255) NOT NULL,
     product_id INTEGER NOT NULL,
     name VARCHAR(255) NOT NULL,
     code VARCHAR(100) DEFAULT '',
@@ -341,8 +341,11 @@ BEGIN
     END IF;
 END $$;
 
--- Збільшуємо розмір колонки qr_code з 100 до 255 символів
+-- Збільшуємо розмір колонок для UUID/QR-кодів до 255 символів
 ALTER TABLE scan_logs ALTER COLUMN qr_code TYPE VARCHAR(255);
+ALTER TABLE imported_projects ALTER COLUMN project_uuid TYPE VARCHAR(255);
+ALTER TABLE parts ALTER COLUMN project_external_uuid TYPE VARCHAR(255);
+ALTER TABLE products ALTER COLUMN project_uuid TYPE VARCHAR(255);
 ";
 
                 _logger.LogInformation("🔧 Altering tables to add new columns...");
