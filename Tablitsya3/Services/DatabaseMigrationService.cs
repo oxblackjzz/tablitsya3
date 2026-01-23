@@ -558,6 +558,9 @@ WHERE table_schema = 'public'
                 {
                     _logger.LogInformation($"✅ All {tableCount} tables exist");
                     Console.WriteLine($"✅ All {tableCount} tables exist");
+                    
+                    // ✅ ЗАВЖДИ ЗАПУСКАЄМО ОНОВЛЕННЯ КОЛОНОК для нових полів
+                    await EnsureColumnsExistAsync(connection);
                 }
                 else
                 {
@@ -572,6 +575,83 @@ WHERE table_schema = 'public'
                 _logger.LogError(ex, "❌ Error checking if tables exist");
                 Console.WriteLine($"❌ Error checking if tables exist: {ex.Message}");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Додає відсутні колонки до існуючих таблиць
+        /// </summary>
+        private async Task EnsureColumnsExistAsync(NpgsqlConnection connection)
+        {
+            try
+            {
+                _logger.LogInformation("🔧 Ensuring all columns exist...");
+                Console.WriteLine("🔧 Ensuring all columns exist...");
+
+                var alterTablesScript = @"
+-- Додаємо колонки worker_id, workstation_id, session_id до scan_logs якщо їх немає
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'scan_logs' AND column_name = 'worker_id') THEN
+        ALTER TABLE scan_logs ADD COLUMN worker_id INTEGER;
+        RAISE NOTICE 'Added column worker_id to scan_logs';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'scan_logs' AND column_name = 'workstation_id') THEN
+        ALTER TABLE scan_logs ADD COLUMN workstation_id INTEGER;
+        RAISE NOTICE 'Added column workstation_id to scan_logs';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'scan_logs' AND column_name = 'session_id') THEN
+        ALTER TABLE scan_logs ADD COLUMN session_id INTEGER;
+        RAISE NOTICE 'Added column session_id to scan_logs';
+    END IF;
+END $$;
+
+-- Збільшуємо розмір колонок для UUID/QR-кодів до 255 символів
+DO $$
+BEGIN
+    -- scan_logs.qr_code
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'scan_logs' AND column_name = 'qr_code' AND character_maximum_length < 255) THEN
+        ALTER TABLE scan_logs ALTER COLUMN qr_code TYPE VARCHAR(255);
+        RAISE NOTICE 'Altered qr_code column size in scan_logs';
+    END IF;
+    
+    -- imported_projects.project_uuid
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'imported_projects' AND column_name = 'project_uuid' AND character_maximum_length < 255) THEN
+        ALTER TABLE imported_projects ALTER COLUMN project_uuid TYPE VARCHAR(255);
+        RAISE NOTICE 'Altered project_uuid column size in imported_projects';
+    END IF;
+    
+    -- parts.project_external_uuid
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'parts' AND column_name = 'project_external_uuid' AND character_maximum_length < 255) THEN
+        ALTER TABLE parts ALTER COLUMN project_external_uuid TYPE VARCHAR(255);
+        RAISE NOTICE 'Altered project_external_uuid column size in parts';
+    END IF;
+    
+    -- products.project_uuid
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'project_uuid' AND character_maximum_length < 255) THEN
+        ALTER TABLE products ALTER COLUMN project_uuid TYPE VARCHAR(255);
+        RAISE NOTICE 'Altered project_uuid column size in products';
+    END IF;
+END $$;
+
+-- Створюємо індекси для нових колонок якщо їх немає
+CREATE INDEX IF NOT EXISTS ""IX_scan_logs_worker_id"" ON scan_logs(worker_id);
+CREATE INDEX IF NOT EXISTS ""IX_scan_logs_workstation_id"" ON scan_logs(workstation_id);
+";
+
+                await using var command = new NpgsqlCommand(alterTablesScript, connection);
+                command.CommandTimeout = 60;
+                await command.ExecuteNonQueryAsync();
+
+                _logger.LogInformation("✅ All columns verified/added successfully");
+                Console.WriteLine("✅ All columns verified/added successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "⚠️ Error ensuring columns exist (may already be correct)");
+                Console.WriteLine($"⚠️ Error ensuring columns exist: {ex.Message}");
             }
         }
     }
