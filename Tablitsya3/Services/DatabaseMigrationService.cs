@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE TABLE IF NOT EXISTS scan_logs (
     id SERIAL PRIMARY KEY,
     part_id INTEGER NOT NULL,
-    qr_code VARCHAR(100) NOT NULL,
+    qr_code VARCHAR(255) NOT NULL,
     stage INTEGER NOT NULL,
     scan_date TIMESTAMP WITH TIME ZONE NOT NULL,
     user_id VARCHAR(100),
@@ -340,6 +340,9 @@ BEGIN
         ALTER TABLE scan_logs ADD COLUMN session_id INTEGER;
     END IF;
 END $$;
+
+-- Збільшуємо розмір колонки qr_code з 100 до 255 символів
+ALTER TABLE scan_logs ALTER COLUMN qr_code TYPE VARCHAR(255);
 ";
 
                 _logger.LogInformation("🔧 Altering tables to add new columns...");

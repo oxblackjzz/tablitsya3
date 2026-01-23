@@ -137,7 +137,7 @@ namespace Tablitsya3.Data.Entities
         public int PartId { get; set; }
 
         [Required]
-        [MaxLength(100)]
+        [MaxLength(255)]
         public string QRCode { get; set; } = string.Empty;
 
         public int Stage { get; set; } // ProductionStage enum value
