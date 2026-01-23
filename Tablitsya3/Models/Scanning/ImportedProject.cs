@@ -109,6 +109,12 @@
         public Part? Part { get; set; }
         public ProductionStage? Stage { get; set; }
         public bool IsFullyCompleted { get; set; }
+        
+        /// <summary>Ім'я працівника, що виконав сканування</summary>
+        public string? WorkerName { get; set; }
+        
+        /// <summary>Назва робочої станції</summary>
+        public string? WorkstationName { get; set; }
     }
 
     /// <summary>

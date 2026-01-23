@@ -41,7 +41,7 @@
             <button class="btn btn-outline-secondary" 
                     @onclick="PerformRedo" 
                     disabled="@(!UndoRedo.CanRedo)"
-                    title="@(UndoRedo.CanRedo ? $"Повторити: UndoRedo.GetRedoDescription()" : "Немає дій для повторення")">
+                    title="@(UndoRedo.CanRedo ? $"Повторити: UndoRedo.GetRedoDescription()" : "Немає дій untuk повторення")">
                 <i class="bi bi-arrow-clockwise"></i>
                 @if (UndoRedo.RedoCount > 0)
                 {
@@ -149,7 +149,7 @@ else
     </div>
 
     <!-- Діаграма -->
-    <div class="card">
+    <div class="card gantt-card-wrapper">
         <div class="card-body p-0">
             <div class="gantt-combined-wrapper">
                 <div class="gantt-combined" style="min-width: @(Math.Max(filteredCalendarDays.Count * 36, 900))px;">
@@ -479,10 +479,22 @@ else
         border: 1px solid rgba(0,0,0,0.1);
     }
     
+    /* Обгортка для карточки діаграми - дозволяє tooltip виходити за межі */
+    .gantt-card-wrapper {
+        overflow: visible !important;
+    }
+    
+    .gantt-card-wrapper .card-body {
+        overflow: visible !important;
+    }
+    
     .gantt-combined-wrapper {
         overflow-x: auto;
         overflow-y: visible;
-        padding-bottom: 10px;
+        padding-top: 120px;    /* Місце для tooltip зверху */
+        padding-bottom: 120px; /* Місце для tooltip знизу */
+        margin-top: -120px;    /* Компенсуємо padding зверху */
+        margin-bottom: -120px; /* Компенсуємо padding знизу */
     }
     
     .gantt-combined {
@@ -779,147 +791,45 @@ else
         pointer-events: none;
     }
     
+    /* Перший рядок - tooltip показується знизу */
+    .gantt-row:first-of-type .bar-tooltip {
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-left: 0;
+        margin-top: 10px;
+    }
+    
+    /* Останній рядок - tooltip показується зверху */
+    .gantt-row:last-of-type .bar-tooltip {
+        top: auto;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-left: 0;
+        margin-bottom: 10px;
+    }
+    
     .gantt-bar:hover .bar-tooltip {
         display: block;
     }
     
-    .bar-tooltip .tooltip-title {
-        font-weight: 700;
-        font-size: 13px;
-        margin-bottom: 8px;
-        padding-bottom: 6px;
-        border-bottom: 1px solid var(--border-color, #dee2e6);
-        color: var(--text-primary, #212529);
+    .toast {
+        animation: slideInRight 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     }
     
-    .bar-tooltip .tooltip-table {
-        width: 100%;
+    .toast.fade {
+        animation: slideOutRight 0.3s ease forwards;
     }
     
-    .bar-tooltip .tooltip-table td {
-        padding: 3px 0;
-        color: var(--text-secondary, #6c757d);
+    @@keyframes slideInRight {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
     }
     
-    .bar-tooltip .tooltip-table td:last-child {
-        text-align: right;
-        color: var(--text-primary, #212529);
-    }
-    
-    .bar-tooltip .tooltip-table tr.divider td {
-        padding: 4px 0;
-        border-bottom: 1px dashed var(--border-color, #dee2e6);
-    }
-    
-    .tooltip-hint {
-        margin-top: 8px;
-        padding-top: 8px;
-        border-top: 1px dashed var(--border-color, #dee2e6);
-    }
-
-    /* Індикатор завантаження */
-    .load-indicator {
-        margin-top: 8px;
-        padding-top: 8px;
-        border-top: 1px solid var(--border-color, #dee2e6);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    
-    .load-bar {
-        flex: 1;
-        height: 8px;
-        background: var(--bg-secondary, #e9ecef);
-        border-radius: 4px;
-        overflow: hidden;
-    }
-    
-    .load-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #27ae60, #f39c12, #e74c3c);
-        border-radius: 4px;
-        transition: width 0.3s ease;
-    }
-    
-    /* Кнопка зміни порядку */
-    .btn-reorder {
-        padding: 2px 4px;
-        font-size: 9px;
-        opacity: 0.8;
-        border: none;
-    }
-    
-    .btn-reorder:hover {
-        opacity: 1;
-        background: rgba(255,255,255,0.3);
-    }
-    
-    /* Drag & Drop стилі для Gantt */
-    .gantt-sortable-ghost {
-        opacity: 0.4;
-    }
-    
-    .gantt-sortable-chosen {
-        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.5), 0 8px 20px rgba(0,0,0,0.3) !important;
-        transform: translateY(-50%) scale(1.05) !important;
-        z-index: 200 !important;
-    }
-    
-    .gantt-sortable-drag {
-        opacity: 0.9;
-    }
-    
-    /* Підсвітка зони для drop */
-    .drop-target-active {
-        background: linear-gradient(90deg, rgba(13, 110, 253, 0.05), rgba(13, 110, 253, 0.1), rgba(13, 110, 253, 0.05)) !important;
-        border: 2px dashed rgba(13, 110, 253, 0.4) !important;
-        border-radius: 4px;
-    }
-    
-    .drop-target-active::after {
-        content: 'Перетягніть сюди';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 11px;
-        color: rgba(13, 110, 253, 0.6);
-        pointer-events: none;
-        z-index: 1;
-    }
-    
-    /* Drag handle на барі */
-    .drag-handle-bar {
-        position: absolute;
-        left: 2px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: rgba(255,255,255,0.6);
-        cursor: grab;
-        font-size: 10px;
-        z-index: 10;
-    }
-    
-    .drag-handle-bar:hover {
-        color: rgba(255,255,255,1);
-    }
-    
-    .is-dragging .drag-handle-bar {
-        cursor: grabbing;
-    }
-    
-    /* Забороняємо виділення тексту під час drag */
-    .is-dragging {
-        user-select: none;
-    }
-    
-    .is-dragging .gantt-bar {
-        pointer-events: none;
-    }
-    
-    .is-dragging .draggable-bar {
-        pointer-events: auto;
+    @@keyframes slideOutRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
     }
 </style>
 
@@ -1411,7 +1321,7 @@ else
             
             if (!workshopData.WorkshopOrders.ContainsKey(fromWorkshop))
             {
-                Logger.LogWarning($"Gantt: Цех-джерело {fromWorkshop} не знайдено", "GanttCombined");
+                Logger.LogWarning($"Gantt: Цех-джерело {fromWorkshop} не найдений", "GanttCombined");
                 return;
             }
             
@@ -1446,7 +1356,7 @@ else
             
             Logger.LogInfo($"Gantt: Назва замовлення: '{orderName ?? "(пусто)"}'", "GanttCombined");
             
-            // Визначаємо СПРАВЖНІЙ оригінальний цех:
+            // Визначаємо СПРАВДЖНІЙ оригінальний цех:
             // 1. Якщо є запис в OriginalWorkshops - беремо його (замовлення вже переміщувалось раніше)
             // 2. Якщо немає запису - fromWorkshop і є оригінальний цех (перше переміщення)
             int originalWorkshop;

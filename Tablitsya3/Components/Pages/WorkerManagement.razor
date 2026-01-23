@@ -1,0 +1,633 @@
+﻿@page "/workers"
+@using Tablitsya3.Data.Entities
+@using Tablitsya3.Models.Scanning
+@using Tablitsya3.Services
+@inject WorkerService WorkerService
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<PageTitle>Управління працівниками</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-people-fill me-2"></i>Управління працівниками</h2>
+        <button class="btn btn-primary" @onclick="ShowAddWorkerModal">
+            <i class="bi bi-plus-lg me-1"></i>Додати працівника
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Завантаження...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Фільтри -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Пошук</label>
+                        <input type="text" class="form-control" placeholder="Ім'я, код, посада..." 
+                               @bind="searchQuery" @bind:event="oninput" @onkeyup="OnSearchChanged" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Цех</label>
+                        <select class="form-select" @bind="selectedWorkshop" @bind:after="LoadWorkers">
+                            <option value="0">Всі цехи</option>
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                <option value="@i">Цех @i</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Статус</label>
+                        <select class="form-select" @bind="showInactive" @bind:after="LoadWorkers">
+                            <option value="false">Тільки активні</option>
+                            <option value="true">Всі (включно з неактивними)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-outline-secondary w-100" @onclick="LoadWorkers">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Оновити
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Статистика -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Всього працівників</h6>
+                        <h2>@workers.Count</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Активних</h6>
+                        <h2>@workers.Count(w => w.IsActive)</h2>
+                    </div>
+                </div>
+            </div>
+            @if (workshopCounts.Any())
+            {
+                @foreach (var wc in workshopCounts.Take(2))
+                {
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Цех @wc.Key</h6>
+                                <h2>@wc.Value</h2>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <!-- Таблиця працівників -->
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Код</th>
+                                <th>ПІБ</th>
+                                <th>Посада</th>
+                                <th>Цех</th>
+                                <th>Етапи</th>
+                                <th>Статус</th>
+                                <th>Дії</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!filteredWorkers.Any())
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center py-4 text-muted">
+                                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                        Працівників не знайдено
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var worker in filteredWorkers)
+                                {
+                                    <tr class="@(worker.IsActive ? "" : "table-secondary")">
+                                        <td>
+                                            <code class="user-select-all">@worker.WorkerCode</code>
+                                        </td>
+                                        <td>
+                                            <strong>@worker.DisplayName</strong>
+                                            @if (!string.IsNullOrEmpty(worker.Phone))
+                                            {
+                                                <br /><small class="text-muted">@worker.Phone</small>
+                                            }
+                                        </td>
+                                        <td>@(string.IsNullOrEmpty(worker.Position) ? "-" : worker.Position)</td>
+                                        <td>
+                                            <span class="badge bg-info">Цех @worker.WorkshopNumber</span>
+                                        </td>
+                                        <td>
+                                            @if (string.IsNullOrEmpty(worker.AllowedStages))
+                                            {
+                                                <span class="text-muted">Всі</span>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var stage in worker.AllowedStagesList)
+                                                {
+                                                    <span class="badge me-1" style="background-color: @stage.GetColor()">
+                                                        @stage.GetDisplayName()
+                                                    </span>
+                                                }
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (worker.IsActive)
+                                            {
+                                                <span class="badge bg-success">Активний</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">Неактивний</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-primary" @onclick="() => ShowEditWorkerModal(worker)" title="Редагувати">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button class="btn btn-outline-info" @onclick="() => ShowSetPinModal(worker)" title="Змінити PIN">
+                                                    <i class="bi bi-key"></i>
+                                                </button>
+                                                @if (worker.IsActive)
+                                                {
+                                                    <button class="btn btn-outline-warning" @onclick="() => DeactivateWorker(worker)" title="Деактивувати">
+                                                        <i class="bi bi-pause-circle"></i>
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="btn btn-outline-success" @onclick="() => ActivateWorker(worker)" title="Активувати">
+                                                        <i class="bi bi-play-circle"></i>
+                                                    </button>
+                                                }
+                                                <button class="btn btn-outline-secondary" @onclick="() => GenerateBadge(worker)" title="Генерувати бейдж">
+                                                    <i class="bi bi-qr-code"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Модальне вікно додавання/редагування -->
+@if (showWorkerModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        @(editingWorker.Id == 0 ? "Додати працівника" : "Редагувати працівника")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseWorkerModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Код працівника</label>
+                            <input type="text" class="form-control" @bind="editingWorker.WorkerCode" 
+                                   placeholder="Автогенерація" />
+                            <small class="text-muted">Залиште порожнім для автогенерації</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Цех *</label>
+                            <select class="form-select" @bind="editingWorker.WorkshopNumber">
+                                @for (int i = 1; i <= 5; i++)
+                                {
+                                    <option value="@i">Цех @i</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Посада</label>
+                            <input type="text" class="form-control" @bind="editingWorker.Position" 
+                                   placeholder="Оператор, Майстер..." />
+                        </div>
+                        
+                        <div class="col-12">
+                            <label class="form-label">ПІБ *</label>
+                            <input type="text" class="form-control" @bind="editingWorker.FullName" 
+                                   placeholder="Прізвище Ім'я По-батькові" />
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label">Прізвище</label>
+                            <input type="text" class="form-control" @bind="editingWorker.LastName" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Ім'я</label>
+                            <input type="text" class="form-control" @bind="editingWorker.FirstName" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">По-батькові</label>
+                            <input type="text" class="form-control" @bind="editingWorker.MiddleName" />
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">Телефон</label>
+                            <input type="tel" class="form-control" @bind="editingWorker.Phone" 
+                                   placeholder="+380..." />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" @bind="editingWorker.Email" />
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">Дата прийому</label>
+                            <input type="date" class="form-control" @bind="editingWorker.HireDate" />
+                        </div>
+                        
+                        @if (editingWorker.Id == 0)
+                        {
+                            <div class="col-md-6">
+                                <label class="form-label">PIN-код (4-6 цифр)</label>
+                                <input type="password" class="form-control" @bind="newPin" 
+                                       placeholder="Опційно" maxlength="6" />
+                            </div>
+                        }
+                        
+                        <div class="col-12">
+                            <label class="form-label">Дозволені етапи</label>
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+                                {
+                                    var isChecked = selectedStages.Contains(stage);
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" 
+                                               id="stage-@((int)stage)" 
+                                               checked="@isChecked"
+                                               @onchange="(e) => ToggleStage(stage, (bool)e.Value!)" />
+                                        <label class="form-check-label" for="stage-@((int)stage)">
+                                            <span class="badge" style="background-color: @stage.GetColor()">
+                                                @stage.GetDisplayName()
+                                            </span>
+                                        </label>
+                                    </div>
+                                }
+                            </div>
+                            <small class="text-muted">Не обрано жодного = всі етапи дозволені</small>
+                        </div>
+                        
+                        <div class="col-12">
+                            <label class="form-label">Примітки</label>
+                            <textarea class="form-control" rows="2" @bind="editingWorker.Notes"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseWorkerModal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveWorker" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Зберегти
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Модальне вікно зміни PIN -->
+@if (showPinModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Змінити PIN</h5>
+                    <button type="button" class="btn-close" @onclick="ClosePinModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">Працівник: <strong>@selectedWorkerForPin?.DisplayName</strong></p>
+                    <div class="mb-3">
+                        <label class="form-label">Новий PIN-код</label>
+                        <input type="password" class="form-control form-control-lg text-center" 
+                               @bind="newPin" maxlength="6" placeholder="4-6 цифр" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Підтвердження PIN</label>
+                        <input type="password" class="form-control form-control-lg text-center" 
+                               @bind="confirmPin" maxlength="6" placeholder="Повторіть PIN" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ClosePinModal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" @onclick="SavePin">Зберегти</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(alertMessage))
+{
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999">
+        <div class="toast show @(alertType == "success" ? "bg-success" : alertType == "error" ? "bg-danger" : "bg-info") text-white">
+            <div class="toast-body d-flex justify-content-between align-items-center">
+                @alertMessage
+                <button type="button" class="btn-close btn-close-white ms-2" @onclick="() => alertMessage = string.Empty"></button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<WorkerEntity> workers = new();
+    private Dictionary<int, int> workshopCounts = new();
+    
+    private bool isLoading = true;
+    private bool isSaving = false;
+    
+    private string searchQuery = string.Empty;
+    private int selectedWorkshop = 0;
+    private bool showInactive = false;
+    
+    private bool showWorkerModal = false;
+    private WorkerEntity editingWorker = new();
+    private HashSet<ProductionStage> selectedStages = new();
+    private string newPin = string.Empty;
+    
+    private bool showPinModal = false;
+    private WorkerEntity? selectedWorkerForPin;
+    private string confirmPin = string.Empty;
+    
+    private string alertMessage = string.Empty;
+    private string alertType = "info";
+    
+    private System.Timers.Timer? searchTimer;
+
+    private IEnumerable<WorkerEntity> filteredWorkers => workers
+        .Where(w => string.IsNullOrEmpty(searchQuery) || 
+                    w.FullName.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    w.WorkerCode.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    (w.Position?.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ?? false))
+        .Where(w => selectedWorkshop == 0 || w.WorkshopNumber == selectedWorkshop)
+        .OrderBy(w => w.FullName);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadWorkers();
+    }
+
+    private async Task LoadWorkers()
+    {
+        isLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            workers = await WorkerService.GetAllWorkersAsync(showInactive);
+            workshopCounts = await WorkerService.GetWorkersCountByWorkshopAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка завантаження: {ex.Message}", "error");
+        }
+        
+        isLoading = false;
+    }
+
+    private void OnSearchChanged()
+    {
+        searchTimer?.Stop();
+        searchTimer?.Dispose();
+        searchTimer = new System.Timers.Timer(300);
+        searchTimer.Elapsed += (s, e) =>
+        {
+            searchTimer?.Stop();
+            InvokeAsync(StateHasChanged);
+        };
+        searchTimer.Start();
+    }
+
+    private void ShowAddWorkerModal()
+    {
+        editingWorker = new WorkerEntity { WorkshopNumber = 1, IsActive = true };
+        selectedStages.Clear();
+        newPin = string.Empty;
+        showWorkerModal = true;
+    }
+
+    private void ShowEditWorkerModal(WorkerEntity worker)
+    {
+        editingWorker = new WorkerEntity
+        {
+            Id = worker.Id,
+            WorkerCode = worker.WorkerCode,
+            FullName = worker.FullName,
+            FirstName = worker.FirstName,
+            LastName = worker.LastName,
+            MiddleName = worker.MiddleName,
+            Position = worker.Position,
+            WorkshopNumber = worker.WorkshopNumber,
+            AllowedStages = worker.AllowedStages,
+            Phone = worker.Phone,
+            Email = worker.Email,
+            HireDate = worker.HireDate,
+            IsActive = worker.IsActive,
+            Notes = worker.Notes
+        };
+        
+        selectedStages = new HashSet<ProductionStage>(worker.AllowedStagesList);
+        if (string.IsNullOrEmpty(worker.AllowedStages))
+            selectedStages.Clear();
+            
+        showWorkerModal = true;
+    }
+
+    private void CloseWorkerModal()
+    {
+        showWorkerModal = false;
+        editingWorker = new();
+        selectedStages.Clear();
+        newPin = string.Empty;
+    }
+
+    private void ToggleStage(ProductionStage stage, bool isChecked)
+    {
+        if (isChecked)
+            selectedStages.Add(stage);
+        else
+            selectedStages.Remove(stage);
+    }
+
+    private async Task SaveWorker()
+    {
+        if (string.IsNullOrWhiteSpace(editingWorker.FullName))
+        {
+            ShowAlert("Введіть ПІБ працівника", "error");
+            return;
+        }
+
+        isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            editingWorker.AllowedStages = selectedStages.Any() 
+                ? string.Join(",", selectedStages.Select(s => (int)s))
+                : string.Empty;
+
+            if (!string.IsNullOrEmpty(newPin))
+            {
+                editingWorker.PinCode = newPin;
+            }
+
+            if (editingWorker.Id == 0)
+            {
+                await WorkerService.CreateWorkerAsync(editingWorker);
+                ShowAlert("Працівника додано успішно", "success");
+            }
+            else
+            {
+                await WorkerService.UpdateWorkerAsync(editingWorker);
+                ShowAlert("Працівника оновлено успішно", "success");
+            }
+
+            CloseWorkerModal();
+            await LoadWorkers();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка: {ex.Message}", "error");
+        }
+
+        isSaving = false;
+    }
+
+    private void ShowSetPinModal(WorkerEntity worker)
+    {
+        selectedWorkerForPin = worker;
+        newPin = string.Empty;
+        confirmPin = string.Empty;
+        showPinModal = true;
+    }
+
+    private void ClosePinModal()
+    {
+        showPinModal = false;
+        selectedWorkerForPin = null;
+        newPin = string.Empty;
+        confirmPin = string.Empty;
+    }
+
+    private async Task SavePin()
+    {
+        if (selectedWorkerForPin == null) return;
+
+        if (newPin != confirmPin)
+        {
+            ShowAlert("PIN-коди не співпадають", "error");
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(newPin) && (newPin.Length < 4 || !newPin.All(char.IsDigit)))
+        {
+            ShowAlert("PIN повинен містити 4-6 цифр", "error");
+            return;
+        }
+
+        try
+        {
+            await WorkerService.SetPinAsync(selectedWorkerForPin.Id, newPin);
+            ShowAlert("PIN-код змінено успішно", "success");
+            ClosePinModal();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка: {ex.Message}", "error");
+        }
+    }
+
+    private async Task DeactivateWorker(WorkerEntity worker)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"Деактивувати працівника {worker.DisplayName}?"))
+            return;
+
+        try
+        {
+            await WorkerService.DeactivateWorkerAsync(worker.Id);
+            ShowAlert("Працівника деактивовано", "success");
+            await LoadWorkers();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка: {ex.Message}", "error");
+        }
+    }
+
+    private async Task ActivateWorker(WorkerEntity worker)
+    {
+        try
+        {
+            worker.IsActive = true;
+            await WorkerService.UpdateWorkerAsync(worker);
+            ShowAlert("Працівника активовано", "success");
+            await LoadWorkers();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка: {ex.Message}", "error");
+        }
+    }
+
+    private async Task GenerateBadge(WorkerEntity worker)
+    {
+        // TODO: Генерація QR-коду для бейджа
+        await Task.CompletedTask;
+        ShowAlert($"Код для бейджа: {worker.WorkerCode}", "info");
+    }
+
+    private void ShowAlert(string message, string type)
+    {
+        alertMessage = message;
+        alertType = type;
+        StateHasChanged();
+        
+        _ = Task.Delay(4000).ContinueWith(_ =>
+        {
+            alertMessage = string.Empty;
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    public void Dispose()
+    {
+        searchTimer?.Dispose();
+    }
+}

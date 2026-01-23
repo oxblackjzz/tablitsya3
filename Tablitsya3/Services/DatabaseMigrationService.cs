@@ -207,9 +207,104 @@ CREATE TABLE IF NOT EXISTS scan_logs (
     stage INTEGER NOT NULL,
     scan_date TIMESTAMP WITH TIME ZONE NOT NULL,
     user_id VARCHAR(100),
+    worker_id INTEGER,
+    workstation_id INTEGER,
+    session_id INTEGER,
     device_id VARCHAR(50),
     success BOOLEAN DEFAULT TRUE,
     message VARCHAR(500)
+);
+
+-- =============================================
+-- ТАБЛИЦІ ДЛЯ ПРАЦІВНИКІВ
+-- =============================================
+
+-- Працівники
+CREATE TABLE IF NOT EXISTS workers (
+    id SERIAL PRIMARY KEY,
+    worker_code VARCHAR(50) NOT NULL UNIQUE,
+    full_name VARCHAR(255) NOT NULL,
+    first_name VARCHAR(100) DEFAULT '',
+    last_name VARCHAR(100) DEFAULT '',
+    middle_name VARCHAR(100) DEFAULT '',
+    position VARCHAR(100) DEFAULT '',
+    workshop_number INTEGER DEFAULT 1,
+    pin_code VARCHAR(10),
+    pin_code_hash VARCHAR(255),
+    allowed_stages VARCHAR(100) DEFAULT '',
+    phone VARCHAR(20),
+    email VARCHAR(100),
+    hire_date TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_date TIMESTAMP WITH TIME ZONE,
+    notes VARCHAR(500)
+);
+
+-- Робочі станції
+CREATE TABLE IF NOT EXISTS workstations (
+    id SERIAL PRIMARY KEY,
+    station_code VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    description VARCHAR(500),
+    workshop_number INTEGER DEFAULT 1,
+    production_stage INTEGER DEFAULT 0,
+    location VARCHAR(100),
+    is_active BOOLEAN DEFAULT TRUE,
+    requires_worker_auth BOOLEAN DEFAULT TRUE,
+    session_timeout_minutes INTEGER DEFAULT 60,
+    device_identifier VARCHAR(100),
+    created_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_date TIMESTAMP WITH TIME ZONE
+);
+
+-- Сесії працівників
+CREATE TABLE IF NOT EXISTS worker_sessions (
+    id SERIAL PRIMARY KEY,
+    worker_id INTEGER NOT NULL,
+    workstation_id INTEGER NOT NULL,
+    session_token VARCHAR(100) NOT NULL UNIQUE,
+    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_time TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT TRUE,
+    ip_address VARCHAR(50),
+    user_agent VARCHAR(500),
+    scans_count INTEGER DEFAULT 0,
+    last_scan_time TIMESTAMP WITH TIME ZONE
+);
+
+-- KPI працівників
+CREATE TABLE IF NOT EXISTS worker_kpis (
+    id SERIAL PRIMARY KEY,
+    worker_id INTEGER NOT NULL,
+    date TIMESTAMP WITH TIME ZONE NOT NULL,
+    production_stage INTEGER NOT NULL,
+    parts_processed INTEGER DEFAULT 0,
+    total_square_meters DOUBLE PRECISION DEFAULT 0,
+    defects_count INTEGER DEFAULT 0,
+    work_minutes INTEGER DEFAULT 0,
+    avg_time_per_part DOUBLE PRECISION DEFAULT 0,
+    updated_date TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+-- Брак/дефекти
+CREATE TABLE IF NOT EXISTS defects (
+    id SERIAL PRIMARY KEY,
+    part_id INTEGER NOT NULL,
+    qr_code VARCHAR(100) NOT NULL,
+    worker_id INTEGER,
+    workstation_id INTEGER,
+    production_stage INTEGER NOT NULL,
+    defect_type VARCHAR(100) DEFAULT '',
+    description VARCHAR(1000),
+    severity INTEGER DEFAULT 1,
+    is_repairable BOOLEAN DEFAULT TRUE,
+    status VARCHAR(20) DEFAULT 'new',
+    repaired_by_worker_id INTEGER,
+    repaired_date TIMESTAMP WITH TIME ZONE,
+    repair_notes VARCHAR(500),
+    created_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_date TIMESTAMP WITH TIME ZONE
 );
 ";
 
@@ -286,6 +381,52 @@ CREATE INDEX IF NOT EXISTS ""IX_scan_logs_scan_date""
     ON scan_logs(scan_date);
 CREATE INDEX IF NOT EXISTS ""IX_scan_logs_part_id"" 
     ON scan_logs(part_id);
+CREATE INDEX IF NOT EXISTS ""IX_scan_logs_worker_id"" 
+    ON scan_logs(worker_id);
+CREATE INDEX IF NOT EXISTS ""IX_scan_logs_workstation_id"" 
+    ON scan_logs(workstation_id);
+
+-- =============================================
+-- ІНДЕКСИ ДЛЯ ПРАЦІВНИКІВ
+-- =============================================
+
+-- Індекси для workers
+CREATE INDEX IF NOT EXISTS ""IX_workers_workshop_number"" 
+    ON workers(workshop_number);
+CREATE INDEX IF NOT EXISTS ""IX_workers_is_active"" 
+    ON workers(is_active);
+
+-- Індекси для workstations
+CREATE INDEX IF NOT EXISTS ""IX_workstations_workshop_number"" 
+    ON workstations(workshop_number);
+CREATE INDEX IF NOT EXISTS ""IX_workstations_production_stage"" 
+    ON workstations(production_stage);
+CREATE INDEX IF NOT EXISTS ""IX_workstations_is_active"" 
+    ON workstations(is_active);
+
+-- Індекси для worker_sessions
+CREATE INDEX IF NOT EXISTS ""IX_worker_sessions_worker_id"" 
+    ON worker_sessions(worker_id);
+CREATE INDEX IF NOT EXISTS ""IX_worker_sessions_workstation_id"" 
+    ON worker_sessions(workstation_id);
+CREATE INDEX IF NOT EXISTS ""IX_worker_sessions_active_workstation"" 
+    ON worker_sessions(is_active, workstation_id);
+
+-- Індекси для worker_kpis
+CREATE UNIQUE INDEX IF NOT EXISTS ""IX_worker_kpis_worker_date_stage"" 
+    ON worker_kpis(worker_id, date, production_stage);
+CREATE INDEX IF NOT EXISTS ""IX_worker_kpis_date"" 
+    ON worker_kpis(date);
+
+-- Індекси для defects
+CREATE INDEX IF NOT EXISTS ""IX_defects_part_id"" 
+    ON defects(part_id);
+CREATE INDEX IF NOT EXISTS ""IX_defects_worker_id"" 
+    ON defects(worker_id);
+CREATE INDEX IF NOT EXISTS ""IX_defects_status"" 
+    ON defects(status);
+CREATE INDEX IF NOT EXISTS ""IX_defects_created_date"" 
+    ON defects(created_date);
 ";
 
                 // Виконуємо створення індексів
@@ -301,7 +442,7 @@ CREATE INDEX IF NOT EXISTS ""IX_scan_logs_part_id""
                 _logger.LogInformation("✅ Database indexes created successfully");
                 Console.WriteLine("✅ Database indexes created successfully");
 
-                // Перевіряємо що всі таблиці створені (тепер 11 таблиць!)
+                // Перевіряємо що всі таблиці створені (тепер 16 таблиць!)
                 var verificationScript = @"
 SELECT COUNT(*) 
 FROM information_schema.tables 
@@ -309,7 +450,8 @@ WHERE table_schema = 'public'
     AND table_name IN ('workshop_data', 'orders', 'workshop_capacities', 
                        'workshop_production_lead_times', 'workshop_days_before_production',
                        'custom_completion_dates', 'original_workshops',
-                       'imported_projects', 'parts', 'products', 'scan_logs');
+                       'imported_projects', 'parts', 'products', 'scan_logs',
+                       'workers', 'workstations', 'worker_sessions', 'worker_kpis', 'defects');
 ";
 
                 _logger.LogInformation("🔎 Verifying tables...");
@@ -319,16 +461,16 @@ WHERE table_schema = 'public'
                 {
                     var tableCount = (long)(await command.ExecuteScalarAsync() ?? 0L);
 
-                    if (tableCount >= 7) // Мінімум 7 базових таблиць
+                    if (tableCount >= 16) // 16 таблиць (7 базових + 4 scanning + 5 workers)
                     {
-                        _logger.LogInformation($"✅ {tableCount} tables verified successfully");
-                        Console.WriteLine($"✅ {tableCount} tables verified successfully");
+                        _logger.LogInformation($"✅ All {tableCount} tables verified successfully");
+                        Console.WriteLine($"✅ All {tableCount} tables verified successfully");
                         return true;
                     }
                     else
                     {
-                        _logger.LogWarning($"⚠️ Only {tableCount} tables found");
-                        Console.WriteLine($"⚠️ Only {tableCount} tables found");
+                        _logger.LogWarning($"⚠️ Only {tableCount} out of 16 tables found");
+                        Console.WriteLine($"⚠️ Only {tableCount} out of 16 tables found");
                         return false;
                     }
                 }
@@ -355,7 +497,7 @@ WHERE table_schema = 'public'
                 await using var connection = new NpgsqlConnection(connectionString);
                 await connection.OpenAsync();
 
-                // Перевіряємо ВСІ таблиці включно зі scanning
+                // Перевіряємо ВСІ таблиці включно зі scanning та workers
                 var checkScript = @"
 SELECT COUNT(*) 
 FROM information_schema.tables 
@@ -363,14 +505,15 @@ WHERE table_schema = 'public'
     AND table_name IN ('workshop_data', 'orders', 'workshop_capacities', 
                        'workshop_production_lead_times', 'workshop_days_before_production',
                        'custom_completion_dates', 'original_workshops',
-                       'imported_projects', 'parts', 'products', 'scan_logs');
+                       'imported_projects', 'parts', 'products', 'scan_logs',
+                       'workers', 'workstations', 'worker_sessions', 'worker_kpis', 'defects');
 ";
 
                 await using var command = new NpgsqlCommand(checkScript, connection);
                 var tableCount = (long)(await command.ExecuteScalarAsync() ?? 0L);
 
-                // Потрібно 11 таблиць (7 базових + 4 scanning)
-                var allTablesExist = tableCount >= 11;
+                // Потрібно 16 таблиць (7 базових + 4 scanning + 5 workers)
+                var allTablesExist = tableCount >= 16;
                 
                 if (allTablesExist)
                 {
@@ -379,8 +522,8 @@ WHERE table_schema = 'public'
                 }
                 else
                 {
-                    _logger.LogInformation($"⚠️ Only {tableCount} out of 11 tables exist, migration needed");
-                    Console.WriteLine($"⚠️ Only {tableCount} out of 11 tables exist, migration needed");
+                    _logger.LogInformation($"⚠️ Only {tableCount} out of 16 tables exist, migration needed");
+                    Console.WriteLine($"⚠️ Only {tableCount} out of 16 tables exist, migration needed");
                 }
                 
                 return allTablesExist;

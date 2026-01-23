@@ -20,7 +20,8 @@ window.DragDropInterop = {
 
         try {
             this.sortableInstances[elementId] = new Sortable(el, {
-                animation: 150,
+                animation: 250, // Збільшено для плавності
+                easing: "cubic-bezier(0.25, 1, 0.5, 1)", // Плавний easing
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
                 dragClass: 'sortable-drag',
@@ -167,7 +168,8 @@ window.GanttDragDrop = {
 
         try {
             this.sortableInstances[elementId] = new Sortable(el, {
-                animation: 150,
+                animation: 300, // Збільшено для плавності
+                easing: "cubic-bezier(0.25, 1, 0.5, 1)", // Плавний easing
                 ghostClass: 'gantt-sortable-ghost',
                 chosenClass: 'gantt-sortable-chosen',
                 dragClass: 'gantt-sortable-drag',
@@ -178,6 +180,7 @@ window.GanttDragDrop = {
                 sort: false, // Вимикаємо автоматичне сортування бо бари абсолютно позиціоновані
                 forceFallback: true,
                 fallbackOnBody: true,
+                fallbackTolerance: 3, // Мінімальний рух для початку drag
                 swapThreshold: 0.65,
                 
                 onStart: function (evt) {
@@ -358,7 +361,8 @@ window.ReorderModalDragDrop = {
 
         try {
             this.sortableInstance = new Sortable(el, {
-                animation: 150,
+                animation: 250, // Збільшено для плавності
+                easing: "cubic-bezier(0.25, 1, 0.5, 1)", // Плавний easing
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
                 dragClass: 'sortable-drag',

@@ -27,6 +27,13 @@ namespace Tablitsya3.Data
         public DbSet<ProductEntity> Products { get; set; }
         public DbSet<ScanLogEntity> ScanLogs { get; set; }
 
+        // === Worker entities ===
+        public DbSet<WorkerEntity> Workers { get; set; }
+        public DbSet<WorkstationEntity> Workstations { get; set; }
+        public DbSet<WorkerSessionEntity> WorkerSessions { get; set; }
+        public DbSet<WorkerKpiEntity> WorkerKpis { get; set; }
+        public DbSet<DefectEntity> Defects { get; set; }
+
         // ✅ АВТОМАТИЧНА КОНВЕРТАЦІЯ В UTC тільки при збереженні
         public override int SaveChanges()
         {
@@ -257,12 +264,139 @@ namespace Tablitsya3.Data
                 entity.Property(e => e.Stage).HasColumnName("stage");
                 entity.Property(e => e.ScanDate).HasColumnName("scan_date");
                 entity.Property(e => e.UserId).HasColumnName("user_id");
+                entity.Property(e => e.WorkerId).HasColumnName("worker_id");
+                entity.Property(e => e.WorkstationId).HasColumnName("workstation_id");
+                entity.Property(e => e.SessionId).HasColumnName("session_id");
                 entity.Property(e => e.DeviceId).HasColumnName("device_id");
                 entity.Property(e => e.Success).HasColumnName("success");
                 entity.Property(e => e.Message).HasColumnName("message");
                 entity.HasIndex(e => e.QRCode);
                 entity.HasIndex(e => e.ScanDate);
                 entity.HasIndex(e => e.PartId);
+                entity.HasIndex(e => e.WorkerId);
+                entity.HasIndex(e => e.WorkstationId);
+            });
+
+            // === Worker entities ===
+
+            // WorkerEntity
+            modelBuilder.Entity<WorkerEntity>(entity =>
+            {
+                entity.ToTable("workers");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.WorkerCode).HasColumnName("worker_code");
+                entity.Property(e => e.FullName).HasColumnName("full_name");
+                entity.Property(e => e.FirstName).HasColumnName("first_name");
+                entity.Property(e => e.LastName).HasColumnName("last_name");
+                entity.Property(e => e.MiddleName).HasColumnName("middle_name");
+                entity.Property(e => e.Position).HasColumnName("position");
+                entity.Property(e => e.WorkshopNumber).HasColumnName("workshop_number");
+                entity.Property(e => e.PinCode).HasColumnName("pin_code");
+                entity.Property(e => e.PinCodeHash).HasColumnName("pin_code_hash");
+                entity.Property(e => e.AllowedStages).HasColumnName("allowed_stages");
+                entity.Property(e => e.Phone).HasColumnName("phone");
+                entity.Property(e => e.Email).HasColumnName("email");
+                entity.Property(e => e.HireDate).HasColumnName("hire_date");
+                entity.Property(e => e.IsActive).HasColumnName("is_active");
+                entity.Property(e => e.CreatedDate).HasColumnName("created_date");
+                entity.Property(e => e.UpdatedDate).HasColumnName("updated_date");
+                entity.Property(e => e.Notes).HasColumnName("notes");
+                entity.HasIndex(e => e.WorkerCode).IsUnique();
+                entity.HasIndex(e => e.WorkshopNumber);
+                entity.HasIndex(e => e.IsActive);
+            });
+
+            // WorkstationEntity
+            modelBuilder.Entity<WorkstationEntity>(entity =>
+            {
+                entity.ToTable("workstations");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.StationCode).HasColumnName("station_code");
+                entity.Property(e => e.Name).HasColumnName("name");
+                entity.Property(e => e.Description).HasColumnName("description");
+                entity.Property(e => e.WorkshopNumber).HasColumnName("workshop_number");
+                entity.Property(e => e.ProductionStage).HasColumnName("production_stage");
+                entity.Property(e => e.Location).HasColumnName("location");
+                entity.Property(e => e.IsActive).HasColumnName("is_active");
+                entity.Property(e => e.RequiresWorkerAuth).HasColumnName("requires_worker_auth");
+                entity.Property(e => e.SessionTimeoutMinutes).HasColumnName("session_timeout_minutes");
+                entity.Property(e => e.DeviceIdentifier).HasColumnName("device_identifier");
+                entity.Property(e => e.CreatedDate).HasColumnName("created_date");
+                entity.Property(e => e.UpdatedDate).HasColumnName("updated_date");
+                entity.HasIndex(e => e.StationCode).IsUnique();
+                entity.HasIndex(e => e.WorkshopNumber);
+                entity.HasIndex(e => e.ProductionStage);
+                entity.HasIndex(e => e.IsActive);
+            });
+
+            // WorkerSessionEntity
+            modelBuilder.Entity<WorkerSessionEntity>(entity =>
+            {
+                entity.ToTable("worker_sessions");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.WorkerId).HasColumnName("worker_id");
+                entity.Property(e => e.WorkstationId).HasColumnName("workstation_id");
+                entity.Property(e => e.SessionToken).HasColumnName("session_token");
+                entity.Property(e => e.StartTime).HasColumnName("start_time");
+                entity.Property(e => e.EndTime).HasColumnName("end_time");
+                entity.Property(e => e.IsActive).HasColumnName("is_active");
+                entity.Property(e => e.IpAddress).HasColumnName("ip_address");
+                entity.Property(e => e.UserAgent).HasColumnName("user_agent");
+                entity.Property(e => e.ScansCount).HasColumnName("scans_count");
+                entity.Property(e => e.LastScanTime).HasColumnName("last_scan_time");
+                entity.HasIndex(e => e.SessionToken).IsUnique();
+                entity.HasIndex(e => e.WorkerId);
+                entity.HasIndex(e => e.WorkstationId);
+                entity.HasIndex(e => new { e.IsActive, e.WorkstationId });
+            });
+
+            // WorkerKpiEntity
+            modelBuilder.Entity<WorkerKpiEntity>(entity =>
+            {
+                entity.ToTable("worker_kpis");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.WorkerId).HasColumnName("worker_id");
+                entity.Property(e => e.Date).HasColumnName("date");
+                entity.Property(e => e.ProductionStage).HasColumnName("production_stage");
+                entity.Property(e => e.PartsProcessed).HasColumnName("parts_processed");
+                entity.Property(e => e.TotalSquareMeters).HasColumnName("total_square_meters");
+                entity.Property(e => e.DefectsCount).HasColumnName("defects_count");
+                entity.Property(e => e.WorkMinutes).HasColumnName("work_minutes");
+                entity.Property(e => e.AvgTimePerPart).HasColumnName("avg_time_per_part");
+                entity.Property(e => e.UpdatedDate).HasColumnName("updated_date");
+                entity.HasIndex(e => new { e.WorkerId, e.Date, e.ProductionStage }).IsUnique();
+                entity.HasIndex(e => e.Date);
+            });
+
+            // DefectEntity
+            modelBuilder.Entity<DefectEntity>(entity =>
+            {
+                entity.ToTable("defects");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.PartId).HasColumnName("part_id");
+                entity.Property(e => e.QRCode).HasColumnName("qr_code");
+                entity.Property(e => e.WorkerId).HasColumnName("worker_id");
+                entity.Property(e => e.WorkstationId).HasColumnName("workstation_id");
+                entity.Property(e => e.ProductionStage).HasColumnName("production_stage");
+                entity.Property(e => e.DefectType).HasColumnName("defect_type");
+                entity.Property(e => e.Description).HasColumnName("description");
+                entity.Property(e => e.Severity).HasColumnName("severity");
+                entity.Property(e => e.IsRepairable).HasColumnName("is_repairable");
+                entity.Property(e => e.Status).HasColumnName("status");
+                entity.Property(e => e.RepairedByWorkerId).HasColumnName("repaired_by_worker_id");
+                entity.Property(e => e.RepairedDate).HasColumnName("repaired_date");
+                entity.Property(e => e.RepairNotes).HasColumnName("repair_notes");
+                entity.Property(e => e.CreatedDate).HasColumnName("created_date");
+                entity.Property(e => e.UpdatedDate).HasColumnName("updated_date");
+                entity.HasIndex(e => e.PartId);
+                entity.HasIndex(e => e.WorkerId);
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.CreatedDate);
             });
         }
     }

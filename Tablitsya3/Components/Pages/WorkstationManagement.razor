@@ -1,0 +1,587 @@
+﻿@page "/workstations"
+@using Tablitsya3.Data.Entities
+@using Tablitsya3.Models.Scanning
+@using Tablitsya3.Services
+@inject WorkstationService WorkstationService
+@inject WorkerAuthService WorkerAuthService
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<PageTitle>Управління станціями</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-pc-display-horizontal me-2"></i>Управління станціями</h2>
+        <div class="btn-group">
+            <button class="btn btn-primary" @onclick="ShowAddStationModal">
+                <i class="bi bi-plus-lg me-1"></i>Додати станцію
+            </button>
+            <button class="btn btn-outline-primary" @onclick="ShowCreateDefaultModal">
+                <i class="bi bi-magic me-1"></i>Створити типові
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Завантаження...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Фільтри -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Цех</label>
+                        <select class="form-select" @bind="selectedWorkshop" @bind:after="LoadStations">
+                            <option value="0">Всі цехи</option>
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                <option value="@i">Цех @i</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Етап</label>
+                        <select class="form-select" @bind="selectedStage" @bind:after="LoadStations">
+                            <option value="-1">Всі етапи</option>
+                            @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+                            {
+                                <option value="@((int)stage)">@stage.GetDisplayName()</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Статус</label>
+                        <select class="form-select" @bind="showInactive" @bind:after="LoadStations">
+                            <option value="false">Тільки активні</option>
+                            <option value="true">Всі</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-outline-secondary w-100" @onclick="LoadStations">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Оновити
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Активні сесії -->
+        @if (activeSessions.Any())
+        {
+            <div class="card mb-4 border-success">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-person-check me-2"></i>Активні сесії (@activeSessions.Count)
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Станція</th>
+                                    <th>Працівник</th>
+                                    <th>Початок</th>
+                                    <th>Сканувань</th>
+                                    <th>Дії</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var (ws, session, worker) in activeSessions)
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong>@ws.Name</strong>
+                                            <br /><small class="text-muted">@ws.StageName</small>
+                                        </td>
+                                        <td>@worker.DisplayName</td>
+                                        <td>@session.StartTime.ToLocalTime().ToString("HH:mm")</td>
+                                        <td>
+                                            <span class="badge bg-info">@session.ScansCount</span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-danger" 
+                                                    @onclick="() => EndSession(session.SessionToken)">
+                                                <i class="bi bi-box-arrow-right"></i> Завершити
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Станції по етапах -->
+        @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+        {
+            var stageStations = filteredStations.Where(s => s.ProductionStage == (int)stage).ToList();
+            if (selectedStage >= 0 && selectedStage != (int)stage) continue;
+            if (!stageStations.Any() && selectedStage < 0) continue;
+
+            <div class="card mb-4">
+                <div class="card-header d-flex align-items-center" style="background-color: @(stage.GetColor())20; border-left: 4px solid @stage.GetColor()">
+                    <i class="@stage.GetIcon() me-2" style="color: @stage.GetColor()"></i>
+                    <strong>@stage.GetDisplayName()</strong>
+                    <span class="badge bg-secondary ms-2">@stageStations.Count станцій</span>
+                </div>
+                <div class="card-body p-0">
+                    @if (!stageStations.Any())
+                    {
+                        <div class="text-center py-4 text-muted">
+                            Станцій не знайдено
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Код</th>
+                                        <th>Назва</th>
+                                        <th>Цех</th>
+                                        <th>Локація</th>
+                                        <th>Авторизація</th>
+                                        <th>Тайм-аут</th>
+                                        <th>Статус</th>
+                                        <th>Дії</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var station in stageStations)
+                                    {
+                                        var hasActiveSession = activeSessions.Any(s => s.Workstation.Id == station.Id);
+                                        <tr class="@(station.IsActive ? "" : "table-secondary")">
+                                            <td><code>@station.StationCode</code></td>
+                                            <td>
+                                                <strong>@station.Name</strong>
+                                                @if (!string.IsNullOrEmpty(station.Description))
+                                                {
+                                                    <br /><small class="text-muted">@station.Description</small>
+                                                }
+                                            </td>
+                                            <td><span class="badge bg-info">Цех @station.WorkshopNumber</span></td>
+                                            <td>@(station.Location ?? "-")</td>
+                                            <td>
+                                                @if (station.RequiresWorkerAuth)
+                                                {
+                                                    <span class="badge bg-warning text-dark">
+                                                        <i class="bi bi-lock"></i> Потрібна
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">
+                                                        <i class="bi bi-unlock"></i> Ні
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (station.SessionTimeoutMinutes > 0)
+                                                {
+                                                    <span>@station.SessionTimeoutMinutes хв</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Без обмежень</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (hasActiveSession)
+                                                {
+                                                    <span class="badge bg-success">
+                                                        <i class="bi bi-person-check"></i> Активна
+                                                    </span>
+                                                }
+                                                else if (station.IsActive)
+                                                {
+                                                    <span class="badge bg-secondary">Вільна</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-dark">Неактивна</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-primary" 
+                                                            @onclick="() => ShowEditStationModal(station)" title="Редагувати">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </button>
+                                                    @if (station.IsActive)
+                                                    {
+                                                        <button class="btn btn-outline-warning" 
+                                                                @onclick="() => DeactivateStation(station)" title="Деактивувати">
+                                                            <i class="bi bi-pause-circle"></i>
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="btn btn-outline-success" 
+                                                                @onclick="() => ActivateStation(station)" title="Активувати">
+                                                            <i class="bi bi-play-circle"></i>
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<!-- Модальне вікно додавання/редагування станції -->
+@if (showStationModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        @(editingStation.Id == 0 ? "Додати станцію" : "Редагувати станцію")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseStationModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Код станції</label>
+                            <input type="text" class="form-control" @bind="editingStation.StationCode" 
+                                   placeholder="Автогенерація" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Цех *</label>
+                            <select class="form-select" @bind="editingStation.WorkshopNumber">
+                                @for (int i = 1; i <= 5; i++)
+                                {
+                                    <option value="@i">Цех @i</option>
+                                }
+                            </select>
+                        </div>
+                        
+                        <div class="col-12">
+                            <label class="form-label">Назва *</label>
+                            <input type="text" class="form-control" @bind="editingStation.Name" 
+                                   placeholder="Порізочний станок #1" />
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">Етап виробництва *</label>
+                            <select class="form-select" @bind="editingStation.ProductionStage">
+                                @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+                                {
+                                    <option value="@((int)stage)">@stage.GetDisplayName()</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Локація</label>
+                            <input type="text" class="form-control" @bind="editingStation.Location" 
+                                   placeholder="Зона A, Ряд 1" />
+                        </div>
+                        
+                        <div class="col-12">
+                            <label class="form-label">Опис</label>
+                            <textarea class="form-control" rows="2" @bind="editingStation.Description"></textarea>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="requiresAuth" 
+                                       @bind="editingStation.RequiresWorkerAuth" />
+                                <label class="form-check-label" for="requiresAuth">
+                                    Потрібна авторизація працівника
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Тайм-аут сесії (хв)</label>
+                            <input type="number" class="form-control" @bind="editingStation.SessionTimeoutMinutes" 
+                                   min="0" max="480" />
+                            <small class="text-muted">0 = без обмежень</small>
+                        </div>
+                        
+                        <div class="col-12">
+                            <label class="form-label">Ідентифікатор пристрою</label>
+                            <input type="text" class="form-control" @bind="editingStation.DeviceIdentifier" 
+                                   placeholder="IP-адреса або унікальний ID" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseStationModal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveStation" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Зберегти
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Модальне вікно створення типових станцій -->
+@if (showCreateDefaultModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Створити типові станції</h5>
+                    <button type="button" class="btn-close" @onclick="() => showCreateDefaultModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Буде створено по одній станції для кожного етапу виробництва.</p>
+                    <div class="mb-3">
+                        <label class="form-label">Виберіть цех</label>
+                        <select class="form-select" @bind="createDefaultWorkshop">
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                <option value="@i">Цех @i</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showCreateDefaultModal = false">Скасувати</button>
+                    <button type="button" class="btn btn-primary" @onclick="CreateDefaultStations">
+                        Створити
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(alertMessage))
+{
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999">
+        <div class="toast show @(alertType == "success" ? "bg-success" : alertType == "error" ? "bg-danger" : "bg-info") text-white">
+            <div class="toast-body d-flex justify-content-between align-items-center">
+                @alertMessage
+                <button type="button" class="btn-close btn-close-white ms-2" @onclick="() => alertMessage = string.Empty"></button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<WorkstationEntity> stations = new();
+    private List<(WorkstationEntity Workstation, WorkerSessionEntity Session, WorkerEntity Worker)> activeSessions = new();
+    
+    private bool isLoading = true;
+    private bool isSaving = false;
+    
+    private int selectedWorkshop = 0;
+    private int selectedStage = -1;
+    private bool showInactive = false;
+    
+    private bool showStationModal = false;
+    private WorkstationEntity editingStation = new();
+    
+    private bool showCreateDefaultModal = false;
+    private int createDefaultWorkshop = 1;
+    
+    private string alertMessage = string.Empty;
+    private string alertType = "info";
+
+    private IEnumerable<WorkstationEntity> filteredStations => stations
+        .Where(s => selectedWorkshop == 0 || s.WorkshopNumber == selectedWorkshop)
+        .Where(s => selectedStage < 0 || s.ProductionStage == selectedStage)
+        .OrderBy(s => s.WorkshopNumber)
+        .ThenBy(s => s.ProductionStage)
+        .ThenBy(s => s.Name);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStations();
+    }
+
+    private async Task LoadStations()
+    {
+        isLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            stations = await WorkstationService.GetAllWorkstationsAsync(showInactive);
+            activeSessions = await WorkerAuthService.GetAllActiveSessionsAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка завантаження: {ex.Message}", "error");
+        }
+        
+        isLoading = false;
+    }
+
+    private void ShowAddStationModal()
+    {
+        editingStation = new WorkstationEntity 
+        { 
+            WorkshopNumber = 1, 
+            ProductionStage = (int)ProductionStage.Cutting,
+            RequiresWorkerAuth = true,
+            SessionTimeoutMinutes = 60,
+            IsActive = true 
+        };
+        showStationModal = true;
+    }
+
+    private void ShowEditStationModal(WorkstationEntity station)
+    {
+        editingStation = new WorkstationEntity
+        {
+            Id = station.Id,
+            StationCode = station.StationCode,
+            Name = station.Name,
+            Description = station.Description,
+            WorkshopNumber = station.WorkshopNumber,
+            ProductionStage = station.ProductionStage,
+            Location = station.Location,
+            IsActive = station.IsActive,
+            RequiresWorkerAuth = station.RequiresWorkerAuth,
+            SessionTimeoutMinutes = station.SessionTimeoutMinutes,
+            DeviceIdentifier = station.DeviceIdentifier
+        };
+        showStationModal = true;
+    }
+
+    private void CloseStationModal()
+    {
+        showStationModal = false;
+        editingStation = new();
+    }
+
+    private async Task SaveStation()
+    {
+        if (string.IsNullOrWhiteSpace(editingStation.Name))
+        {
+            ShowAlert("Введіть назву станції", "error");
+            return;
+        }
+
+        isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            if (editingStation.Id == 0)
+            {
+                await WorkstationService.CreateWorkstationAsync(editingStation);
+                ShowAlert("Станцію додано успішно", "success");
+            }
+            else
+            {
+                await WorkstationService.UpdateWorkstationAsync(editingStation);
+                ShowAlert("Станцію оновлено успішно", "success");
+            }
+
+            CloseStationModal();
+            await LoadStations();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка: {ex.Message}", "error");
+        }
+
+        isSaving = false;
+    }
+
+    private async Task DeactivateStation(WorkstationEntity station)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"Деактивувати станцію {station.Name}?"))
+            return;
+
+        try
+        {
+            await WorkstationService.DeactivateWorkstationAsync(station.Id);
+            ShowAlert("Станцію деактивовано", "success");
+            await LoadStations();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка: {ex.Message}", "error");
+        }
+    }
+
+    private async Task ActivateStation(WorkstationEntity station)
+    {
+        try
+        {
+            station.IsActive = true;
+            await WorkstationService.UpdateWorkstationAsync(station);
+            ShowAlert("Станцію активовано", "success");
+            await LoadStations();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка: {ex.Message}", "error");
+        }
+    }
+
+    private void ShowCreateDefaultModal()
+    {
+        createDefaultWorkshop = 1;
+        showCreateDefaultModal = true;
+    }
+
+    private async Task CreateDefaultStations()
+    {
+        try
+        {
+            var created = await WorkstationService.CreateDefaultWorkstationsAsync(createDefaultWorkshop);
+            ShowAlert($"Створено {created.Count} станцій для цеху {createDefaultWorkshop}", "success");
+            showCreateDefaultModal = false;
+            await LoadStations();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка: {ex.Message}", "error");
+        }
+    }
+
+    private async Task EndSession(string sessionToken)
+    {
+        try
+        {
+            await WorkerAuthService.LogoutAsync(sessionToken);
+            ShowAlert("Сесію завершено", "success");
+            await LoadStations();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка: {ex.Message}", "error");
+        }
+    }
+
+    private void ShowAlert(string message, string type)
+    {
+        alertMessage = message;
+        alertType = type;
+        StateHasChanged();
+        
+        _ = Task.Delay(4000).ContinueWith(_ =>
+        {
+            alertMessage = string.Empty;
+            InvokeAsync(StateHasChanged);
+        });
+    }
+}

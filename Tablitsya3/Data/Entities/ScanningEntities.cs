@@ -144,8 +144,15 @@ namespace Tablitsya3.Data.Entities
 
         public DateTime ScanDate { get; set; } = DateTime.UtcNow;
 
+        /// <summary>ID працівника (застаріле, використовуйте WorkerId)</summary>
         [MaxLength(100)]
         public string? UserId { get; set; }
+
+        /// <summary>ID працівника з таблиці workers</summary>
+        public int? WorkerId { get; set; }
+
+        /// <summary>ID робочої станції</summary>
+        public int? WorkstationId { get; set; }
 
         [MaxLength(50)]
         public string? DeviceId { get; set; }
@@ -154,6 +161,9 @@ namespace Tablitsya3.Data.Entities
 
         [MaxLength(500)]
         public string? Message { get; set; }
+
+        /// <summary>ID сесії працівника</summary>
+        public int? SessionId { get; set; }
     }
 
     /// <summary>

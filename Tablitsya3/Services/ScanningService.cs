@@ -5,6 +5,8 @@ using Tablitsya3.Models.Scanning;
 
 namespace Tablitsya3.Services
 {
+    // WorkerScanContext визначено в WorkerAuthService.cs
+    
     /// <summary>
     /// Сервіс для роботи зі скануванням деталей
     /// </summary>
@@ -190,6 +192,19 @@ namespace Tablitsya3.Services
         /// </summary>
         public async Task<ScanResult> ScanQRCodeAsync(string qrCode, ProductionStage? stage = null, string? userId = null, string? deviceId = null)
         {
+            return await ScanQRCodeWithContextAsync(qrCode, stage, null, userId, deviceId);
+        }
+
+        /// <summary>
+        /// Сканування QR-коду з контекстом авторизованого працівника
+        /// </summary>
+        public async Task<ScanResult> ScanQRCodeWithContextAsync(
+            string qrCode, 
+            ProductionStage? stage = null, 
+            WorkerScanContext? workerContext = null,
+            string? userId = null, 
+            string? deviceId = null)
+        {
             var result = new ScanResult { Success = false };
 
             try
@@ -199,7 +214,8 @@ namespace Tablitsya3.Services
                 if (parsedPart == null)
                 {
                     result.Message = "Невірний формат QR-коду";
-                    await LogScanAsync(0, qrCode, stage, false, result.Message, userId, deviceId);
+                    await LogScanAsync(0, qrCode, stage, false, result.Message, 
+                        workerContext?.WorkerId, workerContext?.WorkstationId, workerContext?.SessionId, userId, deviceId);
                     return result;
                 }
 
@@ -213,11 +229,18 @@ namespace Tablitsya3.Services
                 if (partEntity == null)
                 {
                     result.Message = "Деталь не знайдена в базі даних";
-                    await LogScanAsync(0, qrCode, stage, false, result.Message, userId, deviceId);
+                    await LogScanAsync(0, qrCode, stage, false, result.Message, 
+                        workerContext?.WorkerId, workerContext?.WorkstationId, workerContext?.SessionId, userId, deviceId);
                     return result;
                 }
 
                 var part = MapEntityToPart(partEntity);
+
+                // Якщо є контекст працівника - використовуємо етап станції
+                if (!stage.HasValue && workerContext != null)
+                {
+                    stage = workerContext.Stage;
+                }
 
                 // Якщо етап не вказано - автоматичне визначення
                 if (!stage.HasValue)
@@ -229,7 +252,8 @@ namespace Tablitsya3.Services
                         result.Part = part;
                         result.Message = "Всі етапи вже завершені";
                         result.IsFullyCompleted = true;
-                        await LogScanAsync(partEntity.Id, qrCode, null, true, result.Message, userId, deviceId);
+                        await LogScanAsync(partEntity.Id, qrCode, null, true, result.Message, 
+                            workerContext?.WorkerId, workerContext?.WorkstationId, workerContext?.SessionId, userId, deviceId);
                         return result;
                     }
                 }
@@ -253,7 +277,8 @@ namespace Tablitsya3.Services
                         result.Message = $"Неможливо перейти до етапу '{stage.Value.GetDisplayName()}' - не завершені попередні етапи";
                     }
                     
-                    await LogScanAsync(partEntity.Id, qrCode, stage, false, result.Message, userId, deviceId);
+                    await LogScanAsync(partEntity.Id, qrCode, stage, false, result.Message, 
+                        workerContext?.WorkerId, workerContext?.WorkstationId, workerContext?.SessionId, userId, deviceId);
                     return result;
                 }
 
@@ -268,6 +293,13 @@ namespace Tablitsya3.Services
                 result.Part = part;
                 result.Stage = stage;
                 result.IsFullyCompleted = part.IsFullyCompleted;
+                
+                // Додаємо інформацію про працівника якщо є
+                if (workerContext != null)
+                {
+                    result.WorkerName = workerContext.WorkerName;
+                    result.WorkstationName = workerContext.WorkstationName;
+                }
                 
                 if (stage.Value == ProductionStage.EdgeBanding && part.EdgeBandingSidesRequired > 0)
                 {
@@ -290,7 +322,8 @@ namespace Tablitsya3.Services
                     result.Message += " 🎉 Деталь повністю завершена!";
                 }
 
-                await LogScanAsync(partEntity.Id, qrCode, stage, true, result.Message, userId, deviceId);
+                await LogScanAsync(partEntity.Id, qrCode, stage, true, result.Message, 
+                    workerContext?.WorkerId, workerContext?.WorkstationId, workerContext?.SessionId, userId, deviceId);
 
                 return result;
             }
@@ -321,6 +354,12 @@ namespace Tablitsya3.Services
 
         private async Task LogScanAsync(int partId, string qrCode, ProductionStage? stage, bool success, string? message, string? userId, string? deviceId)
         {
+            await LogScanAsync(partId, qrCode, stage, success, message, null, null, null, userId, deviceId);
+        }
+
+        private async Task LogScanAsync(int partId, string qrCode, ProductionStage? stage, bool success, string? message, 
+            int? workerId, int? workstationId, int? sessionId, string? userId, string? deviceId)
+        {
             var log = new ScanLogEntity
             {
                 PartId = partId,
@@ -328,6 +367,9 @@ namespace Tablitsya3.Services
                 Stage = stage.HasValue ? (int)stage.Value : 0,
                 ScanDate = DateTime.UtcNow,
                 UserId = userId,
+                WorkerId = workerId,
+                WorkstationId = workstationId,
+                SessionId = sessionId,
                 DeviceId = deviceId,
                 Success = success,
                 Message = message

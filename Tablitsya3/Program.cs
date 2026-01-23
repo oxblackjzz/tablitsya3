@@ -143,6 +143,12 @@ builder.Services.AddScoped<ScanningService>();
 builder.Services.AddScoped<ScanningProgressService>();
 Console.WriteLine("✅ Scanning services registered");
 
+// ✅ ДОДАЄМО СЕРВІСИ ПРАЦІВНИКІВ
+builder.Services.AddScoped<WorkerService>();
+builder.Services.AddScoped<WorkstationService>();
+builder.Services.AddScoped<WorkerAuthService>();
+Console.WriteLine("✅ Worker services registered");
+
 // ✅ ДОДАЄМО SIGNALR
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<Tablitsya3.Hubs.ScanningHubService>();

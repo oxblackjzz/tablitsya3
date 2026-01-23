@@ -1,0 +1,344 @@
+﻿@using Tablitsya3.Data.Entities
+@using Tablitsya3.Models.Scanning
+@using Tablitsya3.Services
+@inject WorkerAuthService WorkerAuthService
+@inject WorkstationService WorkstationService
+@inject WorkerService WorkerService
+
+<div class="worker-login-panel">
+    @if (currentSession != null)
+    {
+        <!-- Авторизований користувач -->
+        <div class="card border-success">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <span>
+                    <i class="bi bi-person-check-fill me-2"></i>
+                    @currentSession.WorkerName
+                </span>
+                <button class="btn btn-sm btn-light" @onclick="Logout" title="Вийти">
+                    <i class="bi bi-box-arrow-right"></i>
+                </button>
+            </div>
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">Станція:</small>
+                        <strong class="ms-1">@currentSession.WorkstationName</strong>
+                    </div>
+                    <span class="badge" style="background-color: @currentSession.Stage.GetColor()">
+                        @currentSession.Stage.GetDisplayName()
+                    </span>
+                </div>
+            </div>
+        </div>
+    }
+    else if (requiresAuth)
+    {
+        <!-- Форма авторизації -->
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <i class="bi bi-lock-fill me-2"></i>
+                Авторизація на станції
+            </div>
+            <div class="card-body">
+                @if (workstation != null)
+                {
+                    <div class="mb-3 text-center">
+                        <span class="badge bg-info mb-2">@workstation.Name</span>
+                        <br />
+                        <small class="text-muted">@workstation.StageName</small>
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label class="form-label">Код працівника</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
+                        <input type="text" class="form-control form-control-lg" 
+                               @bind="workerCode" @bind:event="oninput"
+                               @onkeyup="OnWorkerCodeKeyUp"
+                               placeholder="Скануйте бейдж або введіть код"
+                               autofocus />
+                    </div>
+                </div>
+
+                @if (showPinInput)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">PIN-код</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-key"></i></span>
+                            <input type="password" class="form-control form-control-lg text-center" 
+                                   @bind="pinCode" 
+                                   @onkeyup="OnPinKeyUp"
+                                   maxlength="6" 
+                                   placeholder="••••" />
+                        </div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger py-2">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        @errorMessage
+                    </div>
+                }
+
+                <button class="btn btn-primary w-100" @onclick="Login" disabled="@isLoggingIn">
+                    @if (isLoggingIn)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    <i class="bi bi-box-arrow-in-right me-1"></i>
+                    Увійти
+                </button>
+
+                @if (recentWorkers.Any())
+                {
+                    <hr class="my-3" />
+                    <small class="text-muted d-block mb-2">Швидкий вибір:</small>
+                    <div class="d-flex flex-wrap gap-1">
+                        @foreach (var worker in recentWorkers.Take(5))
+                        {
+                            <button class="btn btn-sm btn-outline-secondary" 
+                                    @onclick="() => SelectWorker(worker)">
+                                @worker.DisplayName
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Авторизація не потрібна -->
+        <div class="card">
+            <div class="card-body text-center py-2">
+                <span class="text-muted">
+                    <i class="bi bi-unlock me-1"></i>
+                    Авторизація не потрібна
+                </span>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// ID робочої станції
+    /// </summary>
+    [Parameter]
+    public int WorkstationId { get; set; }
+
+    /// <summary>
+    /// Подія при успішній авторизації
+    /// </summary>
+    [Parameter]
+    public EventCallback<WorkerScanContext> OnAuthenticated { get; set; }
+
+    /// <summary>
+    /// Подія при виході
+    /// </summary>
+    [Parameter]
+    public EventCallback OnLoggedOut { get; set; }
+
+    /// <summary>
+    /// Компактний режим
+    /// </summary>
+    [Parameter]
+    public bool Compact { get; set; } = false;
+
+    private WorkstationEntity? workstation;
+    private WorkerScanContext? currentSession;
+    private List<WorkerEntity> recentWorkers = new();
+
+    private string workerCode = string.Empty;
+    private string pinCode = string.Empty;
+    private bool showPinInput = false;
+    private string errorMessage = string.Empty;
+    private bool isLoggingIn = false;
+    private bool requiresAuth = true;
+
+    private string? sessionToken;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadWorkstation();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (workstation?.Id != WorkstationId)
+        {
+            await LoadWorkstation();
+        }
+    }
+
+    private async Task LoadWorkstation()
+    {
+        if (WorkstationId <= 0) return;
+
+        workstation = await WorkstationService.GetWorkstationByIdAsync(WorkstationId);
+        if (workstation == null) return;
+
+        requiresAuth = workstation.RequiresWorkerAuth;
+
+        // Перевіряємо чи є активна сесія
+        currentSession = await WorkerAuthService.GetScanContextForWorkstationAsync(WorkstationId);
+
+        // Завантажуємо працівників для швидкого вибору
+        if (requiresAuth && workstation != null)
+        {
+            recentWorkers = await WorkerService.GetWorkersByWorkshopAsync(workstation.WorkshopNumber);
+        }
+    }
+
+    private async Task OnWorkerCodeKeyUp(KeyboardEventArgs e)
+    {
+        errorMessage = string.Empty;
+
+        if (e.Key == "Enter")
+        {
+            if (!string.IsNullOrEmpty(workerCode))
+            {
+                // Перевіряємо чи працівник потребує PIN
+                var worker = await WorkerService.GetWorkerByCodeAsync(workerCode);
+                if (worker != null && !string.IsNullOrEmpty(worker.PinCodeHash))
+                {
+                    showPinInput = true;
+                }
+                else
+                {
+                    await Login();
+                }
+            }
+        }
+    }
+
+    private async Task OnPinKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await Login();
+        }
+    }
+
+    private void SelectWorker(WorkerEntity worker)
+    {
+        workerCode = worker.WorkerCode;
+        
+        if (!string.IsNullOrEmpty(worker.PinCodeHash))
+        {
+            showPinInput = true;
+        }
+        else
+        {
+            _ = Login();
+        }
+    }
+
+    private async Task Login()
+    {
+        if (string.IsNullOrWhiteSpace(workerCode))
+        {
+            errorMessage = "Введіть код працівника";
+            return;
+        }
+
+        isLoggingIn = true;
+        errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var result = await WorkerAuthService.LoginAsync(
+                workerCode, 
+                showPinInput ? pinCode : null, 
+                WorkstationId);
+
+            if (result.Success)
+            {
+                sessionToken = result.SessionToken;
+                currentSession = await WorkerAuthService.ValidateSessionAsync(result.SessionToken!);
+                
+                workerCode = string.Empty;
+                pinCode = string.Empty;
+                showPinInput = false;
+
+                if (currentSession != null)
+                {
+                    await OnAuthenticated.InvokeAsync(currentSession);
+                }
+            }
+            else
+            {
+                errorMessage = result.Message;
+                
+                // Якщо потрібен PIN, показуємо поле
+                if (result.Message.Contains("PIN"))
+                {
+                    showPinInput = true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Помилка: {ex.Message}";
+        }
+
+        isLoggingIn = false;
+    }
+
+    private async Task Logout()
+    {
+        if (!string.IsNullOrEmpty(sessionToken))
+        {
+            await WorkerAuthService.LogoutAsync(sessionToken);
+        }
+
+        sessionToken = null;
+        currentSession = null;
+        workerCode = string.Empty;
+        pinCode = string.Empty;
+        showPinInput = false;
+
+        await OnLoggedOut.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Отримати поточний контекст сканування
+    /// </summary>
+    public WorkerScanContext? GetCurrentContext() => currentSession;
+
+    /// <summary>
+    /// Оновити активність сесії
+    /// </summary>
+    public async Task UpdateActivityAsync()
+    {
+        if (currentSession != null)
+        {
+            await WorkerAuthService.UpdateSessionActivityAsync(currentSession.SessionId);
+        }
+    }
+
+    /// <summary>
+    /// Перевірити чи сесія активна
+    /// </summary>
+    public async Task<bool> ValidateSessionAsync()
+    {
+        if (string.IsNullOrEmpty(sessionToken)) return false;
+
+        var context = await WorkerAuthService.ValidateSessionAsync(sessionToken);
+        if (context == null)
+        {
+            currentSession = null;
+            sessionToken = null;
+            StateHasChanged();
+            return false;
+        }
+
+        return true;
+    }
+}
