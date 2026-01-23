@@ -1,0 +1,572 @@
+﻿@page "/workers/statistics"
+@page "/workers/statistics/{WorkerId:int}"
+@using Tablitsya3.Data.Entities
+@using Tablitsya3.Models.Scanning
+@using Tablitsya3.Services
+@inject WorkerService WorkerService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Статистика працівників</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-bar-chart-fill me-2"></i>Статистика працівників</h2>
+        <div>
+            <button class="btn btn-outline-secondary me-2" @onclick="LoadData">
+                <i class="bi bi-arrow-clockwise me-1"></i>Оновити
+            </button>
+            <a href="/workers" class="btn btn-outline-primary">
+                <i class="bi bi-people me-1"></i>До списку працівників
+            </a>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Завантаження...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Фільтри -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label">Працівник</label>
+                        <select class="form-select" @bind="selectedWorkerId" @bind:after="OnWorkerChanged">
+                            <option value="0">Всі працівники (загальна статистика)</option>
+                            @foreach (var worker in workers)
+                            {
+                                <option value="@worker.Id">@worker.DisplayName (Цех @worker.WorkshopNumber)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Період для графіка</label>
+                        <select class="form-select" @bind="daysForChart" @bind:after="LoadData">
+                            <option value="7">7 днів</option>
+                            <option value="14">14 днів</option>
+                            <option value="30">30 днів</option>
+                            <option value="60">60 днів</option>
+                            <option value="90">90 днів</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (selectedWorkerId == 0 && overallStats != null)
+        {
+            <!-- Загальна статистика -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white h-100">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="bi bi-people me-1"></i>Працівників</h6>
+                            <h2>@overallStats.TotalWorkers</h2>
+                            <small>Активних сьогодні: @overallStats.ActiveWorkersToday</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white h-100">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="bi bi-calendar-day me-1"></i>Сьогодні</h6>
+                            <h2>@overallStats.TotalSquareMetersToday.ToString("F2") м²</h2>
+                            <small>Деталей: @overallStats.TotalPartsToday</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white h-100">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="bi bi-calendar-week me-1"></i>Тиждень</h6>
+                            <h2>@overallStats.TotalSquareMetersWeek.ToString("F2") м²</h2>
+                            <small>Деталей: @overallStats.TotalPartsWeek</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-dark h-100">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="bi bi-calendar-month me-1"></i>Місяць</h6>
+                            <h2>@overallStats.TotalSquareMetersMonth.ToString("F2") м²</h2>
+                            <small>Деталей: @overallStats.TotalPartsMonth</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Топ працівників -->
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-success text-white">
+                            <i class="bi bi-trophy me-1"></i>Топ за сьогодні
+                        </div>
+                        <div class="card-body p-0">
+                            @if (overallStats.TopWorkersToday.Any())
+                            {
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Працівник</th>
+                                            <th class="text-end">м²</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var worker in overallStats.TopWorkersToday)
+                                        {
+                                            <tr class="@(worker.Rank <= 3 ? "table-success" : "")">
+                                                <td>
+                                                    @if (worker.Rank == 1) { <i class="bi bi-trophy-fill text-warning"></i> }
+                                                    else if (worker.Rank == 2) { <i class="bi bi-trophy-fill text-secondary"></i> }
+                                                    else if (worker.Rank == 3) { <i class="bi bi-trophy-fill text-danger"></i> }
+                                                    else { @worker.Rank }
+                                                </td>
+                                                <td>
+                                                    <a href="/workers/statistics/@worker.WorkerId" class="text-decoration-none">
+                                                        @worker.WorkerName
+                                                    </a>
+                                                    <br /><small class="text-muted">Цех @worker.WorkshopNumber</small>
+                                                </td>
+                                                <td class="text-end">
+                                                    <strong>@worker.TotalSquareMeters.ToString("F2")</strong>
+                                                    <br /><small class="text-muted">@worker.PartsProcessed дет.</small>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            else
+                            {
+                                <div class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox fs-1"></i>
+                                    <p>Немає даних за сьогодні</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-info text-white">
+                            <i class="bi bi-trophy me-1"></i>Топ за тиждень
+                        </div>
+                        <div class="card-body p-0">
+                            @if (overallStats.TopWorkersWeek.Any())
+                            {
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Працівник</th>
+                                            <th class="text-end">м²</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var worker in overallStats.TopWorkersWeek)
+                                        {
+                                            <tr class="@(worker.Rank <= 3 ? "table-info" : "")">
+                                                <td>
+                                                    @if (worker.Rank == 1) { <i class="bi bi-trophy-fill text-warning"></i> }
+                                                    else if (worker.Rank == 2) { <i class="bi bi-trophy-fill text-secondary"></i> }
+                                                    else if (worker.Rank == 3) { <i class="bi bi-trophy-fill text-danger"></i> }
+                                                    else { @worker.Rank }
+                                                </td>
+                                                <td>
+                                                    <a href="/workers/statistics/@worker.WorkerId" class="text-decoration-none">
+                                                        @worker.WorkerName
+                                                    </a>
+                                                    <br /><small class="text-muted">Цех @worker.WorkshopNumber</small>
+                                                </td>
+                                                <td class="text-end">
+                                                    <strong>@worker.TotalSquareMeters.ToString("F2")</strong>
+                                                    <br /><small class="text-muted">@worker.PartsProcessed дет.</small>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            else
+                            {
+                                <div class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox fs-1"></i>
+                                    <p>Немає даних за тиждень</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-warning text-dark">
+                            <i class="bi bi-trophy me-1"></i>Топ за місяць
+                        </div>
+                        <div class="card-body p-0">
+                            @if (overallStats.TopWorkersMonth.Any())
+                            {
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Працівник</th>
+                                            <th class="text-end">м²</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var worker in overallStats.TopWorkersMonth)
+                                        {
+                                            <tr class="@(worker.Rank <= 3 ? "table-warning" : "")">
+                                                <td>
+                                                    @if (worker.Rank == 1) { <i class="bi bi-trophy-fill text-warning"></i> }
+                                                    else if (worker.Rank == 2) { <i class="bi bi-trophy-fill text-secondary"></i> }
+                                                    else if (worker.Rank == 3) { <i class="bi bi-trophy-fill text-danger"></i> }
+                                                    else { @worker.Rank }
+                                                </td>
+                                                <td>
+                                                    <a href="/workers/statistics/@worker.WorkerId" class="text-decoration-none">
+                                                        @worker.WorkerName
+                                                    </a>
+                                                    <br /><small class="text-muted">Цех @worker.WorkshopNumber</small>
+                                                </td>
+                                                <td class="text-end">
+                                                    <strong>@worker.TotalSquareMeters.ToString("F2")</strong>
+                                                    <br /><small class="text-muted">@worker.PartsProcessed дет.</small>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            else
+                            {
+                                <div class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox fs-1"></i>
+                                    <p>Немає даних за місяць</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (workerStats != null)
+        {
+            <!-- Статистика окремого працівника -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-person-badge me-2"></i>
+                        @workerStats.WorkerName
+                        <span class="badge bg-secondary ms-2">@workerStats.WorkerCode</span>
+                        <span class="badge bg-info ms-1">Цех @workerStats.WorkshopNumber</span>
+                    </h5>
+                </div>
+            </div>
+
+            <!-- Картки статистики -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card border-success h-100">
+                        <div class="card-header bg-success text-white">
+                            <i class="bi bi-calendar-day me-1"></i>Сьогодні
+                        </div>
+                        <div class="card-body text-center">
+                            <h2 class="text-success">@workerStats.Today.TotalSquareMeters.ToString("F2")</h2>
+                            <p class="text-muted mb-0">квадратних метрів</p>
+                            <hr />
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <h5>@workerStats.Today.PartsProcessed</h5>
+                                    <small class="text-muted">Деталей</small>
+                                </div>
+                                <div class="col-6">
+                                    <h5>@workerStats.Today.SuccessfulScans</h5>
+                                    <small class="text-muted">Сканувань</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card border-info h-100">
+                        <div class="card-header bg-info text-white">
+                            <i class="bi bi-calendar-week me-1"></i>Тиждень
+                        </div>
+                        <div class="card-body text-center">
+                            <h2 class="text-info">@workerStats.Week.TotalSquareMeters.ToString("F2")</h2>
+                            <p class="text-muted mb-0">квадратних метрів</p>
+                            <hr />
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <h5>@workerStats.Week.PartsProcessed</h5>
+                                    <small class="text-muted">Деталей</small>
+                                </div>
+                                <div class="col-6">
+                                    <h5>@workerStats.Week.SuccessfulScans</h5>
+                                    <small class="text-muted">Сканувань</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card border-warning h-100">
+                        <div class="card-header bg-warning text-dark">
+                            <i class="bi bi-calendar-month me-1"></i>Місяць
+                        </div>
+                        <div class="card-body text-center">
+                            <h2 class="text-warning">@workerStats.Month.TotalSquareMeters.ToString("F2")</h2>
+                            <p class="text-muted mb-0">квадратних метрів</p>
+                            <hr />
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <h5>@workerStats.Month.PartsProcessed</h5>
+                                    <small class="text-muted">Деталей</small>
+                                </div>
+                                <div class="col-6">
+                                    <h5>@workerStats.Month.SuccessfulScans</h5>
+                                    <small class="text-muted">Сканувань</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card border-primary h-100">
+                        <div class="card-header bg-primary text-white">
+                            <i class="bi bi-infinity me-1"></i>Всього
+                        </div>
+                        <div class="card-body text-center">
+                            <h2 class="text-primary">@workerStats.AllTime.TotalSquareMeters.ToString("F2")</h2>
+                            <p class="text-muted mb-0">квадратних метрів</p>
+                            <hr />
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <h5>@workerStats.AllTime.PartsProcessed</h5>
+                                    <small class="text-muted">Деталей</small>
+                                </div>
+                                <div class="col-6">
+                                    <h5>@workerStats.AllTime.SuccessfulScans</h5>
+                                    <small class="text-muted">Сканувань</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Статистика по етапах -->
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <i class="bi bi-list-check me-1"></i>Статистика по етапах
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Етап</th>
+                                        <th class="text-end">Деталей</th>
+                                        <th class="text-end">м²</th>
+                                        <th class="text-end">Сканувань</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var stage in workerStats.StageStats.OrderByDescending(s => s.Value.TotalSquareMeters))
+                                    {
+                                        @if (stage.Value.SuccessfulScans > 0)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <span class="badge" style="background-color: @stage.Key.GetColor()">
+                                                        @stage.Key.GetDisplayName()
+                                                    </span>
+                                                </td>
+                                                <td class="text-end">@stage.Value.PartsProcessed</td>
+                                                <td class="text-end"><strong>@stage.Value.TotalSquareMeters.ToString("F2")</strong></td>
+                                                <td class="text-end">@stage.Value.SuccessfulScans</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Графік по днях -->
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <i class="bi bi-graph-up me-1"></i>Динаміка за @daysForChart днів
+                        </div>
+                        <div class="card-body">
+                            @if (workerStats.DailyStats.Any(d => d.TotalSquareMeters > 0))
+                            {
+                                <div class="daily-chart">
+                                    @{
+                                        var maxValue = workerStats.DailyStats.Max(d => d.TotalSquareMeters);
+                                        if (maxValue == 0) maxValue = 1;
+                                    }
+                                    <div class="chart-bars d-flex align-items-end" style="height: 200px; gap: 2px;">
+                                        @foreach (var day in workerStats.DailyStats)
+                                        {
+                                            var height = maxValue > 0 ? (day.TotalSquareMeters / maxValue * 100) : 0;
+                                            var isToday = day.Date.Date == DateTime.Today;
+                                            <div class="chart-bar-container text-center flex-fill" title="@day.Date.ToString("dd.MM"): @day.TotalSquareMeters.ToString("F2") м²">
+                                                <div class="chart-bar @(isToday ? "bg-success" : "bg-primary")" 
+                                                     style="height: @height.ToString("F0", System.Globalization.CultureInfo.InvariantCulture)%; min-height: 2px;">
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="chart-labels d-flex mt-1" style="gap: 2px;">
+                                        @foreach (var day in workerStats.DailyStats)
+                                        {
+                                            var showLabel = workerStats.DailyStats.IndexOf(day) % (daysForChart > 14 ? 7 : 1) == 0;
+                                            <div class="flex-fill text-center" style="font-size: 0.65rem;">
+                                                @if (showLabel)
+                                                {
+                                                    @day.Date.ToString("dd.MM")
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="mt-3">
+                                    <table class="table table-sm">
+                                        <tbody>
+                                            <tr>
+                                                <td>Середнє за день:</td>
+                                                <td class="text-end"><strong>@(workerStats.DailyStats.Where(d => d.TotalSquareMeters > 0).DefaultIfEmpty().Average(d => d?.TotalSquareMeters ?? 0).ToString("F2")) м²</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Максимум:</td>
+                                                <td class="text-end"><strong>@maxValue.ToString("F2") м²</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Робочих днів:</td>
+                                                <td class="text-end"><strong>@workerStats.DailyStats.Count(d => d.TotalSquareMeters > 0)</strong></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-center text-muted py-5">
+                                    <i class="bi bi-graph-up fs-1"></i>
+                                    <p>Немає даних за обраний період</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .chart-bar {
+        border-radius: 2px 2px 0 0;
+        transition: height 0.3s ease;
+    }
+    .chart-bar:hover {
+        opacity: 0.8;
+    }
+    .chart-bar-container {
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public int? WorkerId { get; set; }
+
+    private List<WorkerEntity> workers = new();
+    private WorkersOverallStatistics? overallStats;
+    private WorkerStatistics? workerStats;
+
+    private int selectedWorkerId = 0;
+    private int daysForChart = 30;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        workers = await WorkerService.GetAllWorkersAsync();
+        
+        if (WorkerId.HasValue && WorkerId.Value > 0)
+        {
+            selectedWorkerId = WorkerId.Value;
+        }
+
+        await LoadData();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (WorkerId.HasValue && WorkerId.Value > 0 && WorkerId.Value != selectedWorkerId)
+        {
+            selectedWorkerId = WorkerId.Value;
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            if (selectedWorkerId == 0)
+            {
+                overallStats = await WorkerService.GetOverallStatisticsAsync();
+                workerStats = null;
+            }
+            else
+            {
+                workerStats = await WorkerService.GetWorkerStatisticsAsync(selectedWorkerId, daysForChart);
+                overallStats = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading statistics: {ex.Message}");
+        }
+
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task OnWorkerChanged()
+    {
+        if (selectedWorkerId > 0)
+        {
+            Navigation.NavigateTo($"/workers/statistics/{selectedWorkerId}", replace: true);
+        }
+        else
+        {
+            Navigation.NavigateTo("/workers/statistics", replace: true);
+        }
+        await LoadData();
+    }
+}

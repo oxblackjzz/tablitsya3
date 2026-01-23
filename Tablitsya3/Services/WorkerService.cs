@@ -351,5 +351,257 @@ namespace Tablitsya3.Services
         }
 
         #endregion
+
+        #region Statistics
+
+        /// <summary>
+        /// Отримати статистику працівника
+        /// </summary>
+        public async Task<WorkerStatistics?> GetWorkerStatisticsAsync(int workerId, int daysForDailyStats = 30)
+        {
+            var worker = await GetWorkerByIdAsync(workerId);
+            if (worker == null) return null;
+
+            var now = DateTime.UtcNow;
+            var todayStart = now.Date;
+            var weekStart = now.Date.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday);
+            if (weekStart > now.Date) weekStart = weekStart.AddDays(-7);
+            var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            var stats = new WorkerStatistics
+            {
+                WorkerId = workerId,
+                WorkerName = worker.DisplayName,
+                WorkerCode = worker.WorkerCode,
+                WorkshopNumber = worker.WorkshopNumber
+            };
+
+            // Отримуємо всі успішні сканування працівника
+            var scans = await _context.ScanLogs
+                .Where(s => s.WorkerId == workerId && s.Success)
+                .ToListAsync();
+
+            // Отримуємо інформацію про деталі для розрахунку площі
+            var partIds = scans.Select(s => s.PartId).Where(id => id > 0).Distinct().ToList();
+            var parts = await _context.Parts
+                .Where(p => partIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => new { p.Length, p.Width });
+
+            // Функція для розрахунку площі
+            double GetSquareMeters(int partId) => 
+                parts.TryGetValue(partId, out var p) ? (p.Length * p.Width) / 1_000_000 : 0;
+
+            // Статистика за сьогодні
+            var todayScans = scans.Where(s => s.ScanDate >= todayStart).ToList();
+            stats.Today = CalculatePeriodStats(todayScans, GetSquareMeters);
+
+            // Статистика за тиждень
+            var weekScans = scans.Where(s => s.ScanDate >= weekStart).ToList();
+            stats.Week = CalculatePeriodStats(weekScans, GetSquareMeters);
+
+            // Статистика за місяць
+            var monthScans = scans.Where(s => s.ScanDate >= monthStart).ToList();
+            stats.Month = CalculatePeriodStats(monthScans, GetSquareMeters);
+
+            // Статистика за весь час
+            stats.AllTime = CalculatePeriodStats(scans, GetSquareMeters);
+
+            // Статистика по етапах
+            foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+            {
+                var stageScans = scans.Where(s => s.Stage == (int)stage).ToList();
+                stats.StageStats[stage] = new StageWorkerStatistics
+                {
+                    Stage = stage,
+                    PartsProcessed = stageScans.Select(s => s.PartId).Distinct().Count(),
+                    TotalSquareMeters = stageScans.Sum(s => GetSquareMeters(s.PartId)),
+                    SuccessfulScans = stageScans.Count
+                };
+            }
+
+            // Денна статистика для графіка
+            var startDate = now.Date.AddDays(-daysForDailyStats + 1);
+            stats.DailyStats = Enumerable.Range(0, daysForDailyStats)
+                .Select(i => startDate.AddDays(i))
+                .Select(date =>
+                {
+                    var dayScans = scans.Where(s => s.ScanDate.Date == date).ToList();
+                    return new DailyStatistics
+                    {
+                        Date = date,
+                        PartsProcessed = dayScans.Select(s => s.PartId).Distinct().Count(),
+                        TotalSquareMeters = dayScans.Sum(s => GetSquareMeters(s.PartId)),
+                        ScansCount = dayScans.Count
+                    };
+                })
+                .ToList();
+
+            return stats;
+        }
+
+        /// <summary>
+        /// Отримати загальну статистику по всіх працівниках
+        /// </summary>
+        public async Task<WorkersOverallStatistics> GetOverallStatisticsAsync()
+        {
+            var now = DateTime.UtcNow;
+            var todayStart = now.Date;
+            var weekStart = now.Date.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday);
+            if (weekStart > now.Date) weekStart = weekStart.AddDays(-7);
+            var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            var stats = new WorkersOverallStatistics
+            {
+                TotalWorkers = await _context.Workers.CountAsync(w => w.IsActive)
+            };
+
+            // Отримуємо всі успішні сканування з worker_id
+            var scans = await _context.ScanLogs
+                .Where(s => s.WorkerId != null && s.Success)
+                .Select(s => new ScanInfo { WorkerId = s.WorkerId, PartId = s.PartId, ScanDate = s.ScanDate })
+                .ToListAsync();
+
+            // Отримуємо інформацію про деталі
+            var partIds = scans.Select(s => s.PartId).Where(id => id > 0).Distinct().ToList();
+            var parts = await _context.Parts
+                .Where(p => partIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => new { p.Length, p.Width });
+
+            double GetSquareMeters(int partId) => 
+                parts.TryGetValue(partId, out var p) ? (p.Length * p.Width) / 1_000_000 : 0;
+
+            // Статистика за сьогодні
+            var todayScans = scans.Where(s => s.ScanDate >= todayStart).ToList();
+            stats.ActiveWorkersToday = todayScans.Select(s => s.WorkerId).Distinct().Count();
+            stats.TotalPartsToday = todayScans.Select(s => s.PartId).Distinct().Count();
+            stats.TotalSquareMetersToday = todayScans.Sum(s => GetSquareMeters(s.PartId));
+
+            // Статистика за тиждень
+            var weekScans = scans.Where(s => s.ScanDate >= weekStart).ToList();
+            stats.TotalPartsWeek = weekScans.Select(s => s.PartId).Distinct().Count();
+            stats.TotalSquareMetersWeek = weekScans.Sum(s => GetSquareMeters(s.PartId));
+
+            // Статистика за місяць
+            var monthScans = scans.Where(s => s.ScanDate >= monthStart).ToList();
+            stats.TotalPartsMonth = monthScans.Select(s => s.PartId).Distinct().Count();
+            stats.TotalSquareMetersMonth = monthScans.Sum(s => GetSquareMeters(s.PartId));
+
+            // Отримуємо імена працівників
+            var workerIds = scans.Where(s => s.WorkerId.HasValue).Select(s => s.WorkerId!.Value).Distinct().ToList();
+            var workers = await _context.Workers
+                .Where(w => workerIds.Contains(w.Id))
+                .ToDictionaryAsync(w => w.Id, w => (w.FullName, w.WorkshopNumber));
+
+            // Топ працівників
+            stats.TopWorkersToday = GetTopWorkers(todayScans, workers, GetSquareMeters, s => s.WorkerId, s => s.PartId, 10);
+            stats.TopWorkersWeek = GetTopWorkers(weekScans, workers, GetSquareMeters, s => s.WorkerId, s => s.PartId, 10);
+            stats.TopWorkersMonth = GetTopWorkers(monthScans, workers, GetSquareMeters, s => s.WorkerId, s => s.PartId, 10);
+
+            return stats;
+        }
+
+        // Допоміжний клас для сканувань
+        private class ScanInfo
+        {
+            public int? WorkerId { get; set; }
+            public int PartId { get; set; }
+            public DateTime ScanDate { get; set; }
+        }
+
+        /// <summary>
+        /// Отримати статистику всіх працівників за період
+        /// </summary>
+        public async Task<List<WorkerStatistics>> GetAllWorkersStatisticsAsync(DateTime? fromDate = null, DateTime? toDate = null)
+        {
+            var workers = await GetAllWorkersAsync(includeInactive: false);
+            var result = new List<WorkerStatistics>();
+
+            var from = fromDate ?? DateTime.UtcNow.Date.AddDays(-30);
+            var to = toDate ?? DateTime.UtcNow;
+
+            // Отримуємо всі сканування за період
+            var scans = await _context.ScanLogs
+                .Where(s => s.WorkerId != null && s.Success && s.ScanDate >= from && s.ScanDate <= to)
+                .ToListAsync();
+
+            // Отримуємо інформацію про деталі
+            var partIds = scans.Select(s => s.PartId).Where(id => id > 0).Distinct().ToList();
+            var parts = await _context.Parts
+                .Where(p => partIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => new { p.Length, p.Width });
+
+            double GetSquareMeters(int partId) => 
+                parts.TryGetValue(partId, out var p) ? (p.Length * p.Width) / 1_000_000 : 0;
+
+            foreach (var worker in workers)
+            {
+                var workerScans = scans.Where(s => s.WorkerId == worker.Id).ToList();
+                
+                var stats = new WorkerStatistics
+                {
+                    WorkerId = worker.Id,
+                    WorkerName = worker.DisplayName,
+                    WorkerCode = worker.WorkerCode,
+                    WorkshopNumber = worker.WorkshopNumber,
+                    AllTime = CalculatePeriodStats(workerScans, GetSquareMeters)
+                };
+
+                result.Add(stats);
+            }
+
+            return result.OrderByDescending(s => s.AllTime.TotalSquareMeters).ToList();
+        }
+
+        private PeriodStatistics CalculatePeriodStats(List<ScanLogEntity> scans, Func<int, double> getSquareMeters)
+        {
+            var stats = new PeriodStatistics
+            {
+                PartsProcessed = scans.Select(s => s.PartId).Distinct().Count(),
+                TotalSquareMeters = scans.Sum(s => getSquareMeters(s.PartId)),
+                SuccessfulScans = scans.Count(s => s.Success),
+                FailedScans = scans.Count(s => !s.Success)
+            };
+
+            // Розрахунок середнього часу між скануваннями
+            if (scans.Count > 1)
+            {
+                var orderedScans = scans.OrderBy(s => s.ScanDate).ToList();
+                var totalSeconds = 0.0;
+                for (int i = 1; i < orderedScans.Count; i++)
+                {
+                    totalSeconds += (orderedScans[i].ScanDate - orderedScans[i - 1].ScanDate).TotalSeconds;
+                }
+                stats.AvgTimeBetweenScans = totalSeconds / (orderedScans.Count - 1);
+            }
+
+            return stats;
+        }
+
+        private List<WorkerRanking> GetTopWorkers<T>(
+            List<T> scans,
+            Dictionary<int, (string FullName, int WorkshopNumber)> workers,
+            Func<int, double> getSquareMeters,
+            Func<T, int?> getWorkerId,
+            Func<T, int> getPartId,
+            int top)
+        {
+            return scans
+                .Where(s => getWorkerId(s) != null)
+                .GroupBy(s => getWorkerId(s)!.Value)
+                .Select(g => new WorkerRanking
+                {
+                    WorkerId = g.Key,
+                    WorkerName = workers.TryGetValue(g.Key, out var w) ? w.FullName : "Невідомий",
+                    WorkshopNumber = workers.TryGetValue(g.Key, out var w2) ? w2.WorkshopNumber : 0,
+                    PartsProcessed = g.Select(s => getPartId(s)).Distinct().Count(),
+                    TotalSquareMeters = g.Sum(s => getSquareMeters(getPartId(s)))
+                })
+                .OrderByDescending(r => r.TotalSquareMeters)
+                .Take(top)
+                .Select((r, i) => { r.Rank = i + 1; return r; })
+                .ToList();
+        }
+
+        #endregion
     }
 }
