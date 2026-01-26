@@ -401,39 +401,6 @@
 }
 
 /* ============================================ */
-/* DARK THEME SUPPORT */
-/* ============================================ */
-
-[data-theme="dark"] .gantt-chart {
-    background: var(--bg-card);
-    border-color: var(--border-color);
-}
-
-[data-theme="dark"] .gantt-timeline {
-    background: var(--bg-secondary);
-    border-color: var(--border-color);
-}
-
-[data-theme="dark"] .day-number {
-    background: var(--bg-tertiary);
-    border-color: var(--border-color);
-    color: var(--text-secondary);
-}
-
-[data-theme="dark"] .order-details-tooltip {
-    background: var(--bg-card);
-    border-color: var(--color-accent);
-}
-
-[data-theme="dark"] .order-details-tooltip::after {
-    border-bottom-color: var(--bg-card);
-}
-
-[data-theme="dark"] .tooltip-value {
-    color: var(--text-primary);
-}
-
-/* ============================================ */
 /* RESPONSIVE */
 /* ============================================ */
 
