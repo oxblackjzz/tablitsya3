@@ -357,7 +357,7 @@ namespace Tablitsya3.Services
         /// <summary>
         /// Отримати статистику працівника
         /// </summary>
-        public async Task<WorkerStatistics?> GetWorkerStatisticsAsync(int workerId, int daysForDailyStats = 30)
+        public async Task<WorkerStatistics?> GetWorkerStatisticsAsync(int workerId, int daysForDailyStats = 30, IEnumerable<ProductionStage>? stageFilter = null)
         {
             var worker = await GetWorkerByIdAsync(workerId);
             if (worker == null) return null;
@@ -377,9 +377,17 @@ namespace Tablitsya3.Services
             };
 
             // Отримуємо всі успішні сканування працівника
-            var scans = await _context.ScanLogs
-                .Where(s => s.WorkerId == workerId && s.Success)
-                .ToListAsync();
+            var scansQuery = _context.ScanLogs
+                .Where(s => s.WorkerId == workerId && s.Success);
+            
+            // Фільтрація по етапах
+            if (stageFilter != null && stageFilter.Any())
+            {
+                var stageValues = stageFilter.Select(s => (int)s).ToList();
+                scansQuery = scansQuery.Where(s => stageValues.Contains(s.Stage));
+            }
+            
+            var scans = await scansQuery.ToListAsync();
 
             // Отримуємо інформацію про деталі для розрахунку площі
             var partIds = scans.Select(s => s.PartId).Where(id => id > 0).Distinct().ToList();
@@ -442,7 +450,7 @@ namespace Tablitsya3.Services
         /// <summary>
         /// Отримати загальну статистику по всіх працівниках
         /// </summary>
-        public async Task<WorkersOverallStatistics> GetOverallStatisticsAsync()
+        public async Task<WorkersOverallStatistics> GetOverallStatisticsAsync(IEnumerable<ProductionStage>? stageFilter = null)
         {
             var now = DateTime.UtcNow;
             var todayStart = now.Date;
@@ -456,8 +464,17 @@ namespace Tablitsya3.Services
             };
 
             // Отримуємо всі успішні сканування з worker_id
-            var scans = await _context.ScanLogs
-                .Where(s => s.WorkerId != null && s.Success)
+            var scansQuery = _context.ScanLogs
+                .Where(s => s.WorkerId != null && s.Success);
+            
+            // Фільтрація по етапах
+            if (stageFilter != null && stageFilter.Any())
+            {
+                var stageValues = stageFilter.Select(s => (int)s).ToList();
+                scansQuery = scansQuery.Where(s => stageValues.Contains(s.Stage));
+            }
+            
+            var scans = await scansQuery
                 .Select(s => new ScanInfo { WorkerId = s.WorkerId, PartId = s.PartId, ScanDate = s.ScanDate })
                 .ToListAsync();
 

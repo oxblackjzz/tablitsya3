@@ -57,6 +57,24 @@
                         </select>
                     </div>
                 </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <label class="form-label">Типи робіт</label>
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach (var stage in Enum.GetValues<ProductionStage>())
+                            {
+                                var isChecked = selectedStages.Contains(stage);
+                                <label class="btn btn-sm @(isChecked ? "" : "btn-outline-secondary")" 
+                                       style="@(isChecked ? $"background-color: {stage.GetColor()}; color: white; border-color: {stage.GetColor()}" : "")">
+                                    <input type="checkbox" class="btn-check" 
+                                           checked="@isChecked"
+                                           @onchange="@(e => ToggleStage(stage))" />
+                                    <i class="bi @stage.GetIcon() me-1"></i>@stage.GetDisplayName()
+                                </label>
+                            }
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -498,20 +516,23 @@
 </style>
 
 @code {
-    [Parameter]
-    public int? WorkerId { get; set; }
+[Parameter]
+public int? WorkerId { get; set; }
 
-    private List<WorkerEntity> workers = new();
-    private WorkersOverallStatistics? overallStats;
-    private WorkerStatistics? workerStats;
+private List<WorkerEntity> workers = new();
+private WorkersOverallStatistics? overallStats;
+private WorkerStatistics? workerStats;
 
-    private int selectedWorkerId = 0;
-    private int daysForChart = 30;
-    private bool isLoading = true;
+private int selectedWorkerId = 0;
+private int daysForChart = 30;
+private bool isLoading = true;
+    
+// Фільтр по типах робіт (етапах)
+private HashSet<ProductionStage> selectedStages = new(Enum.GetValues<ProductionStage>());
 
-    protected override async Task OnInitializedAsync()
-    {
-        workers = await WorkerService.GetAllWorkersAsync();
+protected override async Task OnInitializedAsync()
+{
+    workers = await WorkerService.GetAllWorkersAsync();
         
         if (WorkerId.HasValue && WorkerId.Value > 0)
         {
@@ -539,12 +560,12 @@
         {
             if (selectedWorkerId == 0)
             {
-                overallStats = await WorkerService.GetOverallStatisticsAsync();
+                overallStats = await WorkerService.GetOverallStatisticsAsync(selectedStages);
                 workerStats = null;
             }
             else
             {
-                workerStats = await WorkerService.GetWorkerStatisticsAsync(selectedWorkerId, daysForChart);
+                workerStats = await WorkerService.GetWorkerStatisticsAsync(selectedWorkerId, daysForChart, selectedStages);
                 overallStats = null;
             }
         }
@@ -569,4 +590,17 @@
         }
         await LoadData();
     }
-}
+
+    private async Task ToggleStage(ProductionStage stage)
+    {
+        if (selectedStages.Contains(stage))
+        {
+            selectedStages.Remove(stage);
+        }
+        else
+        {
+            selectedStages.Add(stage);
+        }
+        await LoadData();
+    }
+    }
