@@ -239,8 +239,26 @@ logger.LogInformation("✅ Database migration completed successfully!");
   }
       else
        {
-   Console.WriteLine("✅ All tables already exist - skipping migration");
-      logger.LogInformation("✅ All tables already exist");
+   Console.WriteLine("✅ All tables already exist - checking for pending migrations...");
+      logger.LogInformation("✅ All tables already exist - checking for pending migrations...");
+      
+      // ✅ ЗАСТОСОВУЄМО PENDING МІГРАЦІЇ (нові колонки, таблиці тощо)
+      var pendingMigrations = await dbContext.Database.GetPendingMigrationsAsync();
+      if (pendingMigrations.Any())
+      {
+          Console.WriteLine($"🔄 Found {pendingMigrations.Count()} pending migrations, applying...");
+          logger.LogInformation($"🔄 Found {pendingMigrations.Count()} pending migrations: {string.Join(", ", pendingMigrations)}");
+          
+          await dbContext.Database.MigrateAsync();
+          
+          Console.WriteLine("✅ Pending migrations applied successfully");
+          logger.LogInformation("✅ Pending migrations applied successfully");
+      }
+      else
+      {
+          Console.WriteLine("✅ No pending migrations");
+          logger.LogInformation("✅ No pending migrations");
+      }
   }
 
       var dbStorage = scope.ServiceProvider.GetRequiredService<DatabaseStorageService>();
