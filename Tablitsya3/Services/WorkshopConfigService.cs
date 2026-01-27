@@ -106,6 +106,7 @@ namespace Tablitsya3.Services
             data.WorkshopCapacities[number] = config.Capacity;
             data.WorkshopProductionLeadTimes[number] = config.ProductionLeadTime;
             data.WorkshopDaysBeforeProduction[number] = config.DaysBeforeProduction;
+            data.WorkshopUseAutoCapacity[number] = config.UseAutoCapacity;
             data.WorkshopOrders[number] = new List<double>();
             data.WorkshopOrderDates[number] = new List<DateTime>();
             data.WorkshopOrderNames[number] = new List<string>();
@@ -131,6 +132,7 @@ namespace Tablitsya3.Services
             data.WorkshopCapacities[config.Number] = config.Capacity;
             data.WorkshopProductionLeadTimes[config.Number] = config.ProductionLeadTime;
             data.WorkshopDaysBeforeProduction[config.Number] = config.DaysBeforeProduction;
+            data.WorkshopUseAutoCapacity[config.Number] = config.UseAutoCapacity;
 
             await _storageService.SaveWorkshopDataAsync(data);
             InvalidateCache();
@@ -152,6 +154,7 @@ namespace Tablitsya3.Services
             data.WorkshopCapacities.Remove(workshopNumber);
             data.WorkshopProductionLeadTimes.Remove(workshopNumber);
             data.WorkshopDaysBeforeProduction.Remove(workshopNumber);
+            data.WorkshopUseAutoCapacity.Remove(workshopNumber);
             data.WorkshopOrders.Remove(workshopNumber);
             data.WorkshopOrderDates.Remove(workshopNumber);
             data.WorkshopOrderNames.Remove(workshopNumber);
@@ -207,6 +210,7 @@ namespace Tablitsya3.Services
                     Capacity = data.WorkshopCapacities.GetValueOrDefault(number, 1000),
                     ProductionLeadTime = data.WorkshopProductionLeadTimes.GetValueOrDefault(number, 5),
                     DaysBeforeProduction = data.WorkshopDaysBeforeProduction.GetValueOrDefault(number, 16),
+                    UseAutoCapacity = data.WorkshopUseAutoCapacity.GetValueOrDefault(number, false),
                     ColorClass = colors[(number - 1) % colors.Length],
                     SortOrder = number,
                     IsActive = true

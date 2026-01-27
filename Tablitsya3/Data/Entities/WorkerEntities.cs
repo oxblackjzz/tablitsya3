@@ -129,15 +129,8 @@ namespace Tablitsya3.Data.Entities
         /// <summary>Номер цеху</summary>
         public int WorkshopNumber { get; set; } = 1;
 
-        /// <summary>
-        /// Етап виробництва, який виконується на цій станції
-        /// </summary>
+        /// <summary>Етап виробництва, який виконується на цій станції</summary>
         public int ProductionStage { get; set; }
-
-        /// <summary>
-        /// Потужність станції за зміну (м²/день)
-        /// </summary>
-        public int Capacity { get; set; } = 0;
 
         /// <summary>Локація в цеху</summary>
         [MaxLength(100)]
@@ -151,6 +144,9 @@ namespace Tablitsya3.Data.Entities
 
         /// <summary>Тайм-аут сесії в хвилинах (0 = без тайм-ауту)</summary>
         public int SessionTimeoutMinutes { get; set; } = 60;
+
+        /// <summary>Потужність станції (м³/день). 0 = не враховувати</summary>
+        public decimal Capacity { get; set; } = 0;
 
         /// <summary>IP-адреса або ідентифікатор пристрою</summary>
         [MaxLength(100)]

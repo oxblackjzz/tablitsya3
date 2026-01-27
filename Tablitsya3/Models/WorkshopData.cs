@@ -28,6 +28,12 @@ namespace Tablitsya3.Models
         public Dictionary<int, int> WorkshopProductionLeadTimes { get; set; } = new();
         public Dictionary<int, int> WorkshopDaysBeforeProduction { get; set; } = new();
         
+        /// <summary>
+        /// Режим авто-потужності для кожного цеху (true = розрахунок від станцій)
+        /// </summary>
+        public Dictionary<int, bool> WorkshopUseAutoCapacity { get; set; } = new();
+        
+        
         public DateTime LastUpdated { get; set; } = DateTime.Now;
         public DateTime StartDate { get; set; } = new DateTime(2025, 1, 1);
         

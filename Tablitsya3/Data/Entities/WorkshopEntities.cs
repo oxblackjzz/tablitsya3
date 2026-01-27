@@ -59,6 +59,12 @@ namespace Tablitsya3.Data.Entities
 
         [Column("capacity")]
         public int Capacity { get; set; }
+
+        /// <summary>
+        /// Режим розрахунку: true = автоматично від станцій, false = ручне введення
+        /// </summary>
+        [Column("use_auto_capacity")]
+        public bool UseAutoCapacity { get; set; } = false;
     }
 
     [Table("workshop_production_lead_times")]

@@ -3,6 +3,7 @@
 @using Tablitsya3.Services
 @inject UnifiedStorageService StorageService
 @inject WorkshopConfigService WorkshopConfigService
+@inject WorkstationService WorkstationService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
@@ -53,12 +54,33 @@
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Продуктивність (м²/день):</label>
-                        <input type="number" class="form-control form-control-lg" 
-                               value="@workshop.Capacity" 
-                               @onchange="@(e => UpdateWorkshopCapacity(workshop.Number, e))"
-                               min="100" max="10000" step="100" />
-                        <small class="text-muted">Рекомендовано: 800-1200 м²/день</small>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="autoCapacity@(workshop.Number)"
+                                   checked="@workshop.UseAutoCapacity" 
+                                   @onchange="@(e => ToggleAutoCapacity(workshop.Number, e))" />
+                            <label class="form-check-label" for="autoCapacity@(workshop.Number)">
+                                <i class="bi bi-robot"></i> Автоматичний розрахунок від станцій
+                            </label>
+                        </div>
+                        @if (workshop.UseAutoCapacity)
+                        {
+                            var autoCapacity = GetAutoCapacity(workshop.Number);
+                            <div class="alert alert-secondary mb-2 py-2">
+                                <strong>Авто-потужність:</strong> @autoCapacity м²/день
+                                <small class="d-block text-muted">
+                                    (мінімум серед сум потужностей по етапах)
+                                </small>
+                            </div>
+                        }
+                        else
+                        {
+                            <label class="form-label fw-bold">Продуктивність (м²/день):</label>
+                            <input type="number" class="form-control form-control-lg" 
+                                   value="@workshop.Capacity" 
+                                   @onchange="@(e => UpdateWorkshopCapacity(workshop.Number, e))"
+                                   min="100" max="10000" step="100" />
+                            <small class="text-muted">Рекомендовано: 800-1200 м²/день</small>
+                        }
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Тривалість виробництва (днів):</label>
@@ -177,6 +199,9 @@
     private int newWorkshopNumber = 1;
     private string newWorkshopName = string.Empty;
     private string? workshopNumberError = null;
+    
+    // Кеш авто-потужностей
+    private Dictionary<int, int> autoCapacities = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -189,6 +214,12 @@
         {
             workshopData = await StorageService.LoadWorkshopDataAsync() ?? new WorkshopData();
             workshops = await WorkshopConfigService.GetAllWorkshopsAsync();
+            
+            // Завантажуємо авто-потужності для всіх цехів
+            foreach (var workshop in workshops)
+            {
+                autoCapacities[workshop.Number] = await WorkstationService.CalculateAutoCapacityAsync(workshop.Number);
+            }
             
             // Якщо немає цехів, ініціалізуємо дефолтні
             if (!workshops.Any())
@@ -258,6 +289,25 @@
         }
     }
 
+    private void ToggleAutoCapacity(int number, ChangeEventArgs e)
+    {
+        var workshop = workshops.FirstOrDefault(w => w.Number == number);
+        if (workshop != null)
+        {
+            workshop.UseAutoCapacity = (bool)(e.Value ?? false);
+            if (workshop.UseAutoCapacity)
+            {
+                // Оновлюємо потужність на авто-значення
+                workshop.Capacity = autoCapacities.GetValueOrDefault(number, 0);
+            }
+        }
+    }
+
+    private int GetAutoCapacity(int workshopNumber)
+    {
+        return autoCapacities.GetValueOrDefault(workshopNumber, 0);
+    }
+
     private int GetOrdersCount(int workshopNumber)
     {
         if (workshopData == null) return 0;
@@ -279,9 +329,16 @@
             // Зберігаємо параметри всіх цехів
             foreach (var workshop in workshops)
             {
+                // Якщо авто-режим увімкнено, беремо потужність від станцій
+                if (workshop.UseAutoCapacity)
+                {
+                    workshop.Capacity = autoCapacities.GetValueOrDefault(workshop.Number, workshop.Capacity);
+                }
+                
                 workshopData.WorkshopCapacities[workshop.Number] = workshop.Capacity;
                 workshopData.WorkshopProductionLeadTimes[workshop.Number] = workshop.ProductionLeadTime;
                 workshopData.WorkshopDaysBeforeProduction[workshop.Number] = workshop.DaysBeforeProduction;
+                workshopData.WorkshopUseAutoCapacity[workshop.Number] = workshop.UseAutoCapacity;
             }
             
             workshopData.StartDate = startDate;

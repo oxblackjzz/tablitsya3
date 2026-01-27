@@ -23,6 +23,11 @@ namespace Tablitsya3.Models
         public int Capacity { get; set; } = 1000;
         
         /// <summary>
+        /// Використовувати автоматичний розрахунок потужності від станцій
+        /// </summary>
+        public bool UseAutoCapacity { get; set; } = false;
+        
+        /// <summary>
         /// Тривалість виробництва (днів)
         /// </summary>
         public int ProductionLeadTime { get; set; } = 5;

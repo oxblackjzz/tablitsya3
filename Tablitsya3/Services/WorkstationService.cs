@@ -150,6 +150,7 @@ namespace Tablitsya3.Services
             existing.RequiresWorkerAuth = workstation.RequiresWorkerAuth;
             existing.SessionTimeoutMinutes = workstation.SessionTimeoutMinutes;
             existing.DeviceIdentifier = workstation.DeviceIdentifier;
+            existing.Capacity = workstation.Capacity;
             existing.UpdatedDate = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -366,6 +367,52 @@ namespace Tablitsya3.Services
             _logger.LogInfo($"Створено {createdStations.Count} станцій за замовчуванням для цеху {workshopNumber}", "WorkstationService");
 
             return createdStations;
+        }
+
+        /// <summary>
+        /// Розрахувати автоматичну потужність цеху від станцій.
+        /// Потужність = мінімум з сум потужностей по кожному етапу виробництва.
+        /// </summary>
+        public async Task<int> CalculateAutoCapacityAsync(int workshopNumber)
+        {
+            var stations = await _context.Workstations
+                .Where(w => w.WorkshopNumber == workshopNumber && w.IsActive && w.Capacity > 0)
+                .ToListAsync();
+
+            if (!stations.Any())
+                return 0;
+
+            // Групуємо по етапах та сумуємо потужності
+            var capacitiesByStage = stations
+                .GroupBy(s => s.ProductionStage)
+                .Select(g => new
+                {
+                    Stage = g.Key,
+                    TotalCapacity = g.Sum(s => s.Capacity)
+                })
+                .ToList();
+
+            if (!capacitiesByStage.Any())
+                return 0;
+
+            // Потужність цеху = мінімум серед усіх етапів
+            return (int)capacitiesByStage.Min(c => c.TotalCapacity);
+        }
+
+        /// <summary>
+        /// Отримати деталізацію потужності по етапах для цеху
+        /// </summary>
+        public async Task<Dictionary<ProductionStage, decimal>> GetCapacityByStageAsync(int workshopNumber)
+        {
+            var stations = await _context.Workstations
+                .Where(w => w.WorkshopNumber == workshopNumber && w.IsActive && w.Capacity > 0)
+                .ToListAsync();
+
+            return stations
+                .GroupBy(s => (ProductionStage)s.ProductionStage)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Sum(s => s.Capacity));
         }
 
         #endregion
