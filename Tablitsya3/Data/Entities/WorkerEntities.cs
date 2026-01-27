@@ -129,8 +129,15 @@ namespace Tablitsya3.Data.Entities
         /// <summary>Номер цеху</summary>
         public int WorkshopNumber { get; set; } = 1;
 
-        /// <summary>Етап виробництва, який виконується на цій станції</summary>
+        /// <summary>
+        /// Етап виробництва, який виконується на цій станції
+        /// </summary>
         public int ProductionStage { get; set; }
+
+        /// <summary>
+        /// Потужність станції за зміну (м²/день)
+        /// </summary>
+        public int Capacity { get; set; } = 0;
 
         /// <summary>Локація в цеху</summary>
         [MaxLength(100)]

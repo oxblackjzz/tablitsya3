@@ -126,12 +126,19 @@
             var stageStations = filteredStations.Where(s => s.ProductionStage == (int)stage).ToList();
             if (selectedStage >= 0 && selectedStage != (int)stage) continue;
             if (!stageStations.Any() && selectedStage < 0) continue;
+            var stageCapacity = stageStations.Where(s => s.IsActive).Sum(s => s.Capacity);
 
             <div class="card mb-4">
                 <div class="card-header d-flex align-items-center" style="background-color: @(stage.GetColor())20; border-left: 4px solid @stage.GetColor()">
                     <i class="@stage.GetIcon() me-2" style="color: @stage.GetColor()"></i>
                     <strong>@stage.GetDisplayName()</strong>
                     <span class="badge bg-secondary ms-2">@stageStations.Count станцій</span>
+                    @if (stageCapacity > 0)
+                    {
+                        <span class="badge bg-primary ms-2">
+                            <i class="bi bi-speedometer2 me-1"></i>@stageCapacity м²/день
+                        </span>
+                    }
                 </div>
                 <div class="card-body p-0">
                     @if (!stageStations.Any())
@@ -149,9 +156,9 @@
                                         <th>Код</th>
                                         <th>Назва</th>
                                         <th>Цех</th>
+                                        <th>Потужність</th>
                                         <th>Локація</th>
                                         <th>Авторизація</th>
-                                        <th>Тайм-аут</th>
                                         <th>Статус</th>
                                         <th>Дії</th>
                                     </tr>
@@ -161,57 +168,57 @@
                                     {
                                         var hasActiveSession = activeSessions.Any(s => s.Workstation.Id == station.Id);
                                         <tr class="@(station.IsActive ? "" : "table-secondary")">
-                                            <td><code>@station.StationCode</code></td>
-                                            <td>
-                                                <strong>@station.Name</strong>
-                                                @if (!string.IsNullOrEmpty(station.Description))
-                                                {
-                                                    <br /><small class="text-muted">@station.Description</small>
-                                                }
-                                            </td>
-                                            <td><span class="badge bg-info">Цех @station.WorkshopNumber</span></td>
-                                            <td>@(station.Location ?? "-")</td>
-                                            <td>
-                                                @if (station.RequiresWorkerAuth)
-                                                {
-                                                    <span class="badge bg-warning text-dark">
-                                                        <i class="bi bi-lock"></i> Потрібна
-                                                    </span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge bg-secondary">
-                                                        <i class="bi bi-unlock"></i> Ні
-                                                    </span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (station.SessionTimeoutMinutes > 0)
-                                                {
-                                                    <span>@station.SessionTimeoutMinutes хв</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">Без обмежень</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (hasActiveSession)
-                                                {
-                                                    <span class="badge bg-success">
-                                                        <i class="bi bi-person-check"></i> Активна
-                                                    </span>
-                                                }
-                                                else if (station.IsActive)
-                                                {
-                                                    <span class="badge bg-secondary">Вільна</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge bg-dark">Неактивна</span>
-                                                }
-                                            </td>
-                                            <td>
+                                        <td><code>@station.StationCode</code></td>
+                                        <td>
+                                            <strong>@station.Name</strong>
+                                            @if (!string.IsNullOrEmpty(station.Description))
+                                            {
+                                                <br /><small class="text-muted">@station.Description</small>
+                                            }
+                                        </td>
+                                        <td><span class="badge bg-info">Цех @station.WorkshopNumber</span></td>
+                                        <td>
+                                            @if (station.Capacity > 0)
+                                            {
+                                                <strong>@station.Capacity</strong> <small class="text-muted">м²/день</small>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">—</span>
+                                            }
+                                        </td>
+                                        <td>@(station.Location ?? "-")</td>
+                                        <td>
+                                            @if (station.RequiresWorkerAuth)
+                                            {
+                                                <span class="badge bg-warning text-dark">
+                                                    <i class="bi bi-lock"></i> Потрібна
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">
+                                                    <i class="bi bi-unlock"></i> Ні
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (hasActiveSession)
+                                            {
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-person-check"></i> Активна
+                                                </span>
+                                            }
+                                            else if (station.IsActive)
+                                            {
+                                                <span class="badge bg-secondary">Вільна</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-dark">Неактивна</span>
+                                            }
+                                        </td>
+                                        <td>
                                                 <div class="btn-group btn-group-sm">
                                                     <button class="btn btn-outline-primary" 
                                                             @onclick="() => ShowEditStationModal(station)" title="Редагувати">
@@ -288,6 +295,12 @@
                                     <option value="@((int)stage)">@stage.GetDisplayName()</option>
                                 }
                             </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Потужність (м²/день)</label>
+                            <input type="number" class="form-control" @bind="editingStation.Capacity" 
+                                   min="0" placeholder="0 = не враховувати" />
+                            <small class="text-muted">Залиште 0 якщо не потрібно враховувати</small>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Локація</label>
@@ -483,6 +496,7 @@
             Description = station.Description,
             WorkshopNumber = station.WorkshopNumber,
             ProductionStage = station.ProductionStage,
+            Capacity = station.Capacity,
             Location = station.Location,
             IsActive = station.IsActive,
             RequiresWorkerAuth = station.RequiresWorkerAuth,
