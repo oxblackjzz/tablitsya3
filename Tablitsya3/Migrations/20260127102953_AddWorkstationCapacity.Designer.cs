@@ -12,8 +12,8 @@ using Tablitsya3.Data;
 namespace Tablitsya3.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260127100650_AddWorkstationCapacityAndAutoMode")]
-    partial class AddWorkstationCapacityAndAutoMode
+    [Migration("20260127102953_AddWorkstationCapacity")]
+    partial class AddWorkstationCapacity
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -932,7 +932,8 @@ namespace Tablitsya3.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("Capacity")
-                        .HasColumnType("numeric");
+                        .HasColumnType("numeric")
+                        .HasColumnName("capacity");
 
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("timestamp without time zone")

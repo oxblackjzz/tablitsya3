@@ -929,7 +929,8 @@ namespace Tablitsya3.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("Capacity")
-                        .HasColumnType("numeric");
+                        .HasColumnType("numeric")
+                        .HasColumnName("capacity");
 
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("timestamp without time zone")

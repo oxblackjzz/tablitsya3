@@ -322,6 +322,7 @@ namespace Tablitsya3.Data
                 entity.Property(e => e.IsActive).HasColumnName("is_active");
                 entity.Property(e => e.RequiresWorkerAuth).HasColumnName("requires_worker_auth");
                 entity.Property(e => e.SessionTimeoutMinutes).HasColumnName("session_timeout_minutes");
+                entity.Property(e => e.Capacity).HasColumnName("capacity");
                 entity.Property(e => e.DeviceIdentifier).HasColumnName("device_identifier");
                 entity.Property(e => e.CreatedDate).HasColumnName("created_date");
                 entity.Property(e => e.UpdatedDate).HasColumnName("updated_date");

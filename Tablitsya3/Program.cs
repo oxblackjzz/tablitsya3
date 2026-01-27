@@ -249,15 +249,28 @@ logger.LogInformation("✅ Database migration completed successfully!");
           Console.WriteLine($"🔄 Found {pendingMigrations.Count()} pending migrations, applying...");
           logger.LogInformation($"🔄 Found {pendingMigrations.Count()} pending migrations: {string.Join(", ", pendingMigrations)}");
           
-          await dbContext.Database.MigrateAsync();
-          
-          Console.WriteLine("✅ Pending migrations applied successfully");
-          logger.LogInformation("✅ Pending migrations applied successfully");
+          try
+          {
+              await dbContext.Database.MigrateAsync();
+              Console.WriteLine("✅ Pending migrations applied successfully");
+              logger.LogInformation("✅ Pending migrations applied successfully");
+          }
+          catch (Exception migEx)
+          {
+              Console.WriteLine($"⚠️ Migration failed: {migEx.Message}");
+              logger.LogWarning($"⚠️ Migration failed: {migEx.Message}");
+              
+              // Fallback: додаємо колонки вручну якщо вони не існують
+              await EnsureColumnsExist(dbContext, logger);
+          }
       }
       else
       {
           Console.WriteLine("✅ No pending migrations");
           logger.LogInformation("✅ No pending migrations");
+          
+          // Перевіряємо чи існують нові колонки
+          await EnsureColumnsExist(dbContext, logger);
       }
   }
 
@@ -344,3 +357,59 @@ app.MapRazorComponents<App>()
 
 Console.WriteLine("🚀 Application started successfully!");
 app.Run();
+
+// ✅ Метод для додавання колонок якщо міграція не спрацювала
+static async Task EnsureColumnsExist(ApplicationDbContext dbContext, ILogger logger)
+{
+    try
+    {
+        // Перевіряємо та додаємо колонку capacity в workstations
+        var checkCapacityColumn = @"
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'workstations' AND column_name = 'capacity'";
+        
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync();
+        
+        using var checkCmd = connection.CreateCommand();
+        checkCmd.CommandText = checkCapacityColumn;
+        var result = await checkCmd.ExecuteScalarAsync();
+        
+        if (result == null)
+        {
+            Console.WriteLine("🔧 Adding missing 'capacity' column to workstations...");
+            logger.LogInformation("🔧 Adding missing 'capacity' column to workstations...");
+            
+            await dbContext.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE workstations ADD COLUMN IF NOT EXISTS capacity numeric DEFAULT 0");
+            
+            Console.WriteLine("✅ Added 'capacity' column");
+            logger.LogInformation("✅ Added 'capacity' column");
+        }
+        
+        // Перевіряємо та додаємо колонку use_auto_capacity в workshop_capacities
+        checkCmd.CommandText = @"
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'workshop_capacities' AND column_name = 'use_auto_capacity'";
+        result = await checkCmd.ExecuteScalarAsync();
+        
+        if (result == null)
+        {
+            Console.WriteLine("🔧 Adding missing 'use_auto_capacity' column to workshop_capacities...");
+            logger.LogInformation("🔧 Adding missing 'use_auto_capacity' column to workshop_capacities...");
+            
+            await dbContext.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE workshop_capacities ADD COLUMN IF NOT EXISTS use_auto_capacity boolean DEFAULT false");
+            
+            Console.WriteLine("✅ Added 'use_auto_capacity' column");
+            logger.LogInformation("✅ Added 'use_auto_capacity' column");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"⚠️ Error ensuring columns exist: {ex.Message}");
+        logger.LogWarning($"⚠️ Error ensuring columns exist: {ex.Message}");
+    }
+}

@@ -5,13 +5,13 @@
 namespace Tablitsya3.Migrations
 {
     /// <inheritdoc />
-    public partial class AddWorkstationCapacityAndAutoMode : Migration
+    public partial class AddWorkstationCapacity : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<decimal>(
-                name: "Capacity",
+                name: "capacity",
                 table: "workstations",
                 type: "numeric",
                 nullable: false,
@@ -59,7 +59,7 @@ namespace Tablitsya3.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "Capacity",
+                name: "capacity",
                 table: "workstations");
 
             migrationBuilder.DropColumn(
