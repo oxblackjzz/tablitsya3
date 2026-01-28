@@ -1,6 +1,8 @@
 ﻿using QRCoder;
 using System.Text;
+using Tablitsya3.Data;
 using Tablitsya3.Data.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace Tablitsya3.Services
 {
@@ -9,10 +11,12 @@ namespace Tablitsya3.Services
     /// </summary>
     public class LabelPrintService
     {
+        private readonly ApplicationDbContext _context;
         private readonly LoggingService _logger;
 
-        public LabelPrintService(LoggingService logger)
+        public LabelPrintService(ApplicationDbContext context, LoggingService logger)
         {
+            _context = context;
             _logger = logger;
         }
 
@@ -22,7 +26,7 @@ namespace Tablitsya3.Services
         public class LabelData
         {
             public string NC { get; set; } = "";           // NC1: номер
-            public string Project { get; set; } = "";       // П: проект
+            public string Project { get; set; } = "";       // П: проект (числовий ID)
             public string Material { get; set; } = "";      // М: матеріал
             public string OrderName { get; set; } = "";     // И: замовлення
             public string PartName { get; set; } = "";      // Н: назва деталі
@@ -43,12 +47,18 @@ namespace Tablitsya3.Services
         /// <summary>
         /// Створити дані бірки з деталі
         /// </summary>
-        public LabelData CreateLabelFromPart(PartEntity part, DefectEntity? defect = null)
+        public async Task<LabelData> CreateLabelFromPartAsync(PartEntity part, DefectEntity? defect = null)
         {
+            // Отримуємо числовий ID проекту з бази
+            var projectId = await _context.ImportedProjects
+                .Where(p => p.ProjectUuid == part.ProjectExternalUuid)
+                .Select(p => p.Id)
+                .FirstOrDefaultAsync();
+
             return new LabelData
             {
                 NC = $"NC1: {part.PartId:D6}^",
-                Project = part.ProjectExternalUuid ?? "",
+                Project = projectId > 0 ? projectId.ToString() : part.ProjectExternalUuid ?? "",
                 Material = part.Material ?? "",
                 OrderName = part.OrderName ?? "",
                 PartName = part.Name ?? "",
@@ -58,8 +68,8 @@ namespace Tablitsya3.Services
                 Thickness = part.Thickness,
                 PartNumber = part.PartId,
                 PartPosition = part.PartCounter,
-                TotalParts = 1, // Можна обчислити якщо є дані
-                Quantity = 1,
+                TotalParts = part.Quantity,
+                Quantity = part.Quantity,
                 QRCode = $"{part.ProjectExternalUuid}/{part.PartId}/{part.PartCounter}",
                 PrintDate = DateTime.Now,
                 DefectType = defect?.DefectType ?? "",

@@ -155,7 +155,7 @@
                 return;
             }
 
-            labelData = LabelPrintService.CreateLabelFromPart(part, Defect);
+            labelData = await LabelPrintService.CreateLabelFromPartAsync(part, Defect);
             qrCodeBase64 = LabelPrintService.GenerateQRCodeBase64(labelData.QRCode, 8);
         }
         catch (Exception ex)
