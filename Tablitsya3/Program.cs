@@ -149,6 +149,10 @@ Console.WriteLine("✅ Worker services registered");
 builder.Services.AddScoped<DefectService>();
 Console.WriteLine("✅ DefectService registered");
 
+// ✅ ДОДАЄМО СЕРВІС ДРУКУ БІРОК
+builder.Services.AddScoped<LabelPrintService>();
+Console.WriteLine("✅ LabelPrintService registered");
+
 // ✅ ДОДАЄМО SIGNALR
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<Tablitsya3.Hubs.ScanningHubService>();

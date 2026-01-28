@@ -1,0 +1,204 @@
+﻿@using Tablitsya3.Data.Entities
+@using Tablitsya3.Services
+@inject LabelPrintService LabelPrintService
+@inject DefectService DefectService
+@inject IJSRuntime JSRuntime
+
+<!-- Модальне вікно друку бірки -->
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">
+                        <i class="bi bi-printer me-2"></i>Друк бірки для перевиробництва
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="Close"></button>
+                </div>
+                <div class="modal-body">
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary"></div>
+                            <p class="mt-2">Генерація бірки...</p>
+                        </div>
+                    }
+                    else if (labelData != null)
+                    {
+                        <!-- Попередній перегляд бірки -->
+                        <div class="border rounded p-3 bg-light mb-3">
+                            <h6 class="mb-3"><i class="bi bi-eye me-2"></i>Попередній перегляд:</h6>
+                            
+                            <div class="label-preview" style="background: white; padding: 15px; border: 1px solid #ddd; max-width: 400px; margin: 0 auto;">
+                                @if (labelData.IsDefectLabel)
+                                {
+                                    <div class="alert alert-danger py-1 px-2 mb-2" style="font-size: 12px;">
+                                        <i class="bi bi-arrow-repeat me-1"></i>
+                                        <strong>ПЕРЕВИРОБНИЦТВО:</strong> @labelData.DefectType
+                                    </div>
+                                }
+                                
+                                <div class="d-flex">
+                                    <div class="flex-grow-1" style="font-size: 11px;">
+                                        <!-- Штрих-код -->
+                                        <div class="mb-2 text-center">
+                                            <div style="background: repeating-linear-gradient(90deg, black 0px, black 2px, white 2px, white 4px); height: 30px; width: 80%;"></div>
+                                            <small class="font-monospace">@labelData.NC</small>
+                                        </div>
+                                        
+                                        <div><strong>П:</strong> @TruncateText(labelData.Project, 15)</div>
+                                        <div><strong>М:</strong> @TruncateText(labelData.Material, 20)</div>
+                                        <div><strong>И:</strong> @TruncateText(labelData.OrderName, 20)</div>
+                                        <div><strong>Н:</strong> @labelData.PartCode - @TruncateText(labelData.PartName, 15)</div>
+                                        <div style="font-size: 14px; font-weight: bold;">
+                                            <strong>РД:</strong> @labelData.Length.ToString("F0") x @labelData.Width.ToString("F0") x @labelData.Thickness.ToString("F0")
+                                        </div>
+                                        <div style="font-size: 13px; font-weight: bold;">
+                                            №:@labelData.PartNumber (@labelData.PartPosition:@labelData.TotalParts) К:@labelData.Quantity
+                                        </div>
+                                        <div><strong>О:</strong></div>
+                                        <div style="font-size: 10px; color: #666;">@labelData.PrintDate.ToString("yyyy.MM.dd HH:mm")</div>
+                                    </div>
+                                    <div class="text-center" style="width: 120px;">
+                                        <div style="font-size: 16px; font-weight: bold;">@labelData.PartCode</div>
+                                        @if (!string.IsNullOrEmpty(qrCodeBase64))
+                                        {
+                                            <img src="data:image/png;base64,@qrCodeBase64" alt="QR" style="width: 100px; height: 100px;" />
+                                        }
+                                        else
+                                        {
+                                            <div style="width: 100px; height: 100px; background: #eee; display: flex; align-items: center; justify-content: center;">
+                                                <i class="bi bi-qr-code" style="font-size: 40px;"></i>
+                                            </div>
+                                        }
+                                        <div style="font-size: 16px; font-weight: bold;">@labelData.PartCode</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Кількість копій -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Кількість копій:</label>
+                                <input type="number" class="form-control" @bind="copies" min="1" max="10" />
+                            </div>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle me-2"></i>@errorMessage
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Close">
+                        <i class="bi bi-x-lg me-1"></i>Скасувати
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="Print" disabled="@(isLoading || labelData == null)">
+                        <i class="bi bi-printer me-1"></i>Друкувати (@copies шт.)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public DefectEntity? Defect { get; set; }
+
+    [Parameter]
+    public PartEntity? Part { get; set; }
+
+    private LabelPrintService.LabelData? labelData;
+    private string? qrCodeBase64;
+    private bool isLoading = false;
+    private string? errorMessage;
+    private int copies = 1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && (Defect != null || Part != null))
+        {
+            await LoadLabelData();
+        }
+    }
+
+    private async Task LoadLabelData()
+    {
+        isLoading = true;
+        errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            PartEntity? part = Part;
+
+            // Якщо є дефект, отримуємо деталь
+            if (part == null && Defect != null)
+            {
+                part = await DefectService.GetPartByDefectIdAsync(Defect.Id);
+            }
+
+            if (part == null)
+            {
+                errorMessage = "Деталь не знайдена";
+                return;
+            }
+
+            labelData = LabelPrintService.CreateLabelFromPart(part, Defect);
+            qrCodeBase64 = LabelPrintService.GenerateQRCodeBase64(labelData.QRCode, 8);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Помилка: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task Print()
+    {
+        if (labelData == null) return;
+
+        try
+        {
+            var html = LabelPrintService.GenerateLabelHtml(labelData);
+            
+            // Відкриваємо нове вікно для друку
+            await JSRuntime.InvokeVoidAsync("printLabel", html, copies);
+            
+            await Close();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Помилка друку: {ex.Message}";
+        }
+    }
+
+    private async Task Close()
+    {
+        labelData = null;
+        qrCodeBase64 = null;
+        errorMessage = null;
+        copies = 1;
+        await OnClose.InvokeAsync();
+    }
+
+    private string TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        return text.Length > maxLength ? text.Substring(0, maxLength) + "..." : text;
+    }
+}

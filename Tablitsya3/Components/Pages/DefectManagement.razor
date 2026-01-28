@@ -2,7 +2,9 @@
 @using Tablitsya3.Data.Entities
 @using Tablitsya3.Models.Scanning
 @using Tablitsya3.Services
+@using Tablitsya3.Components.Shared
 @inject DefectService DefectService
+@inject LabelPrintService LabelPrintService
 @inject LoggingService Logger
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
@@ -190,9 +192,12 @@
                                             <button class="btn btn-outline-primary" @onclick="() => ShowDetailsModal(defect)" title="Деталі">
                                                 <i class="bi bi-eye"></i>
                                             </button>
+                                            <button class="btn btn-outline-warning" @onclick="() => ShowPrintModal(defect)" title="Друк бірки">
+                                                <i class="bi bi-printer"></i>
+                                            </button>
                                             @if (defect.Status == "new" || defect.Status == "in_progress")
                                             {
-                                                <button class="btn btn-outline-success" @onclick="() => MarkAsRepaired(defect)" title="Виправлено">
+                                                <button class="btn btn-outline-success" @onclick="() => MarkAsRepairedAndPrint(defect)" title="Виправлено + Друк">
                                                     <i class="bi bi-check-lg"></i>
                                                 </button>
                                                 <button class="btn btn-outline-secondary" @onclick="() => MarkAsScrapped(defect)" title="Списати">
@@ -407,7 +412,7 @@
                             <p class="border rounded p-2 bg-light">@selectedDefect.Description</p>
                         </div>
                     }
-                    
+
                     @if (!string.IsNullOrEmpty(selectedDefect.RepairNotes))
                     {
                         <div class="mt-3">
@@ -417,10 +422,13 @@
                     }
                 </div>
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-warning" @onclick="() => ShowPrintModal(selectedDefect)">
+                        <i class="bi bi-printer"></i> Друк бірки
+                    </button>
                     @if (selectedDefect.Status == "new" || selectedDefect.Status == "in_progress")
                     {
-                        <button type="button" class="btn btn-success" @onclick="() => MarkAsRepaired(selectedDefect)">
-                            <i class="bi bi-check-lg"></i> Виправлено
+                        <button type="button" class="btn btn-success" @onclick="() => MarkAsRepairedAndPrint(selectedDefect)">
+                            <i class="bi bi-check-lg"></i> Виправлено + Друк
                         </button>
                         <button type="button" class="btn btn-secondary" @onclick="() => MarkAsScrapped(selectedDefect)">
                             <i class="bi bi-trash"></i> Списати
@@ -432,6 +440,11 @@
         </div>
     </div>
 }
+
+<!-- Компонент друку бірки -->
+<PrintDefectLabel IsVisible="@showPrintModal" 
+                  Defect="@printDefect" 
+                  OnClose="ClosePrintModal" />
 
 @code {
     // Дані
@@ -456,7 +469,9 @@
     // Модальні вікна
     private bool showCreateModal = false;
     private bool showDetailsModal = false;
+    private bool showPrintModal = false;
     private DefectEntity? selectedDefect;
+    private DefectEntity? printDefect;
     private DefectEntity newDefect = new();
     private string? modalError;
 
@@ -474,7 +489,7 @@
         try
         {
             int? stage = string.IsNullOrEmpty(filterStage) ? null : int.Parse(filterStage);
-            
+
             var (items, total) = await DefectService.GetDefectsAsync(
                 currentPage,
                 pageSize,
@@ -622,6 +637,23 @@
         }
     }
 
+    private async Task MarkAsRepairedAndPrint(DefectEntity defect)
+    {
+        try
+        {
+            await DefectService.MarkAsRepairedAsync(defect.Id);
+            await LoadData();
+            await LoadStatistics();
+
+            // Показуємо вікно друку бірки
+            ShowPrintModal(defect);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка: {ex.Message}", ex, "DefectManagement");
+        }
+    }
+
     private async Task MarkAsScrapped(DefectEntity defect)
     {
         try
@@ -635,6 +667,19 @@
         {
             Logger.LogError($"Помилка: {ex.Message}", ex, "DefectManagement");
         }
+    }
+
+    private void ShowPrintModal(DefectEntity defect)
+    {
+        printDefect = defect;
+        showPrintModal = true;
+        showDetailsModal = false;
+    }
+
+    private void ClosePrintModal()
+    {
+        showPrintModal = false;
+        printDefect = null;
     }
 
     private string TruncateText(string? text, int maxLength)
