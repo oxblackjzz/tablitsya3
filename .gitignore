@@ -3,6 +3,11 @@ Data/workshop-data.json
 Data/workshop-data.json.backup
 Data/*.json
 
+# Документація (локально)
+**/DOCUMENTATION*.md
+**/TECHNICAL_REQUIREMENTS.md
+**/*_BACKUP.razor
+
 # Visual Studio
 .vs/
 bin/
