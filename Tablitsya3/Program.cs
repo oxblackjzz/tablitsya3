@@ -145,6 +145,10 @@ builder.Services.AddScoped<WorkstationService>();
 builder.Services.AddScoped<WorkerAuthService>();
 Console.WriteLine("✅ Worker services registered");
 
+// ✅ ДОДАЄМО СЕРВІС ДЕФЕКТІВ (БРАКУ)
+builder.Services.AddScoped<DefectService>();
+Console.WriteLine("✅ DefectService registered");
+
 // ✅ ДОДАЄМО SIGNALR
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<Tablitsya3.Hubs.ScanningHubService>();

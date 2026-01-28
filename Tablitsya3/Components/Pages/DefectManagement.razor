@@ -1,0 +1,645 @@
+﻿@page "/defects"
+@using Tablitsya3.Data.Entities
+@using Tablitsya3.Models.Scanning
+@using Tablitsya3.Services
+@inject DefectService DefectService
+@inject LoggingService Logger
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<PageTitle>Управління браком</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="mb-1">
+                <i class="bi bi-exclamation-triangle text-danger"></i> Управління браком
+            </h1>
+            <p class="text-secondary mb-0">Реєстрація, відстеження та обробка дефектів</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-danger" @onclick="ShowCreateModal">
+                <i class="bi bi-plus-lg"></i> Зареєструвати брак
+            </button>
+            <button class="btn btn-outline-primary" @onclick="LoadData">
+                <i class="bi bi-arrow-clockwise"></i> Оновити
+            </button>
+        </div>
+    </div>
+
+    <!-- Статистика -->
+    @if (statistics != null)
+    {
+        <div class="row mb-4">
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card border-danger h-100">
+                    <div class="card-body text-center">
+                        <h2 class="text-danger mb-0">@statistics.NewCount</h2>
+                        <small class="text-muted">Нових</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card border-warning h-100">
+                    <div class="card-body text-center">
+                        <h2 class="text-warning mb-0">@statistics.InProgressCount</h2>
+                        <small class="text-muted">В роботі</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card border-success h-100">
+                    <div class="card-body text-center">
+                        <h2 class="text-success mb-0">@statistics.RepairedCount</h2>
+                        <small class="text-muted">Виправлено</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card border-secondary h-100">
+                    <div class="card-body text-center">
+                        <h2 class="text-secondary mb-0">@statistics.ScrappedCount</h2>
+                        <small class="text-muted">Списано</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Фільтри -->
+    <div class="card mb-4">
+        <div class="card-body py-3">
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label small">Статус</label>
+                    <select class="form-select form-select-sm" @bind="filterStatus" @bind:after="LoadData">
+                        <option value="">Всі</option>
+                        <option value="new">🔴 Нові</option>
+                        <option value="in_progress">🟡 В роботі</option>
+                        <option value="repaired">🟢 Виправлено</option>
+                        <option value="scrapped">⚫ Списано</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Тип дефекту</label>
+                    <select class="form-select form-select-sm" @bind="filterType" @bind:after="LoadData">
+                        <option value="">Всі типи</option>
+                        @foreach (var type in DefectService.DefectTypes)
+                        {
+                            <option value="@type">@type</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Етап</label>
+                    <select class="form-select form-select-sm" @bind="filterStage" @bind:after="LoadData">
+                        <option value="">Всі етапи</option>
+                        @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+                        {
+                            <option value="@((int)stage)">@stage.GetDisplayName()</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Дата від</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filterFromDate" @bind:after="LoadData" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Дата до</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filterToDate" @bind:after="LoadData" />
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-outline-secondary btn-sm w-100" @onclick="ClearFilters">
+                        <i class="bi bi-x-lg"></i> Скинути
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Таблиця дефектів -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-table"></i> Дефекти</span>
+            <span class="badge bg-primary">@totalCount</span>
+        </div>
+        <div class="card-body p-0">
+            @if (isLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-2 text-muted">Завантаження...</p>
+                </div>
+            }
+            else if (!defects.Any())
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-check-circle display-1 text-success"></i>
+                    <p class="mt-3">Дефектів не знайдено</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>QR-код</th>
+                                <th>Тип</th>
+                                <th>Етап</th>
+                                <th class="text-center">Тяжкість</th>
+                                <th>Статус</th>
+                                <th>Дата</th>
+                                <th class="text-end">Дії</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var defect in defects)
+                            {
+                                <tr>
+                                    <td><code>#@defect.Id</code></td>
+                                    <td>
+                                        <code class="small" title="@defect.QRCode">
+                                            @TruncateText(defect.QRCode, 25)
+                                        </code>
+                                    </td>
+                                    <td>@defect.DefectType</td>
+                                    <td>
+                                        <span class="badge" style="background-color: @(((ProductionStage)defect.ProductionStage).GetColor())">
+                                            @(((ProductionStage)defect.ProductionStage).GetDisplayName())
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        @for (int i = 1; i <= 5; i++)
+                                        {
+                                            <i class="bi bi-circle-fill @(i <= defect.Severity ? "text-danger" : "text-muted")" style="font-size: 0.5rem;"></i>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge @(DefectService.DefectStatus.GetBadgeClass(defect.Status))">
+                                            <i class="bi @(DefectService.DefectStatus.GetIcon(defect.Status)) me-1"></i>
+                                            @(DefectService.DefectStatus.GetDisplayName(defect.Status))
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small>@defect.CreatedDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" @onclick="() => ShowDetailsModal(defect)" title="Деталі">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            @if (defect.Status == "new" || defect.Status == "in_progress")
+                                            {
+                                                <button class="btn btn-outline-success" @onclick="() => MarkAsRepaired(defect)" title="Виправлено">
+                                                    <i class="bi bi-check-lg"></i>
+                                                </button>
+                                                <button class="btn btn-outline-secondary" @onclick="() => MarkAsScrapped(defect)" title="Списати">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Пагінація -->
+                @if (totalPages > 1)
+                {
+                    <div class="card-footer d-flex justify-content-between align-items-center py-2">
+                        <small class="text-muted">Сторінка @currentPage з @totalPages</small>
+                        <nav>
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => GoToPage(currentPage - 1)">
+                                        <i class="bi bi-chevron-left"></i>
+                                    </button>
+                                </li>
+                                @for (int i = 1; i <= Math.Min(totalPages, 5); i++)
+                                {
+                                    var pageNum = i;
+                                    <li class="page-item @(currentPage == pageNum ? "active" : "")">
+                                        <button class="page-link" @onclick="() => GoToPage(pageNum)">@pageNum</button>
+                                    </li>
+                                }
+                                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => GoToPage(currentPage + 1)">
+                                        <i class="bi bi-chevron-right"></i>
+                                    </button>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Модальне вікно створення дефекту -->
+@if (showCreateModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Реєстрація браку</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(modalError))
+                    {
+                        <div class="alert alert-danger">@modalError</div>
+                    }
+                    
+                    <div class="mb-3">
+                        <label class="form-label">QR-код деталі <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" @bind="newDefect.QRCode" placeholder="Відскануйте або введіть QR-код" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Тип дефекту <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="newDefect.DefectType">
+                            <option value="">-- Оберіть тип --</option>
+                            @foreach (var type in DefectService.DefectTypes)
+                            {
+                                <option value="@type">@type</option>
+                            }
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Етап виявлення <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="newDefect.ProductionStage">
+                            @foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
+                            {
+                                <option value="@((int)stage)">@stage.GetDisplayName()</option>
+                            }
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Тяжкість (1-5)</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="range" class="form-range" min="1" max="5" @bind="newDefect.Severity" />
+                            <span class="badge bg-danger">@newDefect.Severity</span>
+                        </div>
+                        <small class="text-muted">1 — мінімальна, 5 — критична</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="isRepairable" @bind="newDefect.IsRepairable" />
+                            <label class="form-check-label" for="isRepairable">
+                                Підлягає виправленню
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Опис</label>
+                        <textarea class="form-control" rows="3" @bind="newDefect.Description" placeholder="Детальний опис дефекту..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">Скасувати</button>
+                    <button type="button" class="btn btn-danger" @onclick="CreateDefect" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-plus-lg me-1"></i> Зареєструвати
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Модальне вікно деталей -->
+@if (showDetailsModal && selectedDefect != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-info-circle me-2"></i>Дефект #@selectedDefect.Id
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td class="text-muted">QR-код:</td>
+                                    <td><code>@selectedDefect.QRCode</code></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Тип:</td>
+                                    <td><strong>@selectedDefect.DefectType</strong></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Етап:</td>
+                                    <td>
+                                        <span class="badge" style="background-color: @(((ProductionStage)selectedDefect.ProductionStage).GetColor())">
+                                            @(((ProductionStage)selectedDefect.ProductionStage).GetDisplayName())
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Тяжкість:</td>
+                                    <td>
+                                        @for (int i = 1; i <= 5; i++)
+                                        {
+                                            <i class="bi bi-circle-fill @(i <= selectedDefect.Severity ? "text-danger" : "text-muted")"></i>
+                                        }
+                                        (@selectedDefect.Severity/5)
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Виправний:</td>
+                                    <td>@(selectedDefect.IsRepairable ? "✅ Так" : "❌ Ні")</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td class="text-muted">Статус:</td>
+                                    <td>
+                                        <span class="badge @(DefectService.DefectStatus.GetBadgeClass(selectedDefect.Status))">
+                                            @(DefectService.DefectStatus.GetDisplayName(selectedDefect.Status))
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Створено:</td>
+                                    <td>@selectedDefect.CreatedDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                </tr>
+                                @if (selectedDefect.RepairedDate.HasValue)
+                                {
+                                    <tr>
+                                        <td class="text-muted">Виправлено:</td>
+                                        <td>@selectedDefect.RepairedDate.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                    </tr>
+                                }
+                                @if (selectedDefect.WorkerId.HasValue)
+                                {
+                                    <tr>
+                                        <td class="text-muted">Працівник:</td>
+                                        <td>ID: @selectedDefect.WorkerId</td>
+                                    </tr>
+                                }
+                            </table>
+                        </div>
+                    </div>
+                    
+                    @if (!string.IsNullOrEmpty(selectedDefect.Description))
+                    {
+                        <div class="mt-3">
+                            <strong>Опис:</strong>
+                            <p class="border rounded p-2 bg-light">@selectedDefect.Description</p>
+                        </div>
+                    }
+                    
+                    @if (!string.IsNullOrEmpty(selectedDefect.RepairNotes))
+                    {
+                        <div class="mt-3">
+                            <strong>Примітки виправлення:</strong>
+                            <p class="border rounded p-2 bg-light">@selectedDefect.RepairNotes</p>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    @if (selectedDefect.Status == "new" || selectedDefect.Status == "in_progress")
+                    {
+                        <button type="button" class="btn btn-success" @onclick="() => MarkAsRepaired(selectedDefect)">
+                            <i class="bi bi-check-lg"></i> Виправлено
+                        </button>
+                        <button type="button" class="btn btn-secondary" @onclick="() => MarkAsScrapped(selectedDefect)">
+                            <i class="bi bi-trash"></i> Списати
+                        </button>
+                    }
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CloseModals">Закрити</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // Дані
+    private List<DefectEntity> defects = new();
+    private DefectStatistics? statistics;
+    private bool isLoading = true;
+    private bool isSaving = false;
+
+    // Пагінація
+    private int currentPage = 1;
+    private int pageSize = 20;
+    private int totalCount = 0;
+    private int totalPages => (int)Math.Ceiling((double)totalCount / pageSize);
+
+    // Фільтри
+    private string filterStatus = "";
+    private string filterType = "";
+    private string filterStage = "";
+    private DateTime? filterFromDate;
+    private DateTime? filterToDate;
+
+    // Модальні вікна
+    private bool showCreateModal = false;
+    private bool showDetailsModal = false;
+    private DefectEntity? selectedDefect;
+    private DefectEntity newDefect = new();
+    private string? modalError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        await LoadStatistics();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            int? stage = string.IsNullOrEmpty(filterStage) ? null : int.Parse(filterStage);
+            
+            var (items, total) = await DefectService.GetDefectsAsync(
+                currentPage,
+                pageSize,
+                string.IsNullOrEmpty(filterStatus) ? null : filterStatus,
+                stage,
+                string.IsNullOrEmpty(filterType) ? null : filterType,
+                filterFromDate,
+                filterToDate);
+
+            defects = items;
+            totalCount = total;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка завантаження дефектів: {ex.Message}", ex, "DefectManagement");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadStatistics()
+    {
+        try
+        {
+            statistics = await DefectService.GetStatisticsAsync(filterFromDate, filterToDate);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка завантаження статистики: {ex.Message}", ex, "DefectManagement");
+        }
+    }
+
+    private async Task GoToPage(int page)
+    {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        await LoadData();
+    }
+
+    private async Task ClearFilters()
+    {
+        filterStatus = "";
+        filterType = "";
+        filterStage = "";
+        filterFromDate = null;
+        filterToDate = null;
+        currentPage = 1;
+        await LoadData();
+        await LoadStatistics();
+    }
+
+    private void ShowCreateModal()
+    {
+        newDefect = new DefectEntity
+        {
+            Severity = 3,
+            IsRepairable = true,
+            ProductionStage = 1
+        };
+        modalError = null;
+        showCreateModal = true;
+    }
+
+    private void ShowDetailsModal(DefectEntity defect)
+    {
+        selectedDefect = defect;
+        showDetailsModal = true;
+    }
+
+    private void CloseModals()
+    {
+        showCreateModal = false;
+        showDetailsModal = false;
+        selectedDefect = null;
+        modalError = null;
+    }
+
+    private async Task CreateDefect()
+    {
+        modalError = null;
+
+        if (string.IsNullOrEmpty(newDefect.QRCode))
+        {
+            modalError = "Введіть QR-код деталі";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(newDefect.DefectType))
+        {
+            modalError = "Оберіть тип дефекту";
+            return;
+        }
+
+        isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await DefectService.CreateDefectFromQRAsync(
+                newDefect.QRCode,
+                newDefect.DefectType,
+                newDefect.ProductionStage,
+                null, // workerId
+                null, // workstationId
+                newDefect.Description,
+                newDefect.Severity,
+                newDefect.IsRepairable);
+
+            if (result != null)
+            {
+                CloseModals();
+                await LoadData();
+                await LoadStatistics();
+            }
+            else
+            {
+                modalError = "Деталь з таким QR-кодом не знайдена в базі";
+            }
+        }
+        catch (Exception ex)
+        {
+            modalError = $"Помилка: {ex.Message}";
+            Logger.LogError($"Помилка створення дефекту: {ex.Message}", ex, "DefectManagement");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task MarkAsRepaired(DefectEntity defect)
+    {
+        try
+        {
+            await DefectService.MarkAsRepairedAsync(defect.Id);
+            CloseModals();
+            await LoadData();
+            await LoadStatistics();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка: {ex.Message}", ex, "DefectManagement");
+        }
+    }
+
+    private async Task MarkAsScrapped(DefectEntity defect)
+    {
+        try
+        {
+            await DefectService.MarkAsScrappedAsync(defect.Id);
+            CloseModals();
+            await LoadData();
+            await LoadStatistics();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Помилка: {ex.Message}", ex, "DefectManagement");
+        }
+    }
+
+    private string TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        return text.Length > maxLength ? text.Substring(0, maxLength) + "..." : text;
+    }
+}

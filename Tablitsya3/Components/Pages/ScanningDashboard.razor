@@ -6,6 +6,7 @@
 @using Tablitsya3.Components.Shared
 @inject ScanningService ScanningService
 @inject WorkstationService WorkstationService
+@inject DefectService DefectService
 @inject LoggingService Logger
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
@@ -197,18 +198,23 @@
                             }
 
                             <!-- Кнопка сканування -->
-                            <button class="btn btn-success btn-lg w-100" @onclick="ProcessScan" disabled="@(isScanning || string.IsNullOrEmpty(qrCode))">
-                                @if (isScanning)
-                                {
-                                    <span class="spinner-border spinner-border-sm me-2"></span>
-                                    <span>Обробка...</span>
-                                }
-                                else
-                                {
-                                    <i class="bi bi-check-lg me-2"></i>
-                                    <span>Сканувати</span>
-                                }
-                            </button>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-success btn-lg flex-grow-1" @onclick="ProcessScan" disabled="@(isScanning || string.IsNullOrEmpty(qrCode))">
+                                    @if (isScanning)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                        <span>Обробка...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-check-lg me-2"></i>
+                                        <span>Сканувати</span>
+                                    }
+                                </button>
+                                <button class="btn btn-danger btn-lg" @onclick="ShowDefectModal" disabled="@string.IsNullOrEmpty(qrCode)" title="Зареєструвати брак">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                </button>
+                            </div>
                         }
                     </div>
                 </div>
@@ -391,6 +397,75 @@
     </div>
 </div>
 
+<!-- Модальне вікно реєстрації браку -->
+@if (showDefectModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Реєстрація браку</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseDefectModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(defectError))
+                    {
+                        <div class="alert alert-danger py-2">@defectError</div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label">QR-код деталі</label>
+                        <input type="text" class="form-control" value="@qrCode" readonly />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Тип дефекту <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="defectType">
+                            <option value="">-- Оберіть тип --</option>
+                            @foreach (var type in DefectService.DefectTypes)
+                            {
+                                <option value="@type">@type</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Тяжкість</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="range" class="form-range" min="1" max="5" @bind="defectSeverity" />
+                            <span class="badge bg-danger">@defectSeverity / 5</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="defectRepairable" @bind="defectIsRepairable" />
+                            <label class="form-check-label" for="defectRepairable">
+                                Підлягає виправленню
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Опис (необов'язково)</label>
+                        <textarea class="form-control" rows="2" @bind="defectDescription" placeholder="Опишіть дефект..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDefectModal">Скасувати</button>
+                    <button type="button" class="btn btn-danger" @onclick="SaveDefect" disabled="@isSavingDefect">
+                        @if (isSavingDefect)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-exclamation-triangle me-1"></i> Зареєструвати брак
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter]
     public int WorkstationId { get; set; }
@@ -401,7 +476,7 @@
     // Компонент авторизації
     private WorkerLogin? workerLoginRef;
     private WorkerScanContext? workerContext;
-    
+
     // Станції
     private List<WorkstationEntity> workstations = new();
     private int selectedWorkstationId;
@@ -744,4 +819,89 @@
         if (string.IsNullOrEmpty(name)) return "";
         return name.Length > maxLength ? name.Substring(0, maxLength) + "..." : name;
     }
+
+    #region Defect Modal
+
+    private bool showDefectModal = false;
+    private string defectType = "";
+    private string defectDescription = "";
+    private int defectSeverity = 3;
+    private bool defectIsRepairable = true;
+    private string? defectError;
+    private bool isSavingDefect = false;
+
+    private void ShowDefectModal()
+    {
+        defectType = "";
+        defectDescription = "";
+        defectSeverity = 3;
+        defectIsRepairable = true;
+        defectError = null;
+        showDefectModal = true;
+    }
+
+    private void CloseDefectModal()
+    {
+        showDefectModal = false;
+        defectError = null;
+    }
+
+    private async Task SaveDefect()
+    {
+        if (string.IsNullOrEmpty(qrCode))
+        {
+            defectError = "Введіть QR-код деталі";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(defectType))
+        {
+            defectError = "Оберіть тип дефекту";
+            return;
+        }
+
+        isSavingDefect = true;
+        defectError = null;
+        StateHasChanged();
+
+        try
+        {
+            var stage = useStationStage && currentWorkstation != null 
+                ? (int)currentWorkstation.Stage 
+                : (int)(selectedStage ?? ProductionStage.Cutting);
+
+            var result = await DefectService.CreateDefectFromQRAsync(
+                qrCode,
+                defectType,
+                stage,
+                workerContext?.WorkerId,
+                workerContext?.WorkstationId,
+                defectDescription,
+                defectSeverity,
+                defectIsRepairable);
+
+            if (result != null)
+            {
+                ShowScanMessage($"🚨 Брак зареєстровано: {defectType}", "warning", "exclamation-triangle");
+                CloseDefectModal();
+                qrCode = "";
+                await FocusQRInput();
+            }
+            else
+            {
+                defectError = "Деталь з таким QR-кодом не знайдена";
+            }
+        }
+        catch (Exception ex)
+        {
+            defectError = $"Помилка: {ex.Message}";
+            Logger.LogError($"Помилка збереження дефекту: {ex.Message}", ex, "ScanningDashboard");
+        }
+        finally
+        {
+            isSavingDefect = false;
+        }
+    }
+
+    #endregion
 }

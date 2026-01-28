@@ -346,14 +346,6 @@ ALTER TABLE scan_logs ALTER COLUMN qr_code TYPE VARCHAR(255);
 ALTER TABLE imported_projects ALTER COLUMN project_uuid TYPE VARCHAR(255);
 ALTER TABLE parts ALTER COLUMN project_external_uuid TYPE VARCHAR(255);
 ALTER TABLE products ALTER COLUMN project_uuid TYPE VARCHAR(255);
-
--- Додаємо колонку capacity до workstations якщо її немає
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'workstations' AND column_name = 'capacity') THEN
-        ALTER TABLE workstations ADD COLUMN capacity INTEGER DEFAULT 0;
-    END IF;
-END $$;
 ";
 
                 _logger.LogInformation("🔧 Altering tables to add new columns...");
