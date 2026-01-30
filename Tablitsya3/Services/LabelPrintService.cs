@@ -42,6 +42,7 @@ namespace Tablitsya3.Services
             public DateTime PrintDate { get; set; }         // Дата друку
             public string DefectType { get; set; } = "";    // Тип браку (для перевиробництва)
             public bool IsDefectLabel { get; set; }         // Чи це бірка браку
+            public string EdgeBandingThickness { get; set; } = "";  // Товщина кромки (біля QR-коду)
         }
 
         /// <summary>
@@ -73,7 +74,8 @@ namespace Tablitsya3.Services
                 QRCode = $"{part.ProjectExternalUuid}/{part.PartId}/{part.PartCounter}",
                 PrintDate = DateTime.Now,
                 DefectType = defect?.DefectType ?? "",
-                IsDefectLabel = defect != null
+                IsDefectLabel = defect != null,
+                EdgeBandingThickness = part.EdgeBandingThickness ?? ""
             };
         }
 
@@ -261,7 +263,7 @@ namespace Tablitsya3.Services
                 </svg>
             </div>
             <div class='barcode-text'>{label.NC}</div>
-            
+
             <div class='field'><span class='field-label'>П:</span>{TruncateText(label.Project, 20)}</div>
             <div class='field'><span class='field-label'>М:</span>{TruncateText(label.Material, 25)}</div>
             <div class='field'><span class='field-label'>И:</span>{TruncateText(label.OrderName, 25)}</div>
@@ -272,9 +274,9 @@ namespace Tablitsya3.Services
             <div class='date'>{label.PrintDate:yyyy.MM.dd HH:mm}</div>
         </div>
         <div class='right-section'>
-            <div class='qr-number'>{label.PartCode}</div>
+            <div class='qr-number'>{label.EdgeBandingThickness}</div>
             <img class='qr-code' src='data:image/png;base64,{qrCodeBase64}' alt='QR Code'/>
-            <div class='qr-number'>{label.PartCode}</div>
+            <div class='qr-number'>{label.EdgeBandingThickness}</div>
         </div>
     </div>
 </body>

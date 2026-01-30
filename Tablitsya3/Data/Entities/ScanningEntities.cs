@@ -115,6 +115,10 @@ namespace Tablitsya3.Data.Entities
         [MaxLength(500)]
         public string EdgeBandingCompletedDates { get; set; } = string.Empty;
 
+        /// <summary>Товщина кромки (напр. "05", "08", "20")</summary>
+        [MaxLength(10)]
+        public string EdgeBandingThickness { get; set; } = string.Empty;
+
         // === Обчислювані поля (не зберігаються) ===
         [NotMapped]
         public double SquareMeters => (Length * Width) / 1_000_000;

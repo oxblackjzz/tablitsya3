@@ -214,6 +214,9 @@ namespace Tablitsya3.Services
                 // Чи потрібне свердління - визначаємо з операцій XNC
                 bool requiresDrilling = drillingPartIds.Contains(partId);
 
+                // Товщина кромки
+                string edgeBandingThickness = GetEdgeBandingThickness(partElement);
+
                 // Створюємо actualCount деталей
                 for (int i = 1; i <= actualCount; i++)
                 {
@@ -240,7 +243,8 @@ namespace Tablitsya3.Services
                         SourceFileName = fileName,
                         OrderName = orderName,
                         EdgeBandingSidesRequired = edgeBandingSides,
-                        
+                        EdgeBandingThickness = edgeBandingThickness,
+
                         // Етапи виробництва
                         RequiresCutting = true, // Порізка завжди потрібна
                         RequiresEdgeBanding = edgeBandingSides > 0,
@@ -266,7 +270,7 @@ namespace Tablitsya3.Services
         private int CountEdgeBandingSides(XElement partElement)
         {
             int count = 0;
-            
+
             // Атрибути обклейки: elt (top), elb (bottom), ell (left), elr (right)
             if (!string.IsNullOrEmpty(partElement.Attribute("elt")?.Value)) count++;
             if (!string.IsNullOrEmpty(partElement.Attribute("elb")?.Value)) count++;
@@ -277,12 +281,31 @@ namespace Tablitsya3.Services
         }
 
         /// <summary>
+        /// Отримати товщину кромки з атрибутів деталі
+        /// </summary>
+        private string GetEdgeBandingThickness(XElement partElement)
+        {
+            // Атрибути обклейки: elt (top), elb (bottom), ell (left), elr (right)
+            // Значення зазвичай: "05", "08", "10", "20" - товщина кромки в десятих мм
+            var elt = partElement.Attribute("elt")?.Value;
+            var elb = partElement.Attribute("elb")?.Value;
+            var ell = partElement.Attribute("ell")?.Value;
+            var elr = partElement.Attribute("elr")?.Value;
+
+            // Беремо перше непусте значення
+            var thickness = new[] { elt, elb, ell, elr }
+                .FirstOrDefault(v => !string.IsNullOrEmpty(v));
+
+            return thickness ?? "";
+        }
+
+        /// <summary>
         /// Визначення матеріалу за назвою
         /// </summary>
         private string DetermineMaterial(string name, XElement partElement)
         {
             var lowerName = name.ToLower();
-            
+
             if (lowerName.Contains("двп") || lowerName.Contains("хдф"))
                 return "ХДФ";
             if (lowerName.Contains("дзеркало"))

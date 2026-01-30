@@ -74,15 +74,18 @@ namespace Tablitsya3.Models.Scanning
         public bool RequiresPacking { get; set; } = true;
 
         // === Для поклейки кромки (може бути декілька сторін) ===
-        
+
         /// <summary>Кількість сторін що потребують обклейки</summary>
         public int EdgeBandingSidesRequired { get; set; } = 0;
-        
+
         /// <summary>Кількість сторін вже обклеєних</summary>
         public int EdgeBandingSidesCompleted { get; set; } = 0;
-        
+
         /// <summary>Дати завершення кожної сторони (розділені ;)</summary>
         public string EdgeBandingCompletedDates { get; set; } = string.Empty;
+
+        /// <summary>Товщина кромки (напр. "05", "08", "20")</summary>
+        public string EdgeBandingThickness { get; set; } = string.Empty;
 
         // === Обчислювані властивості ===
 
