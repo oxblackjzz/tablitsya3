@@ -479,22 +479,19 @@ else
         border: 1px solid rgba(0,0,0,0.1);
     }
     
-    /* Обгортка для карточки діаграми - дозволяє tooltip виходити за межі */
+    /* Обгортка для карточки діаграми */
     .gantt-card-wrapper {
-        overflow: visible !important;
+        position: relative;
     }
-    
+
     .gantt-card-wrapper .card-body {
-        overflow: visible !important;
+        overflow: hidden;
     }
     
     .gantt-combined-wrapper {
         overflow-x: auto;
         overflow-y: visible;
-        padding-top: 120px;    /* Місце для tooltip зверху */
-        padding-bottom: 120px; /* Місце для tooltip знизу */
-        margin-top: -120px;    /* Компенсуємо padding зверху */
-        margin-bottom: -120px; /* Компенсуємо padding знизу */
+        /* Tooltip space handled via clip-path, not negative margins */
     }
     
     .gantt-combined {
