@@ -160,6 +160,10 @@ Console.WriteLine("✅ DefectService registered");
 builder.Services.AddScoped<LabelPrintService>();
 Console.WriteLine("✅ LabelPrintService registered");
 
+// ✅ ДОДАЄМО AI АНАЛІТИКУ (ML.NET)
+builder.Services.AddScoped<AIAnalyticsService>();
+Console.WriteLine("✅ AIAnalyticsService registered (ML.NET)");
+
 // ✅ ДОДАЄМО SIGNALR
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<Tablitsya3.Hubs.ScanningHubService>();

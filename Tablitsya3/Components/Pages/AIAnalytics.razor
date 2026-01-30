@@ -1,0 +1,368 @@
+﻿@page "/ai-analytics"
+@using Tablitsya3.Services
+@inject AIAnalyticsService AIService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>AI Аналітика - GTLab</PageTitle>
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="mb-1">
+                <i class="bi bi-robot text-primary"></i> AI Аналітика
+            </h1>
+            <p class="text-muted mb-0">Машинне навчання ML.NET • Прогнози та аномалії</p>
+        </div>
+        <button class="btn btn-primary" @onclick="RefreshData" disabled="@isLoading">
+            <i class="bi bi-arrow-clockwise @(isLoading ? "spin" : "")"></i> Оновити
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-3 text-muted">🤖 AI аналізує дані...</p>
+        </div>
+    }
+    else
+    {
+        <!-- Системна статистика -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="card-subtitle mb-2 opacity-75">Сканувань (30 днів)</h6>
+                                <h2 class="card-title mb-0">@systemStats.ScansLast30Days.ToString("N0")</h2>
+                            </div>
+                            <i class="bi bi-qr-code-scan fs-1 opacity-50"></i>
+                        </div>
+                        <small class="opacity-75">Всього: @systemStats.TotalScans.ToString("N0")</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="card-subtitle mb-2 opacity-75">Середньо за день</h6>
+                                <h2 class="card-title mb-0">@systemStats.AverageDailyScans</h2>
+                            </div>
+                            <i class="bi bi-graph-up fs-1 opacity-50"></i>
+                        </div>
+                        <small class="opacity-75">
+                            @if (systemStats.ProductivityTrend > 0)
+                            {
+                                <i class="bi bi-arrow-up"></i> @($"+{systemStats.ProductivityTrend:F1}%")
+                            }
+                            else if (systemStats.ProductivityTrend < 0)
+                            {
+                                <i class="bi bi-arrow-down"></i> @($"{systemStats.ProductivityTrend:F1}%")
+                            }
+                            else
+                            {
+                                <span>Стабільно</span>
+                            }
+                            vs попередні 30 днів
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="card-subtitle mb-2 opacity-75">Дефектів (30 днів)</h6>
+                                <h2 class="card-title mb-0">@systemStats.DefectsLast30Days</h2>
+                            </div>
+                            <i class="bi bi-exclamation-triangle fs-1 opacity-50"></i>
+                        </div>
+                        <small class="opacity-75">Всього: @systemStats.TotalDefects</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="card-subtitle mb-2 opacity-75">Працівників</h6>
+                                <h2 class="card-title mb-0">@systemStats.TotalWorkers</h2>
+                            </div>
+                            <i class="bi bi-people fs-1 opacity-50"></i>
+                        </div>
+                        <small class="opacity-75">@systemStats.TotalParts.ToString("N0") деталей в системі</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ML Status -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex align-items-center">
+                        <i class="bi bi-cpu me-2 text-primary"></i>
+                        <strong>Статус ML.NET</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    @if (systemStats.HasEnoughDataForPredictions)
+                                    {
+                                        <span class="badge bg-success me-2">✓</span>
+                                        <span>Прогнози: <strong>Доступні</strong></span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary me-2">○</span>
+                                        <span class="text-muted">Прогнози: Потрібно більше даних</span>
+                                    }
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    @if (systemStats.HasEnoughDataForAnomalies)
+                                    {
+                                        <span class="badge bg-success me-2">✓</span>
+                                        <span>Виявлення аномалій: <strong>Активне</strong></span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary me-2">○</span>
+                                        <span class="text-muted">Виявлення аномалій: Потрібно більше даних</span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                @if (systemStats.Recommendations.Any())
+                                {
+                                    <h6 class="text-muted mb-2">Рекомендації:</h6>
+                                    @foreach (var rec in systemStats.Recommendations)
+                                    {
+                                        <div class="small text-muted">@rec</div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="text-success">
+                                        <i class="bi bi-check-circle"></i> Система має достатньо даних для AI аналітики
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Аномалії -->
+        @if (anomalies.Any())
+        {
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card border-warning">
+                        <div class="card-header bg-warning text-dark d-flex align-items-center">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>🔍 Виявлені аномалії</strong>
+                        </div>
+                        <div class="card-body">
+                            @foreach (var anomaly in anomalies)
+                            {
+                                <div class="alert @GetAlertClass(anomaly.Severity) d-flex align-items-center mb-2">
+                                    <i class="bi @GetAnomalyIcon(anomaly.Type) me-3 fs-4"></i>
+                                    <div>
+                                        <strong>@anomaly.Message</strong>
+                                        <div class="small">
+                                            Відхилення: @anomaly.Deviation.ToString("F1")σ від норми
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Топ працівники з прогнозами -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex align-items-center">
+                        <i class="bi bi-trophy me-2 text-warning"></i>
+                        <strong>🤖 AI Прогнози продуктивності працівників</strong>
+                    </div>
+                    <div class="card-body">
+                        @if (workerInsights.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Працівник</th>
+                                            <th class="text-center">За 30 днів</th>
+                                            <th class="text-center">Середньо/день</th>
+                                            <th class="text-center">
+                                                <i class="bi bi-robot"></i> Прогноз на завтра
+                                            </th>
+                                            <th class="text-center">Тренд</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var worker in workerInsights)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <i class="bi bi-person-circle me-2 text-primary"></i>
+                                                    @worker.WorkerName
+                                                </td>
+                                                <td class="text-center">
+                                                    <strong>@worker.TotalScansLast30Days</strong> деталей
+                                                </td>
+                                                <td class="text-center">
+                                                    @worker.AverageDaily
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-primary fs-6">
+                                                        @worker.PredictedTomorrow
+                                                    </span>
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (worker.Trend == "up")
+                                                    {
+                                                        <span class="badge bg-success">
+                                                            <i class="bi bi-graph-up-arrow"></i> Зростання
+                                                        </span>
+                                                    }
+                                                    else if (worker.Trend == "down")
+                                                    {
+                                                        <span class="badge bg-danger">
+                                                            <i class="bi bi-graph-down-arrow"></i> Спад
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-secondary">
+                                                            <i class="bi bi-dash"></i> Стабільно
+                                                        </span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-robot fs-1"></i>
+                                <p class="mt-2">Недостатньо даних для прогнозів</p>
+                                <small>Потрібно мінімум 7 днів сканувань для кожного працівника</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Пояснення -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6><i class="bi bi-info-circle text-primary"></i> Як працює AI аналітика?</h6>
+                        <div class="row small text-muted">
+                            <div class="col-md-4">
+                                <strong>📊 Прогнози (Регресія)</strong>
+                                <p>ML.NET аналізує патерни: день тижня, історію сканувань, і прогнозує продуктивність на завтра.</p>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>🔍 Аномалії (Z-Score)</strong>
+                                <p>Система виявляє незвичайні відхилення від норми: різкі падіння продуктивності або сплески браку.</p>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>📈 Тренди</strong>
+                                <p>Порівнюємо поточний період з попереднім для визначення напрямку розвитку.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+    @@keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private AISystemStats systemStats = new();
+    private List<AnomalyAlert> anomalies = new();
+    private List<WorkerAIInsight> workerInsights = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshData();
+    }
+
+    private async Task RefreshData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Паралельно завантажуємо всі дані
+            var statsTask = AIService.GetSystemStatsAsync();
+            var anomaliesTask = AIService.DetectAnomaliesAsync();
+            var workersTask = AIService.GetTopWorkersWithInsightsAsync(10);
+
+            await Task.WhenAll(statsTask, anomaliesTask, workersTask);
+
+            systemStats = await statsTask;
+            anomalies = await anomaliesTask;
+            workerInsights = await workersTask;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading AI analytics: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetAlertClass(string severity) => severity switch
+    {
+        "critical" => "alert-danger",
+        "warning" => "alert-warning",
+        "info" => "alert-info",
+        _ => "alert-secondary"
+    };
+
+    private string GetAnomalyIcon(AnomalyType type) => type switch
+    {
+        AnomalyType.LowProductivity => "bi-graph-down-arrow",
+        AnomalyType.HighProductivity => "bi-graph-up-arrow",
+        AnomalyType.HighDefectRate => "bi-exclamation-triangle",
+        AnomalyType.LowDefectRate => "bi-check-circle",
+        _ => "bi-question-circle"
+    };
+}
