@@ -25,12 +25,19 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
     if (connectionString.Contains("Host=") && connectionString.Contains("Database="))
     {
      Console.WriteLine("✅ Connection string is already in Npgsql format");
-     
+
      // ✅ ДОДАЄМО UTF-8 якщо його немає
      if (!connectionString.Contains("Client Encoding") && !connectionString.Contains("Encoding"))
      {
          connectionString = connectionString.TrimEnd(';') + ";Client Encoding=UTF8";
          Console.WriteLine("✅ Added UTF-8 encoding to connection string");
+     }
+
+     // ✅ ДОДАЄМО CONNECTION POOLING якщо його немає
+     if (!connectionString.Contains("Pooling=") && !connectionString.Contains("MaxPoolSize="))
+     {
+         connectionString = connectionString.TrimEnd(';') + ";Pooling=true;MinPoolSize=5;MaxPoolSize=100;Connection Idle Lifetime=300";
+         Console.WriteLine("✅ Added connection pooling to connection string");
      }
     }
  // Якщо це Render/Heroku формат (postgres:// або postgresql://)
@@ -54,8 +61,8 @@ if (!string.IsNullOrEmpty(connectionString) && connectionString.Length > 10)
 
     Console.WriteLine($"🔍 Parsed - Host: {host}, Port: {port}, Database: {database}, User: {username}");
 
-   connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true;Client Encoding=UTF8";
-         Console.WriteLine($"✅ Converted Postgres URL to Npgsql format");
+   connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true;Client Encoding=UTF8;Pooling=true;MinPoolSize=5;MaxPoolSize=100;Connection Idle Lifetime=300";
+         Console.WriteLine($"✅ Converted Postgres URL to Npgsql format (with connection pooling)");
   }
     else
      {
@@ -157,6 +164,10 @@ Console.WriteLine("✅ LabelPrintService registered");
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<Tablitsya3.Hubs.ScanningHubService>();
 Console.WriteLine("✅ SignalR configured");
+
+// ✅ ДОДАЄМО BACKGROUND SERVICE ДЛЯ АВТОМАТИЧНОГО ОБСЛУГОВУВАННЯ БД
+builder.Services.AddHostedService<MaintenanceBackgroundService>();
+Console.WriteLine("✅ MaintenanceBackgroundService registered (auto-archive old logs)");
 
 // ✅ ГЛОБАЛЬНА ОБРОБКА ПОМИЛОК
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

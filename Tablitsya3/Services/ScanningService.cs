@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Tablitsya3.Data;
 using Tablitsya3.Data.Entities;
 using Tablitsya3.Models.Scanning;
@@ -6,7 +7,7 @@ using Tablitsya3.Models.Scanning;
 namespace Tablitsya3.Services
 {
     // WorkerScanContext визначено в WorkerAuthService.cs
-    
+
     /// <summary>
     /// Сервіс для роботи зі скануванням деталей
     /// </summary>
@@ -15,12 +16,23 @@ namespace Tablitsya3.Services
         private readonly ApplicationDbContext _context;
         private readonly ProjectFileParserService _parser;
         private readonly LoggingService _logger;
+        private readonly IMemoryCache _cache;
 
-        public ScanningService(ApplicationDbContext context, ProjectFileParserService parser, LoggingService logger)
+        // Ключі кешування
+        private const string CACHE_KEY_OVERALL_STATS = "scanning_overall_stats";
+        private const string CACHE_KEY_PROJECT_STATS_PREFIX = "scanning_project_stats_";
+        private static readonly TimeSpan StatsCacheExpiration = TimeSpan.FromMinutes(2);
+
+        public ScanningService(
+            ApplicationDbContext context, 
+            ProjectFileParserService parser, 
+            LoggingService logger,
+            IMemoryCache cache)
         {
             _context = context;
             _parser = parser;
             _logger = logger;
+            _cache = cache;
         }
 
         #region Імпорт проектів
@@ -89,9 +101,21 @@ namespace Tablitsya3.Services
 
                 _context.ImportedProjects.Add(projectEntity);
 
-                // Зберігаємо товари та деталі
+                // ✅ BATCH ІМПОРТ - збираємо всі деталі для одного запиту
+                var allPartsToAdd = new List<PartEntity>();
+                var allProductsToAdd = new List<ProductEntity>();
                 int addedParts = 0;
                 int skippedParts = 0;
+
+                // ✅ Завантажуємо існуючі ключі деталей одним запитом
+                var existingPartKeys = await _context.Parts
+                    .Where(p => p.ProjectExternalUuid == project.ProjectUuid)
+                    .Select(p => new { p.ProjectExternalUuid, p.PartId, p.PartCounter })
+                    .ToListAsync();
+
+                var existingKeysSet = existingPartKeys
+                    .Select(k => $"{k.ProjectExternalUuid}_{k.PartId}_{k.PartCounter}")
+                    .ToHashSet();
 
                 foreach (var product in project.Products)
                 {
@@ -111,28 +135,35 @@ namespace Tablitsya3.Services
                         CreatedDate = DateTime.UtcNow
                     };
 
-                    _context.Products.Add(productEntity);
+                    allProductsToAdd.Add(productEntity);
 
-                    // Зберігаємо деталі
+                    // ✅ Перевіряємо деталі через HashSet (O(1) замість O(n) запиту до БД)
                     foreach (var part in product.Parts)
                     {
-                        // Перевіряємо чи деталь вже існує
-                        var existingPart = await _context.Parts
-                            .FirstOrDefaultAsync(p => 
-                                p.ProjectExternalUuid == part.ProjectExternalUuid &&
-                                p.PartId == part.PartId &&
-                                p.PartCounter == part.PartCounter);
+                        var partKey = $"{part.ProjectExternalUuid}_{part.PartId}_{part.PartCounter}";
 
-                        if (existingPart != null)
+                        if (existingKeysSet.Contains(partKey))
                         {
                             skippedParts++;
                             continue;
                         }
 
                         var partEntity = MapPartToEntity(part);
-                        _context.Parts.Add(partEntity);
+                        allPartsToAdd.Add(partEntity);
+                        existingKeysSet.Add(partKey); // Додаємо в set щоб уникнути дублікатів в межах імпорту
                         addedParts++;
                     }
+                }
+
+                // ✅ BATCH INSERT - додаємо всі записи разом
+                if (allProductsToAdd.Any())
+                {
+                    _context.Products.AddRange(allProductsToAdd);
+                }
+
+                if (allPartsToAdd.Any())
+                {
+                    _context.Parts.AddRange(allPartsToAdd);
                 }
 
                 await _context.SaveChangesAsync();
@@ -504,75 +535,204 @@ namespace Tablitsya3.Services
         }
 
         /// <summary>
-        /// Отримання статистики по проекту
+        /// Отримання статистики по проекту (оптимізовано SQL агрегацією + кеш)
         /// </summary>
         public async Task<ProjectStatistics?> GetProjectStatisticsAsync(string projectUuid)
         {
-            var parts = await _context.Parts
-                .Where(p => p.ProjectExternalUuid == projectUuid)
-                .ToListAsync();
+            // ✅ Спочатку перевіряємо кеш
+            var cacheKey = $"{CACHE_KEY_PROJECT_STATS_PREFIX}{projectUuid}";
+            if (_cache.TryGetValue(cacheKey, out ProjectStatistics? cachedStats))
+            {
+                return cachedStats;
+            }
 
-            if (!parts.Any()) return null;
+            // ✅ SQL агрегація - рахує на сервері БД
+            var basicStats = await _context.Parts
+                .Where(p => p.ProjectExternalUuid == projectUuid)
+                .GroupBy(_ => 1)
+                .Select(g => new
+                {
+                    TotalParts = g.Count(),
+                    CompletedParts = g.Count(p => p.IsPackingCompleted),
+                    TotalSquareMeters = g.Sum(p => p.Length * p.Width / 1_000_000),
+                    CompletedSquareMeters = g.Where(p => p.IsPackingCompleted).Sum(p => p.Length * p.Width / 1_000_000),
+                    FileName = g.Max(p => p.SourceFileName) // Беремо будь-який файл
+                })
+                .FirstOrDefaultAsync();
+
+            if (basicStats == null || basicStats.TotalParts == 0) return null;
 
             var stats = new ProjectStatistics
             {
                 ProjectUuid = projectUuid,
-                FileName = parts.First().SourceFileName,
-                TotalParts = parts.Count,
-                CompletedParts = parts.Count(p => p.IsPackingCompleted),
-                TotalSquareMeters = parts.Sum(p => p.SquareMeters),
-                CompletedSquareMeters = parts.Where(p => p.IsPackingCompleted).Sum(p => p.SquareMeters)
+                FileName = basicStats.FileName ?? "",
+                TotalParts = basicStats.TotalParts,
+                CompletedParts = basicStats.CompletedParts,
+                TotalSquareMeters = basicStats.TotalSquareMeters,
+                CompletedSquareMeters = basicStats.CompletedSquareMeters
             };
 
-            // Статистика по етапах
-            foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
-            {
-                var stageStats = new StageStatistics
+            // ✅ SQL агрегація для статистики по етапах
+            var stageStats = await _context.Parts
+                .Where(p => p.ProjectExternalUuid == projectUuid)
+                .GroupBy(_ => 1)
+                .Select(g => new
                 {
-                    Stage = stage,
-                    TotalRequired = parts.Count(p => IsStageRequired(p, stage)),
-                    Completed = parts.Count(p => IsStageCompleted(p, stage)),
-                    InProgress = 0 // Може бути визначено додатково
-                };
+                    CuttingRequired = g.Count(p => p.RequiresCutting),
+                    CuttingCompleted = g.Count(p => p.IsCutCompleted),
+                    EdgeBandingRequired = g.Count(p => p.RequiresEdgeBanding),
+                    EdgeBandingCompleted = g.Count(p => p.IsEdgeBandingCompleted),
+                    DrillingRequired = g.Count(p => p.RequiresDrilling),
+                    DrillingCompleted = g.Count(p => p.IsDrillingCompleted),
+                    SortingRequired = g.Count(p => p.RequiresSorting),
+                    SortingCompleted = g.Count(p => p.IsSortingCompleted),
+                    PackingRequired = g.Count(p => p.RequiresPacking),
+                    PackingCompleted = g.Count(p => p.IsPackingCompleted)
+                })
+                .FirstOrDefaultAsync();
 
-                stats.StageStats[stage] = stageStats;
+            if (stageStats != null)
+            {
+                stats.StageStats[ProductionStage.Cutting] = new StageStatistics
+                {
+                    Stage = ProductionStage.Cutting,
+                    TotalRequired = stageStats.CuttingRequired,
+                    Completed = stageStats.CuttingCompleted
+                };
+                stats.StageStats[ProductionStage.EdgeBanding] = new StageStatistics
+                {
+                    Stage = ProductionStage.EdgeBanding,
+                    TotalRequired = stageStats.EdgeBandingRequired,
+                    Completed = stageStats.EdgeBandingCompleted
+                };
+                stats.StageStats[ProductionStage.Drilling] = new StageStatistics
+                {
+                    Stage = ProductionStage.Drilling,
+                    TotalRequired = stageStats.DrillingRequired,
+                    Completed = stageStats.DrillingCompleted
+                };
+                stats.StageStats[ProductionStage.Sorting] = new StageStatistics
+                {
+                    Stage = ProductionStage.Sorting,
+                    TotalRequired = stageStats.SortingRequired,
+                    Completed = stageStats.SortingCompleted
+                };
+                stats.StageStats[ProductionStage.Packing] = new StageStatistics
+                {
+                    Stage = ProductionStage.Packing,
+                    TotalRequired = stageStats.PackingRequired,
+                    Completed = stageStats.PackingCompleted
+                };
             }
+
+            // ✅ Зберігаємо в кеш
+            _cache.Set(cacheKey, stats, StatsCacheExpiration);
 
             return stats;
         }
 
         /// <summary>
-        /// Отримання загальної статистики по всіх проектах
+        /// Отримання загальної статистики по всіх проектах (оптимізовано SQL агрегацією + кеш)
         /// </summary>
         public async Task<ProjectStatistics> GetOverallStatisticsAsync()
         {
-            var parts = await _context.Parts.ToListAsync();
+            // ✅ Спочатку перевіряємо кеш
+            if (_cache.TryGetValue(CACHE_KEY_OVERALL_STATS, out ProjectStatistics? cachedStats) && cachedStats != null)
+            {
+                return cachedStats;
+            }
+
+            // ✅ SQL агрегація - рахує на сервері БД, не завантажує всі записи в пам'ять
+            var basicStats = await _context.Parts
+                .GroupBy(_ => 1)
+                .Select(g => new
+                {
+                    TotalParts = g.Count(),
+                    CompletedParts = g.Count(p => p.IsPackingCompleted),
+                    TotalSquareMeters = g.Sum(p => p.Length * p.Width / 1_000_000),
+                    CompletedSquareMeters = g.Where(p => p.IsPackingCompleted).Sum(p => p.Length * p.Width / 1_000_000)
+                })
+                .FirstOrDefaultAsync();
 
             var stats = new ProjectStatistics
             {
                 ProjectUuid = "all",
                 FileName = "Всі проекти",
-                TotalParts = parts.Count,
-                CompletedParts = parts.Count(p => p.IsPackingCompleted),
-                TotalSquareMeters = parts.Sum(p => p.SquareMeters),
-                CompletedSquareMeters = parts.Where(p => p.IsPackingCompleted).Sum(p => p.SquareMeters)
+                TotalParts = basicStats?.TotalParts ?? 0,
+                CompletedParts = basicStats?.CompletedParts ?? 0,
+                TotalSquareMeters = basicStats?.TotalSquareMeters ?? 0,
+                CompletedSquareMeters = basicStats?.CompletedSquareMeters ?? 0
             };
 
-            // Статистика по етапах
-            foreach (ProductionStage stage in Enum.GetValues<ProductionStage>())
-            {
-                var stageStats = new StageStatistics
+            // ✅ SQL агрегація для статистики по етапах
+            var stageStats = await _context.Parts
+                .GroupBy(_ => 1)
+                .Select(g => new
                 {
-                    Stage = stage,
-                    TotalRequired = parts.Count(p => IsStageRequired(p, stage)),
-                    Completed = parts.Count(p => IsStageCompleted(p, stage)),
-                    InProgress = 0
-                };
+                    // Cutting
+                    CuttingRequired = g.Count(p => p.RequiresCutting),
+                    CuttingCompleted = g.Count(p => p.IsCutCompleted),
+                    // EdgeBanding
+                    EdgeBandingRequired = g.Count(p => p.RequiresEdgeBanding),
+                    EdgeBandingCompleted = g.Count(p => p.IsEdgeBandingCompleted),
+                    // Drilling
+                    DrillingRequired = g.Count(p => p.RequiresDrilling),
+                    DrillingCompleted = g.Count(p => p.IsDrillingCompleted),
+                    // Sorting
+                    SortingRequired = g.Count(p => p.RequiresSorting),
+                    SortingCompleted = g.Count(p => p.IsSortingCompleted),
+                    // Packing
+                    PackingRequired = g.Count(p => p.RequiresPacking),
+                    PackingCompleted = g.Count(p => p.IsPackingCompleted)
+                })
+                .FirstOrDefaultAsync();
 
-                stats.StageStats[stage] = stageStats;
+            if (stageStats != null)
+            {
+                stats.StageStats[ProductionStage.Cutting] = new StageStatistics
+                {
+                    Stage = ProductionStage.Cutting,
+                    TotalRequired = stageStats.CuttingRequired,
+                    Completed = stageStats.CuttingCompleted
+                };
+                stats.StageStats[ProductionStage.EdgeBanding] = new StageStatistics
+                {
+                    Stage = ProductionStage.EdgeBanding,
+                    TotalRequired = stageStats.EdgeBandingRequired,
+                    Completed = stageStats.EdgeBandingCompleted
+                };
+                stats.StageStats[ProductionStage.Drilling] = new StageStatistics
+                {
+                    Stage = ProductionStage.Drilling,
+                    TotalRequired = stageStats.DrillingRequired,
+                    Completed = stageStats.DrillingCompleted
+                };
+                stats.StageStats[ProductionStage.Sorting] = new StageStatistics
+                {
+                    Stage = ProductionStage.Sorting,
+                    TotalRequired = stageStats.SortingRequired,
+                    Completed = stageStats.SortingCompleted
+                };
+                stats.StageStats[ProductionStage.Packing] = new StageStatistics
+                {
+                    Stage = ProductionStage.Packing,
+                    TotalRequired = stageStats.PackingRequired,
+                    Completed = stageStats.PackingCompleted
+                };
             }
 
+            // ✅ Зберігаємо в кеш
+            _cache.Set(CACHE_KEY_OVERALL_STATS, stats, StatsCacheExpiration);
+
             return stats;
+        }
+
+        /// <summary>
+        /// Інвалідація кешу статистики (викликати після сканування/імпорту)
+        /// </summary>
+        public void InvalidateStatsCache()
+        {
+            _cache.Remove(CACHE_KEY_OVERALL_STATS);
         }
 
         /// <summary>
@@ -749,5 +909,103 @@ namespace Tablitsya3.Services
         }
 
         #endregion
+
+        #region Архівація та очищення
+
+        /// <summary>
+        /// Архівація/видалення старих ScanLogs для оптимізації продуктивності
+        /// </summary>
+        /// <param name="daysToKeep">Кількість днів для зберігання (за замовчуванням 30)</param>
+        /// <returns>Кількість видалених записів</returns>
+        public async Task<int> ArchiveOldScanLogsAsync(int daysToKeep = 30)
+        {
+            try
+            {
+                var cutoffDate = DateTime.UtcNow.AddDays(-daysToKeep);
+
+                // ✅ Використовуємо ExecuteDeleteAsync для ефективного видалення без завантаження в пам'ять
+                var deletedCount = await _context.ScanLogs
+                    .Where(s => s.ScanDate < cutoffDate)
+                    .ExecuteDeleteAsync();
+
+                if (deletedCount > 0)
+                {
+                    _logger.LogInfo($"Архівація ScanLogs: видалено {deletedCount} записів старше {daysToKeep} днів", "ScanningService");
+                }
+
+                return deletedCount;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Помилка архівації ScanLogs: {ex.Message}", ex, "ScanningService");
+                return 0;
+            }
+        }
+
+        /// <summary>
+        /// Отримання статистики по ScanLogs для моніторингу
+        /// </summary>
+        public async Task<ScanLogsStatistics> GetScanLogsStatisticsAsync()
+        {
+            var stats = await _context.ScanLogs
+                .GroupBy(_ => 1)
+                .Select(g => new ScanLogsStatistics
+                {
+                    TotalRecords = g.Count(),
+                    OldestRecord = g.Min(s => s.ScanDate),
+                    NewestRecord = g.Max(s => s.ScanDate),
+                    RecordsLast24Hours = g.Count(s => s.ScanDate >= DateTime.UtcNow.AddHours(-24)),
+                    RecordsLast7Days = g.Count(s => s.ScanDate >= DateTime.UtcNow.AddDays(-7)),
+                    RecordsOlderThan30Days = g.Count(s => s.ScanDate < DateTime.UtcNow.AddDays(-30))
+                })
+                .FirstOrDefaultAsync();
+
+            return stats ?? new ScanLogsStatistics();
+        }
+
+        /// <summary>
+        /// Очищення завершених деталей старше вказаної дати
+        /// </summary>
+        public async Task<int> CleanupCompletedPartsAsync(int daysToKeep = 90)
+        {
+            try
+            {
+                var cutoffDate = DateTime.UtcNow.AddDays(-daysToKeep);
+
+                // Видаляємо тільки повністю завершені деталі
+                var deletedCount = await _context.Parts
+                    .Where(p => p.IsPackingCompleted && p.PackingCompletedDate < cutoffDate)
+                    .ExecuteDeleteAsync();
+
+                if (deletedCount > 0)
+                {
+                    _logger.LogInfo($"Очищення Parts: видалено {deletedCount} завершених деталей старше {daysToKeep} днів", "ScanningService");
+                }
+
+                return deletedCount;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Помилка очищення Parts: {ex.Message}", ex, "ScanningService");
+                return 0;
+            }
+        }
+
+        #endregion
+    }
+
+    /// <summary>
+    /// Статистика по ScanLogs для моніторингу
+    /// </summary>
+    public class ScanLogsStatistics
+    {
+        public int TotalRecords { get; set; }
+        public DateTime? OldestRecord { get; set; }
+        public DateTime? NewestRecord { get; set; }
+        public int RecordsLast24Hours { get; set; }
+        public int RecordsLast7Days { get; set; }
+        public int RecordsOlderThan30Days { get; set; }
+
+        public string EstimatedSize => $"~{TotalRecords * 200 / 1024 / 1024} MB"; // ~200 байт на запис
     }
 }
