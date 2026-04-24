@@ -78,6 +78,13 @@
             </div>
         </div>
 
+        @if (errorMessage != null)
+        {
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle me-2"></i>@errorMessage
+            </div>
+        }
+
         @if (selectedWorkerId == 0 && overallStats != null)
         {
             <!-- Загальна статистика -->
@@ -277,6 +284,13 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        }
+        else if (selectedWorkerId == 0 && overallStats == null && errorMessage == null)
+        {
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-inbox fs-1"></i>
+                <p class="mt-2">Немає даних для відображення. Переконайтесь що є записи сканування з прив'язаними працівниками.</p>
             </div>
         }
         else if (workerStats != null)
@@ -524,8 +538,9 @@ private WorkersOverallStatistics? overallStats;
 private WorkerStatistics? workerStats;
 
 private int selectedWorkerId = 0;
-private int daysForChart = 30;
-private bool isLoading = true;
+    private int daysForChart = 30;
+    private bool isLoading = true;
+    private string? errorMessage;
     
 // Фільтр по типах робіт (етапах)
 private HashSet<ProductionStage> selectedStages = new(Enum.GetValues<ProductionStage>());
@@ -554,6 +569,7 @@ protected override async Task OnInitializedAsync()
     private async Task LoadData()
     {
         isLoading = true;
+        errorMessage = null;
         StateHasChanged();
 
         try
@@ -571,7 +587,8 @@ protected override async Task OnInitializedAsync()
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading statistics: {ex.Message}");
+            Console.WriteLine($"Error loading statistics: {ex.Message}\n{ex.StackTrace}");
+            errorMessage = $"Помилка завантаження: {ex.Message}";
         }
 
         isLoading = false;
