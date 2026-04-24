@@ -116,7 +116,7 @@ namespace Tablitsya3.Data.Entities
         public string EdgeBandingCompletedDates { get; set; } = string.Empty;
 
         /// <summary>Товщина кромки (напр. "05", "08", "20")</summary>
-        [MaxLength(10)]
+        [NotMapped]
         public string EdgeBandingThickness { get; set; } = string.Empty;
 
         // === Обчислювані поля (не зберігаються) ===

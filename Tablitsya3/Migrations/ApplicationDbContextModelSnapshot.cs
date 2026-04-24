@@ -324,11 +324,6 @@ namespace Tablitsya3.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("edge_banding_sides_required");
 
-                    b.Property<string>("EdgeBandingThickness")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
                     b.Property<bool>("IsCutCompleted")
                         .HasColumnType("boolean")
                         .HasColumnName("is_cut_completed");
