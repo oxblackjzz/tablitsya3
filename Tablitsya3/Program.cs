@@ -453,6 +453,26 @@ static async Task EnsureAuthSchemaAndSeedAsync(IServiceProvider services, ILogge
         ALTER TABLE app_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
         ALTER TABLE app_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
         ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ NULL;
+
+        -- Виправлення типу колонки role якщо вона не INTEGER (наприклад, varchar зі старої схеми)
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'app_users' AND column_name = 'role'
+                  AND data_type <> 'integer'
+            ) THEN
+                ALTER TABLE app_users
+                    ALTER COLUMN role TYPE INTEGER
+                    USING (CASE
+                        WHEN role ~ '^[0-9]+$' THEN role::INTEGER
+                        WHEN lower(role) = 'admin' THEN 3
+                        WHEN lower(role) = 'manager' THEN 2
+                        WHEN lower(role) = 'operator' THEN 1
+                        ELSE 0
+                    END);
+            END IF;
+        END $$;
     ";
 
     await dbContext.Database.ExecuteSqlRawAsync(createTableSql);
