@@ -436,8 +436,8 @@ static async Task EnsureAuthSchemaAndSeedAsync(IServiceProvider services, ILogge
         CREATE TABLE IF NOT EXISTS app_users (
             id SERIAL PRIMARY KEY,
             username VARCHAR(64) NOT NULL,
-            password_hash TEXT NOT NULL,
-            password_salt TEXT NOT NULL,
+            password_hash TEXT NOT NULL DEFAULT '',
+            password_salt TEXT NOT NULL DEFAULT '',
             display_name VARCHAR(128) NOT NULL DEFAULT '',
             role INTEGER NOT NULL DEFAULT 0,
             is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -445,10 +445,18 @@ static async Task EnsureAuthSchemaAndSeedAsync(IServiceProvider services, ILogge
             last_login_at TIMESTAMPTZ NULL
         );
         CREATE UNIQUE INDEX IF NOT EXISTS ix_app_users_username ON app_users (username);
+
+        ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash TEXT NOT NULL DEFAULT '';
+        ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_salt TEXT NOT NULL DEFAULT '';
+        ALTER TABLE app_users ADD COLUMN IF NOT EXISTS display_name VARCHAR(128) NOT NULL DEFAULT '';
+        ALTER TABLE app_users ADD COLUMN IF NOT EXISTS role INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE app_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+        ALTER TABLE app_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+        ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ NULL;
     ";
 
     await dbContext.Database.ExecuteSqlRawAsync(createTableSql);
-    logger.LogInformation("✅ app_users table ensured");
+    logger.LogInformation("✅ app_users table ensured (with all columns)");
 
     var auth = services.GetRequiredService<AuthService>();
     if (!await auth.AnyUserExistsAsync())
@@ -459,6 +467,17 @@ static async Task EnsureAuthSchemaAndSeedAsync(IServiceProvider services, ILogge
         Console.WriteLine("⚠️  Change this password after first login!");
         Console.WriteLine("============================================");
         logger.LogWarning("👤 Default admin user created with password 'admin123' - change it!");
+    }
+    else
+    {
+        // Якщо адмін існує але без password_salt (зламаний старий запис) - перестворити
+        var admin = await auth.GetByUsernameAsync("admin");
+        if (admin != null && string.IsNullOrEmpty(admin.PasswordSalt))
+        {
+            await auth.SetPasswordAsync(admin.Id, "admin123");
+            logger.LogWarning("👤 Admin password reset to default (was missing salt)");
+            Console.WriteLine("👤 Admin password was reset to: admin123");
+        }
     }
 }
 

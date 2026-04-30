@@ -27,10 +27,9 @@ public class GlobalExceptionHandler : IExceptionHandler
         {
          Status = (int)HttpStatusCode.InternalServerError,
          Title = "Виникла помилка",
-         Detail = exception.Message,
-         ExceptionType = exception.GetType().FullName,
-         StackTrace = exception.StackTrace,
-         InnerMessage = exception.InnerException?.Message,
+     Detail = httpContext.Request.Host.Host.Contains("localhost") 
+      ? exception.Message 
+      : "Будь ласка, спробуйте пізніше або зверніться до адміністратора.",
     Instance = httpContext.Request.Path,
    Timestamp = DateTime.UtcNow
         };
