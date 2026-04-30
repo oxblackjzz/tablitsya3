@@ -407,11 +407,11 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseAntiforgery();
 app.MapStaticAssets();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseAntiforgery();
 
 // ✅ Маппінг API Controllers
 app.MapControllers();
