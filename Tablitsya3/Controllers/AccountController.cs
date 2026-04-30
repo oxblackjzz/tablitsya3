@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Tablitsya3.Models;
 using Tablitsya3.Services;
@@ -12,12 +13,14 @@ namespace Tablitsya3.Controllers
     {
         private readonly AuthService _auth;
         private readonly RoleService _roles;
+        private readonly IDataProtectionProvider _dataProtection;
         private readonly ILogger<AccountController> _logger;
 
-        public AccountController(AuthService auth, RoleService roles, ILogger<AccountController> logger)
+        public AccountController(AuthService auth, RoleService roles, IDataProtectionProvider dataProtection, ILogger<AccountController> logger)
         {
             _auth = auth;
             _roles = roles;
+            _dataProtection = dataProtection;
             _logger = logger;
         }
 
@@ -84,10 +87,30 @@ namespace Tablitsya3.Controllers
                     SameSite = SameSiteMode.Lax,
                     Secure = Request.IsHttps,
                 });
+
+                // Захищене зберігання пароля (DataProtection) для автозаповнення поля "Пароль"
+                try
+                {
+                    var protector = _dataProtection.CreateProtector("Tablitsya3.RememberedPassword.v1");
+                    var encrypted = protector.Protect(password);
+                    Response.Cookies.Append("remembered_pwd", encrypted, new CookieOptions
+                    {
+                        Expires = DateTimeOffset.UtcNow.AddDays(180),
+                        HttpOnly = true,
+                        IsEssential = true,
+                        SameSite = SameSiteMode.Lax,
+                        Secure = Request.IsHttps,
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Не вдалось зберегти remembered_pwd для {User}", user.Username);
+                }
             }
             else
             {
                 Response.Cookies.Delete("remembered_user");
+                Response.Cookies.Delete("remembered_pwd");
             }
 
             _logger.LogInformation("Вхід успішний: {Username} ({Role})", user.Username, role);

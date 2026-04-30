@@ -34,78 +34,55 @@
     }
     else if (requiresAuth)
     {
-        <!-- Форма авторизації -->
-        <div class="card border-warning">
-            <div class="card-header bg-warning text-dark">
-                <i class="bi bi-lock-fill me-2"></i>
-                Авторизація на станції
+        <!-- Очікування QR-бейджа -->
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-person-badge me-2"></i>
+                Очікування працівника
             </div>
-            <div class="card-body">
+            <div class="card-body text-center">
                 @if (workstation != null)
                 {
-                    <div class="mb-3 text-center">
-                        <span class="badge bg-info mb-2">@workstation.Name</span>
-                        <br />
-                        <small class="text-muted">@workstation.StageName</small>
+                    <div class="mb-3">
+                        <span class="badge bg-info">@workstation.Name</span>
+                        <div class="text-muted small mt-1">@workstation.StageName</div>
                     </div>
                 }
 
-                <div class="mb-3">
-                    <label class="form-label">Код працівника</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
-                        <input type="text" class="form-control form-control-lg" 
-                               @bind="workerCode" @bind:event="oninput"
-                               @onkeyup="OnWorkerCodeKeyUp"
-                               placeholder="Скануйте бейдж або введіть код"
-                               autofocus />
-                    </div>
+                <div class="py-3">
+                    <i class="bi bi-qr-code-scan" style="font-size: 3rem; color: #0d6efd;"></i>
+                    <div class="mt-2 fw-semibold">Пікніть QR-бейдж</div>
+                    <div class="text-muted small">Сканер активний — піднесіть бейдж працівника</div>
                 </div>
 
                 @if (showPinInput)
                 {
-                    <div class="mb-3">
-                        <label class="form-label">PIN-код</label>
+                    <div class="mb-3 text-start">
+                        <label class="form-label">PIN-код для @pendingWorkerName</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-key"></i></span>
-                            <input type="password" class="form-control form-control-lg text-center" 
-                                   @bind="pinCode" 
+                            <input type="password" class="form-control form-control-lg text-center"
+                                   @bind="pinCode"
                                    @onkeyup="OnPinKeyUp"
-                                   maxlength="6" 
-                                   placeholder="••••" />
+                                   maxlength="6"
+                                   placeholder="••••" autofocus />
                         </div>
+                        <button class="btn btn-primary w-100 mt-2" @onclick="Login" disabled="@isLoggingIn">
+                            @if (isLoggingIn)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            Увійти
+                        </button>
+                        <button class="btn btn-link btn-sm w-100" @onclick="CancelPin">Скасувати</button>
                     </div>
                 }
 
                 @if (!string.IsNullOrEmpty(errorMessage))
                 {
-                    <div class="alert alert-danger py-2">
+                    <div class="alert alert-danger py-2 mb-0">
                         <i class="bi bi-exclamation-triangle me-1"></i>
                         @errorMessage
-                    </div>
-                }
-
-                <button class="btn btn-primary w-100" @onclick="Login" disabled="@isLoggingIn">
-                    @if (isLoggingIn)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1"></span>
-                    }
-                    <i class="bi bi-box-arrow-in-right me-1"></i>
-                    Увійти
-                </button>
-
-                @if (recentWorkers.Any())
-                {
-                    <hr class="my-3" />
-                    <small class="text-muted d-block mb-2">Швидкий вибір:</small>
-                    <div class="d-flex flex-wrap gap-1">
-                        @foreach (var worker in recentWorkers.Take(5))
-                        {
-                            <button class="btn btn-sm btn-outline-secondary" 
-                                    @onclick="() => SelectWorker(worker)">
-                                @worker.DisplayName
-                            </button>
-                        }
                     </div>
                 }
             </div>
@@ -152,11 +129,11 @@
 
     private WorkstationEntity? workstation;
     private WorkerScanContext? currentSession;
-    private List<WorkerEntity> recentWorkers = new();
 
     private string workerCode = string.Empty;
     private string pinCode = string.Empty;
     private bool showPinInput = false;
+    private string pendingWorkerName = string.Empty;
     private string errorMessage = string.Empty;
     private bool isLoggingIn = false;
     private bool requiresAuth = true;
@@ -200,11 +177,16 @@
             }
         }
 
-        // Завантажуємо працівників для швидкого вибору
-        if (requiresAuth && workstation != null)
-        {
-            recentWorkers = await WorkerService.GetWorkersByWorkshopAsync(workstation.WorkshopNumber);
-        }
+        // Завантаження recentWorkers вже не потрібне — вхід тільки через бейдж
+    }
+
+    private void CancelPin()
+    {
+        showPinInput = false;
+        pinCode = string.Empty;
+        workerCode = string.Empty;
+        pendingWorkerName = string.Empty;
+        errorMessage = string.Empty;
     }
 
     private async Task OnWorkerCodeKeyUp(KeyboardEventArgs e)
@@ -219,6 +201,7 @@
                 var worker = await WorkerService.GetWorkerByCodeAsync(workerCode);
                 if (worker != null && !string.IsNullOrEmpty(worker.PinCodeHash))
                 {
+                    pendingWorkerName = worker.DisplayName;
                     showPinInput = true;
                 }
                 else
@@ -240,9 +223,10 @@
     private void SelectWorker(WorkerEntity worker)
     {
         workerCode = worker.WorkerCode;
-        
+
         if (!string.IsNullOrEmpty(worker.PinCodeHash))
         {
+            pendingWorkerName = worker.DisplayName;
             showPinInput = true;
         }
         else

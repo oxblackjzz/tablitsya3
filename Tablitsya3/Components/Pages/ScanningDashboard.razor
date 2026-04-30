@@ -7,6 +7,8 @@
 @using Tablitsya3.Components.Shared
 @inject ScanningService ScanningService
 @inject WorkstationService WorkstationService
+@inject WorkerAuthService WorkerAuthService
+@inject WorkerService WorkerService
 @inject DefectService DefectService
 @inject LoggingService Logger
 @inject IJSRuntime JSRuntime
@@ -137,22 +139,23 @@
                         <i class="bi bi-qr-code"></i> Сканування
                     </div>
                     <div class="card-body">
-                        @if (!CanScan)
+                        @if (selectedWorkstationId == 0)
                         {
                             <div class="alert alert-warning mb-0">
                                 <i class="bi bi-lock me-2"></i>
-                                @if (selectedWorkstationId == 0)
-                                {
-                                    <span>Виберіть станцію для початку роботи</span>
-                                }
-                                else if (workerContext == null && currentWorkstation?.RequiresWorkerAuth == true)
-                                {
-                                    <span>Авторизуйтесь для початку сканування</span>
-                                }
+                                <span>Виберіть станцію для початку роботи</span>
                             </div>
                         }
                         else
                         {
+                            @if (workerContext == null && currentWorkstation?.RequiresWorkerAuth == true)
+                            {
+                                <div class="alert alert-info py-2 mb-3 small">
+                                    <i class="bi bi-person-badge me-1"></i>
+                                    Працівник не авторизований — деталі будуть записані як <strong>default</strong>. Пікніть бейдж для персонального обліку.
+                                </div>
+                            }
+
                             <!-- Поле QR-коду (без input — захоплюється глобально від сканера) -->
                             <div class="mb-3">
                                 <label class="form-label d-flex justify-content-between align-items-center">
@@ -525,9 +528,12 @@
     private string filterFileName = "";
     private string filterCompleted = "";
 
-    // Чи можна сканувати
-    private bool CanScan => selectedWorkstationId > 0 && 
-                            (workerContext != null || currentWorkstation?.RequiresWorkerAuth != true);
+    // Чи можна сканувати ДЕТАЛЬ (потрібен працівник якщо станція цього вимагає)
+    private bool CanScanPart => selectedWorkstationId > 0 &&
+                                (workerContext != null || currentWorkstation?.RequiresWorkerAuth != true);
+
+    // Сканер активний завжди при вибраній станції — щоб приймати QR бейджа
+    private bool CanScan => selectedWorkstationId > 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -584,9 +590,83 @@
     public async Task OnScanCapturedAsync(string code)
     {
         if (string.IsNullOrWhiteSpace(code) || !CanScan) return;
-        qrCode = code.Trim();
-        StateHasChanged();
+
+        var trimmed = code.Trim();
+
+        // Спершу перевіряємо чи це бейдж працівника
+        if (await TryHandleWorkerBadgeAsync(trimmed))
+        {
+            return;
+        }
+
+        // Деталі приймаємо завжди — якщо немає авторизованого працівника,
+        // запис буде виконано від імені "default" з повідомленням-нагадуванням.
+        if (!CanScanPart && currentWorkstation?.RequiresWorkerAuth == true)
+        {
+            ShowScanMessage("Деталь записано як 'default'. Пікніть бейдж для персонального обліку.", "warning", "person-badge");
+        }
+
+        qrCode = trimmed;
+        await InvokeAsync(StateHasChanged);
         await ProcessScan();
+    }
+
+    private static bool LooksLikeWorkerBadge(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return false;
+        if (code.StartsWith("WORKER:", StringComparison.OrdinalIgnoreCase)) return true;
+        if (code.StartsWith("WRK-", StringComparison.OrdinalIgnoreCase)) return true;
+        // Бейдж — короткий рядок без "/" (QR деталі завжди має кілька "/")
+        if (code.Length <= 32 && !code.Contains('/')) return true;
+        return false;
+    }
+
+    private async Task<bool> TryHandleWorkerBadgeAsync(string code)
+    {
+        if (selectedWorkstationId <= 0) return false;
+        if (!LooksLikeWorkerBadge(code)) return false;
+
+        // Перевіряємо чи такий працівник існує (щоб уникнути false positives)
+        var lookupCode = code.StartsWith("WORKER:", StringComparison.OrdinalIgnoreCase)
+            ? code.Split(':').ElementAtOrDefault(1) ?? code
+            : code;
+
+        var worker = await WorkerService.GetWorkerByCodeAsync(lookupCode);
+        if (worker == null) return false;
+
+        // Якщо це той самий працівник, що вже в сесії — нічого не робимо
+        if (workerContext != null && workerContext.WorkerId == worker.Id)
+        {
+            ShowScanMessage($"{worker.DisplayName} вже на станції", "info", "person-check");
+            await InvokeAsync(StateHasChanged);
+            return true;
+        }
+
+        // Якщо у працівника є PIN — звичайний flow через форму, не приймаємо як silent badge
+        if (!string.IsNullOrEmpty(worker.PinCodeHash))
+        {
+            ShowScanMessage($"{worker.DisplayName}: введіть PIN-код", "warning", "key");
+            await InvokeAsync(StateHasChanged);
+            return true;
+        }
+
+        var result = await WorkerAuthService.LoginByBadgeAsync(code, selectedWorkstationId);
+        if (result.Success && result.SessionToken != null)
+        {
+            workerContext = await WorkerAuthService.ValidateSessionAsync(result.SessionToken);
+            if (workerContext != null)
+            {
+                ShowScanMessage($"Вітаємо, {workerContext.WorkerName}!", "success", "person-check-fill");
+                Logger.LogInfo($"Працівник {workerContext.WorkerName} увійшов через бейдж", "ScanningDashboard");
+            }
+        }
+        else
+        {
+            ShowScanMessage(result.Message, "danger", "x-circle");
+        }
+
+        await InvokeAsync(StateHasChanged);
+        return true;
     }
 
     public async ValueTask DisposeAsync()
@@ -720,6 +800,7 @@
         finally
         {
             isLoading = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -751,7 +832,7 @@
 
     private async Task ProcessScan()
     {
-        if (string.IsNullOrEmpty(qrCode) || !CanScan) return;
+        if (string.IsNullOrEmpty(qrCode) || selectedWorkstationId <= 0) return;
 
         isScanning = true;
         ClearScanMessage();
@@ -763,14 +844,18 @@
             ProductionStage? stage = useStationStage && currentWorkstation != null 
                 ? currentWorkstation.Stage 
                 : selectedStage;
-            
+
+            // Якщо немає авторизованого працівника — пишемо як "default"
+            string? scanUserId = workerContext != null ? null : "default";
+
             // Сканування з інформацією про працівника
             var result = await ScanningService.ScanQRCodeAsync(
                 qrCode, 
                 stage,
                 workerContext?.WorkerId,
                 workerContext?.WorkstationId,
-                workerContext?.SessionId);
+                workerContext?.SessionId,
+                scanUserId);
 
             if (result.Success)
             {
@@ -809,6 +894,7 @@
         finally
         {
             isScanning = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 

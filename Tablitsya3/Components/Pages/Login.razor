@@ -1,86 +1,164 @@
 ﻿@page "/login"
 @layout Tablitsya3.Components.Layout.EmptyLayout
 @attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.DataProtection
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
+@inject Microsoft.AspNetCore.DataProtection.IDataProtectionProvider DataProtection
 
-<PageTitle>Вхід — Tablitsya3</PageTitle>
+<PageTitle>Вхід — GTLab</PageTitle>
 
-<div class="login-card">
-    <div class="login-header">
-        <div class="logo">📊</div>
-        <h1>Tablitsya3</h1>
-        <p class="subtitle">Система керування виробництвом</p>
-    </div>
-
-    @if (!string.IsNullOrEmpty(ErrorMessage))
-    {
-        <div class="alert-error">⚠️ @ErrorMessage</div>
-    }
-
-    <form method="post" action="/account/login" class="login-form">
-        <AntiforgeryToken />
-        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
-
-        <div class="form-group">
-            <label for="username">Логін</label>
-            <input type="text" id="username" name="username" required autofocus autocomplete="username" placeholder="admin" value="@RememberedUsername" />
+<div class="login-page">
+    <div class="login-card">
+        <div class="login-header">
+            <div class="brand">
+                <svg width="180" height="64" viewBox="0 0 240 80" xmlns="http://www.w3.org/2000/svg" aria-label="GTLab">
+                    <defs>
+                        <linearGradient id="gtlabGrad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#667eea"/>
+                            <stop offset="100%" stop-color="#764ba2"/>
+                        </linearGradient>
+                    </defs>
+                    <rect x="4" y="4" width="232" height="72" rx="16" ry="16" fill="url(#gtlabGrad)"/>
+                    <text x="120" y="52" text-anchor="middle" fill="white"
+                          font-family="Inter, -apple-system, Segoe UI, sans-serif"
+                          font-size="34" font-weight="700" letter-spacing="1">GTLab</text>
+                </svg>
+            </div>
+            <p class="subtitle">Система керування виробництвом</p>
         </div>
 
-        <div class="form-group">
-            <label for="password">Пароль</label>
-            <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="••••••••" />
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="alert-error">⚠️ @ErrorMessage</div>
+        }
+
+        <form method="post" action="/account/login" class="login-form" autocomplete="off">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+
+            <div class="form-group">
+                <label for="username">Логін</label>
+                <input type="text" id="username" name="username" required autofocus autocomplete="off" placeholder="admin" value="@RememberedUsername" />
+            </div>
+
+            <div class="form-group">
+                <label for="password">Пароль</label>
+                <input type="password" id="password" name="password" required autocomplete="new-password" placeholder="••••••••" value="@RememberedPassword" />
+            </div>
+
+            <div class="form-check">
+                <input type="checkbox" id="rememberMe" name="rememberMe" value="true" checked="@IsRememberChecked" />
+                <label for="rememberMe">Запам'ятати мене</label>
+            </div>
+
+            <button type="submit" class="btn-login">Увійти</button>
+        </form>
+
+        <div class="login-footer">
+            <small>© @DateTime.Now.Year GTLab · Виробництво під контролем</small>
         </div>
-
-        <div class="form-check">
-            <input type="checkbox" id="rememberMe" name="rememberMe" value="true" checked="@IsRememberChecked" />
-            <label for="rememberMe">Запам'ятати мене</label>
-        </div>
-
-        <button type="submit" class="btn-login">Увійти</button>
-    </form>
-
-    <div class="login-footer">
-        <small>© @DateTime.Now.Year Tablitsya3</small>
     </div>
 </div>
 
 <style>
-    .login-card {
-        background: white;
-        border-radius: 16px;
-        padding: 40px;
-        max-width: 420px;
+    .login-page {
+        min-height: 100vh;
         width: 100%;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background:
+            radial-gradient(1200px 600px at -10% -20%, rgba(118, 75, 162, 0.55), transparent 60%),
+            radial-gradient(900px 500px at 110% 120%, rgba(102, 126, 234, 0.55), transparent 60%),
+            linear-gradient(135deg, #1a1a2e 0%, #2d1b4e 50%, #1a1a2e 100%);
+        position: relative;
+        overflow: hidden;
     }
-    .login-header { text-align: center; margin-bottom: 30px; }
-    .login-header .logo { font-size: 48px; margin-bottom: 10px; }
-    .login-header h1 { margin: 0; color: #333; font-size: 28px; }
-    .login-header .subtitle { color: #888; margin: 8px 0 0; font-size: 14px; }
+    .login-page::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image:
+            linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.7), transparent 70%);
+        pointer-events: none;
+    }
+    .login-card {
+        position: relative;
+        z-index: 1;
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: 20px;
+        padding: 40px 38px 30px;
+        max-width: 440px;
+        width: 100%;
+        box-shadow: 0 30px 80px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06);
+        backdrop-filter: blur(8px);
+    }
+    .login-header { text-align: center; margin-bottom: 28px; }
+    .login-header .brand { display: flex; justify-content: center; margin-bottom: 14px; }
+    .login-header .subtitle {
+        color: #6b7280;
+        margin: 0;
+        font-size: 14px;
+        letter-spacing: 0.2px;
+    }
     .alert-error {
         background: #fee;
         color: #c33;
         padding: 12px 16px;
-        border-radius: 8px;
+        border-radius: 10px;
         margin-bottom: 20px;
         border-left: 4px solid #c33;
         font-size: 14px;
     }
-    .login-form .form-group { margin-bottom: 18px; }
-    .login-form label { display: block; margin-bottom: 6px; font-weight: 600; color: #444; font-size: 14px; }
-    .login-form input {
+    .login-form .form-group { margin-bottom: 16px; }
+    .login-form label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+        color: #374151;
+        font-size: 13px;
+        letter-spacing: 0.2px;
+    }
+    .login-form input[type="text"],
+    .login-form input[type="password"] {
         width: 100%;
         padding: 12px 14px;
-        border: 2px solid #e0e0e0;
-        border-radius: 8px;
+        border: 2px solid #e5e7eb;
+        border-radius: 10px;
         font-size: 15px;
-        transition: border-color 0.2s;
+        background: #f9fafb;
+        transition: border-color .2s, background .2s, box-shadow .2s;
         box-sizing: border-box;
     }
-    .login-form input:focus {
+    .login-form input[type="text"]:focus,
+    .login-form input[type="password"]:focus {
         outline: none;
         border-color: #667eea;
+        background: #fff;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+    }
+    .form-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 0 20px;
+    }
+    .form-check input[type="checkbox"] {
+        width: 16px; height: 16px;
+        cursor: pointer; accent-color: #667eea;
+    }
+    .form-check label {
+        margin: 0;
+        font-weight: 500;
+        color: #4b5563;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
     }
     .btn-login {
         width: 100%;
@@ -88,20 +166,30 @@
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border: none;
-        border-radius: 8px;
+        border-radius: 10px;
         font-size: 16px;
         font-weight: 600;
+        letter-spacing: 0.3px;
         cursor: pointer;
-        transition: transform 0.15s, box-shadow 0.15s;
+        transition: transform .15s, box-shadow .15s, filter .15s;
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.35);
     }
     .btn-login:hover {
         transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        filter: brightness(1.05);
+        box-shadow: 0 12px 26px rgba(102, 126, 234, 0.45);
     }
-    .login-footer { text-align: center; margin-top: 24px; color: #999; }
-    .form-check { display: flex; align-items: center; gap: 8px; margin: 4px 0 18px; }
-    .form-check input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #667eea; }
-    .form-check label { margin: 0; font-weight: 500; color: #555; font-size: 14px; cursor: pointer; user-select: none; }
+    .btn-login:active { transform: translateY(0); }
+    .login-footer {
+        text-align: center;
+        margin-top: 22px;
+        color: #9ca3af;
+        font-size: 12px;
+    }
+
+    @@media (max-width: 480px) {
+        .login-card { padding: 28px 22px; border-radius: 16px; }
+    }
 </style>
 
 @code {
@@ -113,7 +201,23 @@
     private string RememberedUsername =>
         HttpContextAccessor.HttpContext?.Request.Cookies["remembered_user"] ?? string.Empty;
 
+    private string RememberedPassword
+    {
+        get
+        {
+            var encrypted = HttpContextAccessor.HttpContext?.Request.Cookies["remembered_pwd"];
+            if (string.IsNullOrEmpty(encrypted)) return string.Empty;
+            try
+            {
+                var protector = DataProtection.CreateProtector("Tablitsya3.RememberedPassword.v1");
+                return protector.Unprotect(encrypted);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+    }
+
     private bool IsRememberChecked => !string.IsNullOrEmpty(RememberedUsername);
 }
-git commit --allow-empty -m "test: auto-deploy"
-git push origin master

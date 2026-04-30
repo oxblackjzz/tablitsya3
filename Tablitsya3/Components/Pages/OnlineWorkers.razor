@@ -1,0 +1,128 @@
+﻿@page "/workers/online"
+@attribute [Authorize(Policy = AuthPolicies.OperatorOrAbove)]
+@using Tablitsya3.Data.Entities
+@using Tablitsya3.Models.Scanning
+@using Tablitsya3.Services
+@inject WorkerAuthService WorkerAuthService
+@implements IDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Онлайн працівники</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h3 class="mb-0">
+        <i class="bi bi-broadcast text-success me-2"></i>
+        Онлайн працівники
+        <span class="badge bg-success ms-2">@sessions.Count</span>
+    </h3>
+    <div class="text-muted small">
+        <i class="bi bi-arrow-repeat me-1"></i>Авто-оновлення кожні 3 сек.
+        <span class="ms-2">Останнє: @lastUpdated.ToString("HH:mm:ss")</span>
+    </div>
+</div>
+
+@if (!sessions.Any())
+{
+    <div class="alert alert-secondary text-center py-5">
+        <i class="bi bi-person-x" style="font-size:2rem;"></i>
+        <div class="mt-2">Зараз ніхто не працює на станціях</div>
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var s in sessions.OrderBy(x => x.Workstation.WorkshopNumber).ThenBy(x => x.Workstation.Name))
+        {
+            var stage = (ProductionStage)s.Workstation.ProductionStage;
+            var color = stage.GetColor();
+            var dur = (DateTime.UtcNow - s.Session.StartTime);
+            var idleMin = (int)((DateTime.UtcNow - (s.Session.LastScanTime ?? s.Session.StartTime)).TotalMinutes);
+            var idleClass = idleMin >= 10 ? "text-warning" : "text-muted";
+
+            <div class="col-12 col-md-6 col-xl-4">
+                <div class="card h-100 shadow-sm" style="border-left: 5px solid @color">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <div class="fw-semibold fs-5">
+                                    <i class="bi bi-person-fill me-1"></i>@s.Worker.DisplayName
+                                </div>
+                                <div class="text-muted small">@s.Worker.Position</div>
+                            </div>
+                            <span class="badge" style="background-color: @color">
+                                @stage.GetDisplayName()
+                            </span>
+                        </div>
+
+                        <hr class="my-2" />
+
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-muted"><i class="bi bi-pc-display me-1"></i>Станція</span>
+                            <strong>@s.Workstation.Name</strong>
+                        </div>
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-muted"><i class="bi bi-building me-1"></i>Цех</span>
+                            <span>№ @s.Workstation.WorkshopNumber</span>
+                        </div>
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-muted"><i class="bi bi-clock me-1"></i>На станції</span>
+                            <span>@FormatDuration(dur)</span>
+                        </div>
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-muted"><i class="bi bi-qr-code-scan me-1"></i>Сканувань</span>
+                            <span class="badge bg-primary">@s.Session.ScansCount</span>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted"><i class="bi bi-hourglass me-1"></i>Без активності</span>
+                            <span class="@idleClass">@idleMin хв</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<(WorkstationEntity Workstation, WorkerSessionEntity Session, WorkerEntity Worker)> sessions = new();
+    private DateTime lastUpdated = DateTime.Now;
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await ReloadAsync();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
+    }
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            sessions = await WorkerAuthService.GetAllActiveSessionsAsync();
+            lastUpdated = DateTime.Now;
+        }
+        catch
+        {
+            // ignore transient errors
+        }
+    }
+
+    private static string FormatDuration(TimeSpan d)
+    {
+        if (d.TotalHours >= 1) return $"{(int)d.TotalHours} год {d.Minutes} хв";
+        if (d.TotalMinutes >= 1) return $"{(int)d.TotalMinutes} хв";
+        return $"{(int)d.TotalSeconds} сек";
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}
