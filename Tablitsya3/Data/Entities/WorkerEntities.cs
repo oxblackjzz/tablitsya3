@@ -77,6 +77,9 @@ namespace Tablitsya3.Data.Entities
         [MaxLength(500)]
         public string? Notes { get; set; }
 
+        /// <summary>Опційне посилання на обліковий запис web-користувача (AppUserEntity).</summary>
+        public int? AppUserId { get; set; }
+
         // === Обчислювані поля ===
         [NotMapped]
         public List<ProductionStage> AllowedStagesList
@@ -393,6 +396,77 @@ namespace Tablitsya3.Data.Entities
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
 
         /// <summary>Дата оновлення</summary>
+        public DateTime? UpdatedDate { get; set; }
+    }
+
+    /// <summary>
+    /// Сканер, прив'язаний до станції. Одна станція може мати декілька сканерів
+    /// (наприклад, один промисловий + один-два ручних для роботи з браком).
+    /// </summary>
+    public class WorkstationScannerEntity
+    {
+        [Key]
+        public int Id { get; set; }
+
+        public int WorkstationId { get; set; }
+
+        /// <summary>Назва пристрою (для зручності)</summary>
+        [MaxLength(150)]
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Роль сканера на станції: 0 = промисловий (основний), 1 = ручний,
+        /// 2 = для браку, 3 = резервний.
+        /// </summary>
+        public int Role { get; set; } = 0;
+
+        /// <summary>Чи це основний сканер станції</summary>
+        public bool IsPrimary { get; set; } = false;
+
+        /// <summary>Чи увімкнено цей сканер</summary>
+        public bool IsEnabled { get; set; } = true;
+
+        /// <summary>Модель сканера (значення <see cref="Models.Scanning.ScannerModel"/>)</summary>
+        public int ScannerModel { get; set; } = 0;
+
+        /// <summary>Тип фізичного підключення (значення <see cref="Models.Scanning.ScannerConnectionType"/>)</summary>
+        public int ConnectionType { get; set; } = 0;
+
+        [MaxLength(100)]
+        public string? SerialNumber { get; set; }
+
+        [MaxLength(10)]
+        public string? UsbVid { get; set; }
+
+        [MaxLength(10)]
+        public string? UsbPid { get; set; }
+
+        [MaxLength(20)]
+        public string? ComPort { get; set; }
+
+        public int? BaudRate { get; set; }
+
+        [MaxLength(50)]
+        public string? BluetoothMac { get; set; }
+
+        [MaxLength(50)]
+        public string? IpAddress { get; set; }
+
+        public int? TcpPort { get; set; }
+
+        [MaxLength(500)]
+        public string? WebhookUrl { get; set; }
+
+        [MaxLength(20)]
+        public string? Prefix { get; set; }
+
+        [MaxLength(20)]
+        public string? Suffix { get; set; }
+
+        public string? ExtraJson { get; set; }
+
+        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+
         public DateTime? UpdatedDate { get; set; }
     }
 }

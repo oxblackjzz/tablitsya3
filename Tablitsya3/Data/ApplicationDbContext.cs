@@ -30,12 +30,16 @@ namespace Tablitsya3.Data
         // === Worker entities ===
         public DbSet<WorkerEntity> Workers { get; set; }
         public DbSet<WorkstationEntity> Workstations { get; set; }
+        public DbSet<WorkstationScannerEntity> WorkstationScanners { get; set; }
         public DbSet<WorkerSessionEntity> WorkerSessions { get; set; }
         public DbSet<WorkerKpiEntity> WorkerKpis { get; set; }
         public DbSet<DefectEntity> Defects { get; set; }
 
         // === Authentication / App users ===
         public DbSet<AppUserEntity> AppUsers { get; set; }
+        public DbSet<RoleEntity> Roles { get; set; }
+        public DbSet<RolePermissionEntity> RolePermissions { get; set; }
+        public DbSet<UserPermissionOverrideEntity> UserPermissionOverrides { get; set; }
 
         // ✅ АВТОМАТИЧНА КОНВЕРТАЦІЯ В UTC тільки при збереженні
         public override int SaveChanges()
@@ -186,6 +190,7 @@ namespace Tablitsya3.Data
                 entity.Property(e => e.ProductsCount).HasColumnName("products_count");
                 entity.Property(e => e.PartsCount).HasColumnName("parts_count");
                 entity.Property(e => e.TotalSquareMeters).HasColumnName("total_square_meters");
+                entity.Property(e => e.LdpColors).HasColumnName("ldp_colors");
                 entity.Property(e => e.IsActive).HasColumnName("is_active");
                 entity.Property(e => e.WorkshopNumber).HasColumnName("workshop_number");
                 entity.HasIndex(e => e.ProjectUuid).IsUnique();
@@ -211,6 +216,10 @@ namespace Tablitsya3.Data
                 entity.Property(e => e.CreatedDate).HasColumnName("created_date");
                 entity.Property(e => e.SourceFileName).HasColumnName("source_file_name");
                 entity.Property(e => e.OrderName).HasColumnName("order_name");
+                entity.Property(e => e.ProductName).HasColumnName("product_name");
+                entity.Property(e => e.Counterparty).HasColumnName("counterparty");
+                entity.Property(e => e.CounterpartyOrderNumber).HasColumnName("counterparty_order_number");
+                entity.Property(e => e.LdpColors).HasColumnName("ldp_colors");
                 entity.Property(e => e.IsCutCompleted).HasColumnName("is_cut_completed");
                 entity.Property(e => e.CutCompletedDate).HasColumnName("cut_completed_date");
                 entity.Property(e => e.IsEdgeBandingCompleted).HasColumnName("is_edge_banding_completed");
@@ -232,6 +241,8 @@ namespace Tablitsya3.Data
                 entity.HasIndex(e => new { e.ProjectExternalUuid, e.PartId, e.PartCounter }).IsUnique();
                 entity.HasIndex(e => e.SourceFileName);
                 entity.HasIndex(e => e.OrderName);
+                entity.HasIndex(e => e.Counterparty);
+                entity.HasIndex(e => e.CounterpartyOrderNumber);
                 entity.HasIndex(e => new { e.IsCutCompleted, e.IsEdgeBandingCompleted, e.IsDrillingCompleted, e.IsSortingCompleted, e.IsPackingCompleted });
             });
 
@@ -252,6 +263,9 @@ namespace Tablitsya3.Data
                 entity.Property(e => e.OperationCost).HasColumnName("operation_cost");
                 entity.Property(e => e.OrderDate).HasColumnName("order_date");
                 entity.Property(e => e.CreatedDate).HasColumnName("created_date");
+                entity.Property(e => e.Counterparty).HasColumnName("counterparty");
+                entity.Property(e => e.CounterpartyOrderNumber).HasColumnName("counterparty_order_number");
+                entity.Property(e => e.LdpColors).HasColumnName("ldp_colors");
                 entity.HasIndex(e => new { e.ProjectUuid, e.ProductId });
                 entity.HasIndex(e => e.Name);
             });
@@ -305,6 +319,7 @@ namespace Tablitsya3.Data
                 entity.Property(e => e.CreatedDate).HasColumnName("created_date");
                 entity.Property(e => e.UpdatedDate).HasColumnName("updated_date");
                 entity.Property(e => e.Notes).HasColumnName("notes");
+                entity.Property(e => e.AppUserId).HasColumnName("app_user_id");
                 entity.HasIndex(e => e.WorkerCode).IsUnique();
                 entity.HasIndex(e => e.WorkshopNumber);
                 entity.HasIndex(e => e.IsActive);
@@ -351,7 +366,35 @@ namespace Tablitsya3.Data
                 entity.HasIndex(e => e.IsActive);
             });
 
-            // WorkerSessionEntity
+            // WorkstationScannerEntity - окрема таблиця для прив'язки декількох сканерів до станції
+            modelBuilder.Entity<WorkstationScannerEntity>(entity =>
+            {
+                entity.ToTable("app_workstation_scanners");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.WorkstationId).HasColumnName("workstation_id");
+                entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(150);
+                entity.Property(e => e.Role).HasColumnName("role");
+                entity.Property(e => e.IsPrimary).HasColumnName("is_primary");
+                entity.Property(e => e.IsEnabled).HasColumnName("is_enabled");
+                entity.Property(e => e.ScannerModel).HasColumnName("scanner_model");
+                entity.Property(e => e.ConnectionType).HasColumnName("connection_type");
+                entity.Property(e => e.SerialNumber).HasColumnName("serial_number");
+                entity.Property(e => e.UsbVid).HasColumnName("usb_vid");
+                entity.Property(e => e.UsbPid).HasColumnName("usb_pid");
+                entity.Property(e => e.ComPort).HasColumnName("com_port");
+                entity.Property(e => e.BaudRate).HasColumnName("baud_rate");
+                entity.Property(e => e.BluetoothMac).HasColumnName("bluetooth_mac");
+                entity.Property(e => e.IpAddress).HasColumnName("ip_address");
+                entity.Property(e => e.TcpPort).HasColumnName("tcp_port");
+                entity.Property(e => e.WebhookUrl).HasColumnName("webhook_url");
+                entity.Property(e => e.Prefix).HasColumnName("prefix");
+                entity.Property(e => e.Suffix).HasColumnName("suffix");
+                entity.Property(e => e.ExtraJson).HasColumnName("extra_json");
+                entity.Property(e => e.CreatedDate).HasColumnName("created_date");
+                entity.Property(e => e.UpdatedDate).HasColumnName("updated_date");
+                entity.HasIndex(e => e.WorkstationId);
+            });
             modelBuilder.Entity<WorkerSessionEntity>(entity =>
             {
                 entity.ToTable("worker_sessions");
@@ -430,10 +473,49 @@ namespace Tablitsya3.Data
                 entity.Property(e => e.PasswordSalt).HasColumnName("password_salt").IsRequired();
                 entity.Property(e => e.DisplayName).HasColumnName("display_name").HasMaxLength(128);
                 entity.Property(e => e.Role).HasColumnName("role");
+                entity.Property(e => e.RoleId).HasColumnName("role_id");
+                entity.Property(e => e.WorkerId).HasColumnName("worker_id");
                 entity.Property(e => e.IsActive).HasColumnName("is_active");
                 entity.Property(e => e.CreatedAt).HasColumnName("created_at");
                 entity.Property(e => e.LastLoginAt).HasColumnName("last_login_at");
                 entity.HasIndex(e => e.Username).IsUnique();
+                entity.HasIndex(e => e.RoleId);
+            });
+
+            modelBuilder.Entity<RoleEntity>(entity =>
+            {
+                entity.ToTable("app_roles");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.Code).HasColumnName("code").HasMaxLength(64).IsRequired();
+                entity.Property(e => e.DisplayName).HasColumnName("display_name").HasMaxLength(128).IsRequired();
+                entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(500);
+                entity.Property(e => e.BadgeColor).HasColumnName("badge_color").HasMaxLength(16);
+                entity.Property(e => e.IsSystem).HasColumnName("is_system");
+                entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+                entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+                entity.HasIndex(e => e.Code).IsUnique();
+            });
+
+            modelBuilder.Entity<RolePermissionEntity>(entity =>
+            {
+                entity.ToTable("app_role_permissions");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.RoleId).HasColumnName("role_id");
+                entity.Property(e => e.PermissionKey).HasColumnName("permission_key").HasMaxLength(128).IsRequired();
+                entity.HasIndex(e => new { e.RoleId, e.PermissionKey }).IsUnique();
+            });
+
+            modelBuilder.Entity<UserPermissionOverrideEntity>(entity =>
+            {
+                entity.ToTable("app_user_permission_overrides");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.UserId).HasColumnName("user_id");
+                entity.Property(e => e.PermissionKey).HasColumnName("permission_key").HasMaxLength(128).IsRequired();
+                entity.Property(e => e.IsGranted).HasColumnName("is_granted");
+                entity.HasIndex(e => new { e.UserId, e.PermissionKey }).IsUnique();
             });
         }
     }

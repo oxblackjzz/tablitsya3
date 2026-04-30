@@ -5,6 +5,7 @@
 @using Tablitsya3.Models
 @using Tablitsya3.Services
 @inject AuthService Auth
+@inject RoleService Roles
 @inject IJSRuntime JS
 
 <PageTitle>Користувачі</PageTitle>
@@ -59,15 +60,25 @@
                 <tbody>
                     @foreach (var u in users)
                     {
-                        var role = (UserRole)u.Role;
+                        var dynRole = u.RoleId.HasValue ? rolesById.GetValueOrDefault(u.RoleId.Value) : null;
+                        var legacyRole = (UserRole)u.Role;
                         <tr>
                             <td>@u.Id</td>
                             <td><strong>@u.Username</strong></td>
                             <td>@u.DisplayName</td>
                             <td>
-                                <span class="badge" style="background-color: @role.GetBadgeColor()">
-                                    @role.GetDisplayName()
-                                </span>
+                                @if (dynRole != null)
+                                {
+                                    <span class="badge" style="background-color: @(dynRole.BadgeColor ?? "#6c757d")">
+                                        @dynRole.DisplayName
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge" style="background-color: @legacyRole.GetBadgeColor()">
+                                        @legacyRole.GetDisplayName()
+                                    </span>
+                                }
                             </td>
                             <td>
                                 @if (u.IsActive)
@@ -84,6 +95,9 @@
                             <td class="text-end">
                                 <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => ShowEditModal(u)">
                                     Редагувати
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-info" @onclick="() => ShowOverridesModal(u)">
+                                    Права
                                 </button>
                                 <button type="button" class="btn btn-sm btn-outline-warning" @onclick="() => ShowPasswordModal(u)">
                                     Пароль
@@ -127,10 +141,13 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Роль</label>
-                        <select class="form-select" @bind="formRole">
-                            @foreach (var r in Enum.GetValues<UserRole>())
+                        <select class="form-select" @bind="formRoleId">
+                            @if (rolesList != null)
                             {
-                                <option value="@r">@r.GetDisplayName()</option>
+                                @foreach (var r in rolesList)
+                                {
+                                    <option value="@r.Id">@r.DisplayName (@r.Code)</option>
+                                }
                             }
                         </select>
                     </div>
@@ -173,8 +190,66 @@
     </div>
 }
 
+@if (showOverridesModal && overridesUser != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        Індивідуальні права: <strong>@overridesUser.Username</strong>
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseOverridesModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">
+                        Поверх ролі можна <strong>дозволити</strong> (Grant) або <strong>заборонити</strong> (Deny) окремі дії.
+                        «За замовчуванням» — використовується дозвіл з ролі.
+                    </p>
+                    @foreach (var grp in Permissions.AllPages.GroupBy(p => p.Group))
+                    {
+                        <h6 class="mt-3 text-uppercase text-muted">@grp.Key</h6>
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30%">Розділ</th>
+                                    <th>Перегляд (роль: @(roleHasText("view"))) </th>
+                                    <th>Редагування</th>
+                                    <th>Видалення</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var pg in grp)
+                                {
+                                    <tr>
+                                        <td>@pg.DisplayName <small class="text-muted">(@pg.Key)</small></td>
+                                        <td>@OverrideSelect(pg.ViewKey, true)</td>
+                                        <td>
+                                            @if (pg.SupportsEdit) { @OverrideSelect(pg.EditKey, true) } else { <span class="text-muted">—</span> }
+                                        </td>
+                                        <td>
+                                            @if (pg.SupportsDelete) { @OverrideSelect(pg.DeleteKey, true) } else { <span class="text-muted">—</span> }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" @onclick="ClearOverrides">Скинути всі overrides</button>
+                    <button type="button" class="btn btn-secondary" @onclick="CloseOverridesModal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveOverrides">Зберегти</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<AppUserEntity>? users;
+    private List<RoleEntity>? rolesList;
+    private Dictionary<int, RoleEntity> rolesById = new();
     private string? errorMessage;
     private string? successMessage;
 
@@ -183,12 +258,18 @@
     private string formUsername = string.Empty;
     private string formPassword = string.Empty;
     private string formDisplayName = string.Empty;
-    private UserRole formRole = UserRole.Viewer;
+    private int formRoleId;
     private bool formIsActive = true;
 
     private bool showPasswordModal;
     private AppUserEntity? passwordUser;
     private string newPassword = string.Empty;
+
+    private bool showOverridesModal;
+    private AppUserEntity? overridesUser;
+    private HashSet<string> roleAllowed = new(StringComparer.OrdinalIgnoreCase);
+    // null = default, true = grant, false = deny
+    private Dictionary<string, bool?> overrideMap = new(StringComparer.OrdinalIgnoreCase);
 
     protected override async Task OnInitializedAsync()
     {
@@ -198,6 +279,8 @@
     private async Task Reload()
     {
         users = await Auth.GetAllAsync();
+        rolesList = await Roles.GetAllRolesAsync();
+        rolesById = rolesList.ToDictionary(r => r.Id);
     }
 
     private void ShowCreateModal()
@@ -206,7 +289,9 @@
         formUsername = string.Empty;
         formPassword = string.Empty;
         formDisplayName = string.Empty;
-        formRole = UserRole.Viewer;
+        formRoleId = rolesList?.FirstOrDefault(r => r.Code == "Viewer")?.Id
+                     ?? rolesList?.FirstOrDefault()?.Id
+                     ?? 0;
         formIsActive = true;
         showEditModal = true;
         StateHasChanged();
@@ -217,7 +302,10 @@
         editingUser = u;
         formUsername = u.Username;
         formDisplayName = u.DisplayName;
-        formRole = (UserRole)u.Role;
+        formRoleId = u.RoleId
+            ?? rolesList?.FirstOrDefault(r => r.Code == ((UserRole)u.Role).ToString())?.Id
+            ?? rolesList?.FirstOrDefault()?.Id
+            ?? 0;
         formIsActive = u.IsActive;
         showEditModal = true;
         StateHasChanged();
@@ -235,15 +323,16 @@
         {
             errorMessage = null;
             if (editingUser == null) return;
+            if (formRoleId <= 0) { errorMessage = "Виберіть роль"; return; }
 
             if (editingUser.Id == 0)
             {
-                await Auth.CreateAsync(formUsername, formPassword, formDisplayName, formRole, formIsActive);
+                await Auth.CreateAsync(formUsername, formPassword, formDisplayName, formRoleId, formIsActive);
                 successMessage = $"Користувача '{formUsername}' створено";
             }
             else
             {
-                await Auth.UpdateAsync(editingUser.Id, formDisplayName, formRole, formIsActive);
+                await Auth.UpdateAsync(editingUser.Id, formDisplayName, formRoleId, formIsActive);
                 successMessage = "Користувача оновлено";
             }
 
@@ -297,6 +386,111 @@
             await Auth.DeleteAsync(u.Id);
             successMessage = $"Користувача '{u.Username}' видалено";
             await Reload();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    // === Overrides ===
+
+    private async Task ShowOverridesModal(AppUserEntity u)
+    {
+        overridesUser = u;
+
+        roleAllowed = u.RoleId.HasValue
+            ? await Roles.GetRolePermissionsAsync(u.RoleId.Value)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var existing = await Roles.GetUserOverridesAsync(u.Id);
+        overrideMap = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var ov in existing)
+            overrideMap[ov.PermissionKey] = ov.IsGranted;
+
+        showOverridesModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseOverridesModal()
+    {
+        showOverridesModal = false;
+        overridesUser = null;
+        overrideMap.Clear();
+    }
+
+    private RenderFragment OverrideSelect(string key, bool _ignored) => builder =>
+    {
+        var current = overrideMap.TryGetValue(key, out var v) ? v : (bool?)null;
+        var roleHas = roleAllowed.Contains(key);
+        var hint = roleHas ? "✓ роль" : "✗ роль";
+
+        builder.OpenElement(0, "select");
+        builder.AddAttribute(1, "class", "form-select form-select-sm");
+        builder.AddAttribute(2, "value", current switch { true => "grant", false => "deny", _ => "default" });
+        builder.AddAttribute(3, "onchange",
+            Microsoft.AspNetCore.Components.EventCallback.Factory.CreateBinder<string>(
+                this,
+                value => SetOverride(key, value),
+                ""));
+
+        builder.OpenElement(10, "option");
+        builder.AddAttribute(11, "value", "default");
+        builder.AddContent(12, $"За замовч. ({hint})");
+        builder.CloseElement();
+
+        builder.OpenElement(20, "option");
+        builder.AddAttribute(21, "value", "grant");
+        builder.AddContent(22, "✅ Дозволити");
+        builder.CloseElement();
+
+        builder.OpenElement(30, "option");
+        builder.AddAttribute(31, "value", "deny");
+        builder.AddContent(32, "🚫 Заборонити");
+        builder.CloseElement();
+
+        builder.CloseElement();
+    };
+
+    private void SetOverride(string key, string value)
+    {
+        switch (value)
+        {
+            case "grant": overrideMap[key] = true; break;
+            case "deny": overrideMap[key] = false; break;
+            default: overrideMap.Remove(key); break;
+        }
+    }
+
+    private string roleHasText(string _) => "роль";
+
+    private async Task SaveOverrides()
+    {
+        if (overridesUser == null) return;
+        try
+        {
+            var dict = overrideMap
+                .Where(kv => kv.Value.HasValue)
+                .ToDictionary(kv => kv.Key, kv => kv.Value!.Value, StringComparer.OrdinalIgnoreCase);
+
+            await Roles.SetUserOverridesAsync(overridesUser.Id, dict);
+            successMessage = $"Права для '{overridesUser.Username}' збережено";
+            CloseOverridesModal();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task ClearOverrides()
+    {
+        if (overridesUser == null) return;
+        try
+        {
+            await Roles.ClearUserOverridesAsync(overridesUser.Id);
+            successMessage = $"Overrides для '{overridesUser.Username}' очищено";
+            CloseOverridesModal();
         }
         catch (Exception ex)
         {

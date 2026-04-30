@@ -14,45 +14,53 @@
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="nav flex-column">
         <AuthorizeView>
+        <HasPermission Key="@Permissions.Home.ViewKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
                 <i class="bi bi-speedometer2"></i> 
                 <span>Головна</span>
             </NavLink>
         </div>
+        </HasPermission>
 
+        <HasPermission Key="@Permissions.Planning.ViewKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="production-planning">
                 <i class="bi bi-bar-chart-fill"></i> 
                 <span>Діаграми</span>
             </NavLink>
         </div>
+        </HasPermission>
 
+        <HasPermission Key="@Permissions.Gantt.ViewKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="gantt-combined">
                 <i class="bi bi-bar-chart-steps"></i> 
                 <span>Об'єднана діаграма</span>
             </NavLink>
         </div>
+        </HasPermission>
 
+        <HasPermission Key="@Permissions.Orders.ViewKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="orders">
                 <i class="bi bi-table"></i> 
                 <span>Замовлення</span>
             </NavLink>
         </div>
+        </HasPermission>
         </AuthorizeView>
 
-        <AuthorizeView Policy="@AuthPolicies.ManagerOrAbove">
+        <HasPermission Key="@Permissions.BulkOrders.EditKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="bulk-order-entry">
                 <i class="bi bi-plus-square-fill"></i> 
                 <span>Нові замовлення</span>
             </NavLink>
         </div>
-        </AuthorizeView>
+        </HasPermission>
 
-        <AuthorizeView Policy="@AuthPolicies.OperatorOrAbove">
+        <HasPermission Key="@Permissions.Scanning.ViewKey">
         <!-- Секція сканування -->
         <div class="nav-item px-3 pt-2 pb-1">
             <small class="text-muted text-uppercase">Сканування</small>
@@ -64,90 +72,120 @@
                 <span>Сканування деталей</span>
             </NavLink>
         </div>
+        </HasPermission>
 
+        <HasPermission Key="@Permissions.ScanningImport.ViewKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="scanning/import">
                 <i class="bi bi-file-earmark-arrow-up"></i> 
                 <span>Імпорт проектів</span>
             </NavLink>
         </div>
-        </AuthorizeView>
+        </HasPermission>
 
-        <AuthorizeView Policy="@AuthPolicies.ManagerOrAbove">
+        <HasPermission Key="@Permissions.Scanning.ViewKey">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="parts-overview">
+                <i class="bi bi-table"></i>
+                <span>Повна таблиця деталей</span>
+            </NavLink>
+        </div>
+        </HasPermission>
+
+        <HasPermission Key="@Permissions.Workers.ViewKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="workers">
                 <i class="bi bi-people-fill"></i> 
                 <span>Працівники</span>
             </NavLink>
         </div>
+        </HasPermission>
 
+        <HasPermission Key="@Permissions.WorkerStats.ViewKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="workers/statistics">
                 <i class="bi bi-bar-chart-line"></i> 
                 <span>Статистика працівників</span>
             </NavLink>
         </div>
+        </HasPermission>
 
+        <HasPermission Key="@Permissions.Workstations.ViewKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="workstations">
                 <i class="bi bi-pc-display-horizontal"></i> 
                 <span>Станції</span>
             </NavLink>
         </div>
-        </AuthorizeView>
+        </HasPermission>
 
-        <AuthorizeView Policy="@AuthPolicies.OperatorOrAbove">
+        <HasPermission Key="@Permissions.Defects.ViewKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="defects">
                 <i class="bi bi-exclamation-triangle"></i> 
                 <span>Брак</span>
             </NavLink>
         </div>
-        </AuthorizeView>
+        </HasPermission>
 
-            <AuthorizeView Policy="@AuthPolicies.ManagerOrAbove">
-            <!-- Секція налаштувань -->
-            <div class="nav-item px-3 pt-2 pb-1">
-                <small class="text-muted text-uppercase">Система</small>
-            </div>
+        <HasPermission Key="@Permissions.Ai.ViewKey">
+        <!-- Секція налаштувань -->
+        <div class="nav-item px-3 pt-2 pb-1">
+            <small class="text-muted text-uppercase">Система</small>
+        </div>
 
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="ai-analytics">
-                    <i class="bi bi-robot"></i> 
-                    <span>AI Аналітика</span>
-                </NavLink>
-            </div>
-            </AuthorizeView>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="ai-analytics">
+                <i class="bi bi-robot"></i> 
+                <span>AI Аналітика</span>
+            </NavLink>
+        </div>
+        </HasPermission>
 
-            <AuthorizeView Policy="@AuthPolicies.AdminOnly">
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="workshop-settings">
+        <HasPermission Key="@Permissions.WorkshopSettings.ViewKey">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="workshop-settings">
                 <i class="bi bi-sliders"></i> 
                 <span>Налаштування</span>
             </NavLink>
         </div>
+        </HasPermission>
 
+        <HasPermission Key="@Permissions.Backup.ViewKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="backup-management">
                 <i class="bi bi-cloud-arrow-up-fill"></i> 
                 <span>Бекапи</span>
             </NavLink>
         </div>
+        </HasPermission>
 
+        <HasPermission Key="@Permissions.Logs.ViewKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="logs">
                 <i class="bi bi-file-text-fill"></i> 
                 <span>Журнал</span>
             </NavLink>
         </div>
+        </HasPermission>
 
+        <HasPermission Key="@Permissions.Users.ViewKey">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="users">
                 <i class="bi bi-person-badge"></i> 
                 <span>Користувачі</span>
             </NavLink>
         </div>
-        </AuthorizeView>
+        </HasPermission>
+
+        <HasPermission Key="@Permissions.Roles.ViewKey">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="roles">
+                <i class="bi bi-shield-lock"></i> 
+                <span>Ролі та права</span>
+            </NavLink>
+        </div>
+        </HasPermission>
     </nav>
 </div>
 

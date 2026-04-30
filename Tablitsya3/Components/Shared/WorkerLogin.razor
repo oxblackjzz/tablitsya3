@@ -185,8 +185,20 @@
 
         requiresAuth = workstation.RequiresWorkerAuth;
 
-        // Перевіряємо чи є активна сесія
-        currentSession = await WorkerAuthService.GetScanContextForWorkstationAsync(WorkstationId);
+        // Перевіряємо чи є активна сесія (відновлення після оновлення сторінки)
+        var existingSession = await WorkstationService.GetActiveSessionAsync(WorkstationId);
+        if (existingSession != null)
+        {
+            sessionToken = existingSession.SessionToken;
+            currentSession = await WorkerAuthService.ValidateSessionAsync(existingSession.SessionToken);
+
+            // Сповіщаємо батьківський компонент про вже існуючу авторизацію,
+            // щоб панель сканування одразу стала активною після перезавантаження.
+            if (currentSession != null)
+            {
+                await OnAuthenticated.InvokeAsync(currentSession);
+            }
+        }
 
         // Завантажуємо працівників для швидкого вибору
         if (requiresAuth && workstation != null)

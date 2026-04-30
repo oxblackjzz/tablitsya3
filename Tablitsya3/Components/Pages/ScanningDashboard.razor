@@ -11,6 +11,7 @@
 @inject LoggingService Logger
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
+@implements IAsyncDisposable
 @rendermode InteractiveServer
 
 <PageTitle>Сканування деталей</PageTitle>
@@ -152,22 +153,34 @@
                         }
                         else
                         {
-                            <!-- Поле QR-коду -->
+                            <!-- Поле QR-коду (без input — захоплюється глобально від сканера) -->
                             <div class="mb-3">
-                                <label class="form-label">QR-код деталі</label>
+                                <label class="form-label d-flex justify-content-between align-items-center">
+                                    <span>QR-код деталі</span>
+                                    <span class="badge bg-success" title="Сканер активний">
+                                        <i class="bi bi-broadcast"></i> Сканер активний
+                                    </span>
+                                </label>
                                 <div class="input-group input-group-lg">
                                     <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           @bind="qrCode" 
-                                           @bind:event="oninput"
-                                           @onkeypress="OnQRKeyPress"
-                                           placeholder="Відскануйте QR-код..."
-                                           @ref="qrInput" />
-                                    <button class="btn btn-outline-secondary" @onclick="ClearQR" title="Очистити">
+                                    <div class="form-control bg-light text-monospace" style="user-select: none;" aria-readonly="true">
+                                        @if (string.IsNullOrEmpty(qrCode))
+                                        {
+                                            <span class="text-muted">Очікування сканування...</span>
+                                        }
+                                        else
+                                        {
+                                            <strong>@qrCode</strong>
+                                        }
+                                    </div>
+                                    <button class="btn btn-outline-secondary" @onclick="ClearQR" title="Очистити" disabled="@string.IsNullOrEmpty(qrCode)">
                                         <i class="bi bi-x-lg"></i>
                                     </button>
                                 </div>
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Просто відскануйте код — рядок вводу відсутній, щоб уникнути випадкового скидання при промисловому скануванні.
+                                </small>
                             </div>
 
                             <!-- Автоматичний режим для станції -->
@@ -484,8 +497,7 @@
     private WorkstationEntity? currentWorkstation;
     private bool useStationStage = true;
 
-    // Сканування
-    private ElementReference qrInput;
+    // Сканування (inputless capture через scanner-capture.js)
     private string qrCode = "";
     private ProductionStage? selectedStage;
     private bool isScanning = false;
@@ -540,10 +552,54 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && CanScan)
+        if (firstRender)
         {
-            await FocusQRInput();
+            _scanCaptureRef = DotNetObjectReference.Create(this);
         }
+        await UpdateScannerCaptureStateAsync();
+    }
+
+    private DotNetObjectReference<ScanningDashboard>? _scanCaptureRef;
+    private bool _scannerActive = false;
+
+    private async Task UpdateScannerCaptureStateAsync()
+    {
+        try
+        {
+            if (CanScan && !_scannerActive && _scanCaptureRef != null)
+            {
+                await JSRuntime.InvokeVoidAsync("__scannerCapture.start", _scanCaptureRef, nameof(OnScanCapturedAsync), new { minLength = 3 });
+                _scannerActive = true;
+            }
+            else if (!CanScan && _scannerActive)
+            {
+                await JSRuntime.InvokeVoidAsync("__scannerCapture.stop");
+                _scannerActive = false;
+            }
+        }
+        catch { }
+    }
+
+    [JSInvokable]
+    public async Task OnScanCapturedAsync(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code) || !CanScan) return;
+        qrCode = code.Trim();
+        StateHasChanged();
+        await ProcessScan();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_scannerActive)
+            {
+                await JSRuntime.InvokeVoidAsync("__scannerCapture.stop");
+            }
+        }
+        catch { }
+        _scanCaptureRef?.Dispose();
     }
 
     private async Task OnWorkstationSelected()
@@ -631,12 +687,8 @@
 
     private async Task FocusQRInput()
     {
-        try
-        {
-            await Task.Delay(100);
-            await JSRuntime.InvokeVoidAsync("eval", "document.querySelector('input[placeholder*=\"QR\"]')?.focus()");
-        }
-        catch { }
+        // Inputless capture: no input field to focus.
+        await Task.CompletedTask;
     }
 
     private async Task LoadData()
@@ -692,10 +744,9 @@
 
     private async Task OnQRKeyPress(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !string.IsNullOrEmpty(qrCode))
-        {
-            await ProcessScan();
-        }
+        // Більше не використовується — введення з фізичного сканера
+        // обробляється через __scannerCapture / OnScanCapturedAsync.
+        await Task.CompletedTask;
     }
 
     private async Task ProcessScan()

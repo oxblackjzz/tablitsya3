@@ -95,6 +95,7 @@ namespace Tablitsya3.Services
                     ProductsCount = project.ProductsCount,
                     PartsCount = project.PartsCount,
                     TotalSquareMeters = project.TotalSquareMeters,
+                    LdpColors = project.LdpColors,
                     IsActive = true,
                     WorkshopNumber = workshopNumber
                 };
@@ -132,7 +133,10 @@ namespace Tablitsya3.Services
                         MaterialCost = product.MaterialCost,
                         OperationCost = product.OperationCost,
                         OrderDate = product.OrderDate,
-                        CreatedDate = DateTime.UtcNow
+                        CreatedDate = DateTime.UtcNow,
+                        Counterparty = product.Counterparty,
+                        CounterpartyOrderNumber = product.CounterpartyOrderNumber,
+                        LdpColors = product.LdpColors
                     };
 
                     allProductsToAdd.Add(productEntity);
@@ -769,6 +773,10 @@ namespace Tablitsya3.Services
                 CreatedDate = part.CreatedDate,
                 SourceFileName = part.SourceFileName,
                 OrderName = part.OrderName,
+                ProductName = part.ProductName,
+                Counterparty = part.Counterparty,
+                CounterpartyOrderNumber = part.CounterpartyOrderNumber,
+                LdpColors = part.LdpColors,
                 IsCutCompleted = part.IsCutCompleted,
                 CutCompletedDate = part.CutCompletedDate,
                 IsEdgeBandingCompleted = part.IsEdgeBandingCompleted,
@@ -808,6 +816,10 @@ namespace Tablitsya3.Services
                 CreatedDate = entity.CreatedDate,
                 SourceFileName = entity.SourceFileName,
                 OrderName = entity.OrderName,
+                ProductName = entity.ProductName,
+                Counterparty = entity.Counterparty,
+                CounterpartyOrderNumber = entity.CounterpartyOrderNumber,
+                LdpColors = entity.LdpColors,
                 IsCutCompleted = entity.IsCutCompleted,
                 CutCompletedDate = entity.CutCompletedDate,
                 IsEdgeBandingCompleted = entity.IsEdgeBandingCompleted,

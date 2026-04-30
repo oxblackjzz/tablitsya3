@@ -103,6 +103,10 @@ namespace Tablitsya3.Services
             if (existing != null)
                 throw new InvalidOperationException($"Користувач '{username}' вже існує");
 
+            // Намагаємося прив'язати динамічну роль за кодом enum (Admin/Manager/...)
+            var roleCode = role.ToString();
+            var dynamicRole = await _db.Roles.FirstOrDefaultAsync(r => r.Code == roleCode);
+
             var (hash, salt) = HashPassword(password);
             var user = new AppUserEntity
             {
@@ -111,6 +115,7 @@ namespace Tablitsya3.Services
                 PasswordSalt = salt,
                 DisplayName = string.IsNullOrWhiteSpace(displayName) ? username : displayName.Trim(),
                 Role = (int)role,
+                RoleId = dynamicRole?.Id,
                 IsActive = isActive,
                 CreatedAt = DateTime.UtcNow,
             };
@@ -120,11 +125,65 @@ namespace Tablitsya3.Services
             return user;
         }
 
+        public async Task<AppUserEntity> CreateAsync(string username, string password, string displayName, int roleId, bool isActive = true)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+                throw new ArgumentException("Введіть логін");
+            if (string.IsNullOrEmpty(password) || password.Length < 4)
+                throw new ArgumentException("Пароль має містити щонайменше 4 символи");
+
+            username = username.Trim().ToLowerInvariant();
+
+            var existing = await GetByUsernameAsync(username);
+            if (existing != null)
+                throw new InvalidOperationException($"Користувач '{username}' вже існує");
+
+            var role = await _db.Roles.FindAsync(roleId)
+                ?? throw new InvalidOperationException("Роль не знайдена");
+
+            // legacy-зворотна сумісність: якщо код збігається з UserRole — ставимо його в Role
+            int legacyRole = Enum.TryParse<UserRole>(role.Code, out var parsed) ? (int)parsed : (int)UserRole.Viewer;
+
+            var (hash, salt) = HashPassword(password);
+            var user = new AppUserEntity
+            {
+                Username = username,
+                PasswordHash = hash,
+                PasswordSalt = salt,
+                DisplayName = string.IsNullOrWhiteSpace(displayName) ? username : displayName.Trim(),
+                Role = legacyRole,
+                RoleId = role.Id,
+                IsActive = isActive,
+                CreatedAt = DateTime.UtcNow,
+            };
+            _db.AppUsers.Add(user);
+            await _db.SaveChangesAsync();
+            _logger.LogInformation("Created user {Username} with role {Role}", username, role.Code);
+            return user;
+        }
+
         public async Task UpdateAsync(int id, string displayName, UserRole role, bool isActive)
         {
             var user = await _db.AppUsers.FindAsync(id) ?? throw new InvalidOperationException("Користувача не знайдено");
             user.DisplayName = displayName?.Trim() ?? user.Username;
             user.Role = (int)role;
+
+            var roleCode = role.ToString();
+            var dynamicRole = await _db.Roles.FirstOrDefaultAsync(r => r.Code == roleCode);
+            if (dynamicRole != null) user.RoleId = dynamicRole.Id;
+
+            user.IsActive = isActive;
+            await _db.SaveChangesAsync();
+        }
+
+        public async Task UpdateAsync(int id, string displayName, int roleId, bool isActive)
+        {
+            var user = await _db.AppUsers.FindAsync(id) ?? throw new InvalidOperationException("Користувача не знайдено");
+            var role = await _db.Roles.FindAsync(roleId) ?? throw new InvalidOperationException("Роль не знайдена");
+
+            user.DisplayName = displayName?.Trim() ?? user.Username;
+            user.RoleId = role.Id;
+            if (Enum.TryParse<UserRole>(role.Code, out var parsed)) user.Role = (int)parsed;
             user.IsActive = isActive;
             await _db.SaveChangesAsync();
         }

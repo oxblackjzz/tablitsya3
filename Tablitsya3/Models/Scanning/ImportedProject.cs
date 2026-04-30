@@ -39,7 +39,10 @@
         
         /// <summary>Загальна площа в м²</summary>
         public double TotalSquareMeters { get; set; }
-        
+
+        /// <summary>Кольори ЛДСП у проєкті, через кому</summary>
+        public string LdpColors { get; set; } = string.Empty;
+
         /// <summary>Товари з проекту</summary>
         public List<ImportedProduct> Products { get; set; } = new();
     }
@@ -77,7 +80,19 @@
         
         /// <summary>Дата замовлення (з XML)</summary>
         public DateTime? OrderDate { get; set; }
-        
+
+        /// <summary>Назва виробу (good code)</summary>
+        public string ProductName { get; set; } = string.Empty;
+
+        /// <summary>Контрагент</summary>
+        public string Counterparty { get; set; } = string.Empty;
+
+        /// <summary>Номер замовлення контрагента</summary>
+        public string CounterpartyOrderNumber { get; set; } = string.Empty;
+
+        /// <summary>Кольори ЛДСП у виробі (CSV)</summary>
+        public string LdpColors { get; set; } = string.Empty;
+
         /// <summary>Деталі товару</summary>
         public List<Part> Parts { get; set; } = new();
         

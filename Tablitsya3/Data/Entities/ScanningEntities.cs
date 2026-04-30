@@ -39,6 +39,10 @@ namespace Tablitsya3.Data.Entities
         public int PartsCount { get; set; }
         public double TotalSquareMeters { get; set; }
 
+        /// <summary>Кольори ЛДСП у проєкті через кому</summary>
+        [MaxLength(500)]
+        public string LdpColors { get; set; } = string.Empty;
+
         /// <summary>Чи активний проект</summary>
         public bool IsActive { get; set; } = true;
         
@@ -84,6 +88,22 @@ namespace Tablitsya3.Data.Entities
 
         [MaxLength(255)]
         public string OrderName { get; set; } = string.Empty;
+
+        /// <summary>Назва виробу (good.code)</summary>
+        [MaxLength(255)]
+        public string ProductName { get; set; } = string.Empty;
+
+        /// <summary>Контрагент (з good.name)</summary>
+        [MaxLength(255)]
+        public string Counterparty { get; set; } = string.Empty;
+
+        /// <summary>Номер замовлення контрагента (з good.name)</summary>
+        [MaxLength(100)]
+        public string CounterpartyOrderNumber { get; set; } = string.Empty;
+
+        /// <summary>Кольори ЛДСП виробу через кому</summary>
+        [MaxLength(500)]
+        public string LdpColors { get; set; } = string.Empty;
 
         // === Статуси етапів ===
         public bool IsCutCompleted { get; set; }
@@ -208,5 +228,17 @@ namespace Tablitsya3.Data.Entities
         public DateTime? OrderDate { get; set; }
 
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+
+        /// <summary>Контрагент (виділений з good.name)</summary>
+        [MaxLength(255)]
+        public string Counterparty { get; set; } = string.Empty;
+
+        /// <summary>Номер замовлення контрагента (виділений з good.name)</summary>
+        [MaxLength(100)]
+        public string CounterpartyOrderNumber { get; set; } = string.Empty;
+
+        /// <summary>Кольори ЛДСП виробу через кому</summary>
+        [MaxLength(500)]
+        public string LdpColors { get; set; } = string.Empty;
     }
 }

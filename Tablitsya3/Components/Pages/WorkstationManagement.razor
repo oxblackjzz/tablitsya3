@@ -6,6 +6,7 @@
 @inject WorkstationService WorkstationService
 @inject WorkerAuthService WorkerAuthService
 @inject WorkshopConfigService WorkshopConfigService
+@inject WorkstationScannerService ScannerService
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
@@ -218,6 +219,10 @@
                                                             @onclick="() => ShowEditStationModal(station)" title="Редагувати">
                                                         <i class="bi bi-pencil"></i>
                                                     </button>
+                                                    <button class="btn btn-outline-info"
+                                                            @onclick="() => ShowScannersModal(station)" title="Сканери">
+                                                        <i class="bi bi-upc-scan"></i>
+                                                    </button>
                                                     @if (station.IsActive)
                                                     {
                                                         <button class="btn btn-outline-warning" 
@@ -332,151 +337,14 @@
 
                         <div class="col-12">
                             <hr class="my-2" />
-                            <h6 class="mb-2"><i class="bi bi-upc-scan me-1"></i>Підключення сканера штрих-кодів</h6>
-                        </div>
-
-                        <div class="col-md-6">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="scannerEnabled"
-                                       @bind="editingStation.ScannerEnabled" />
-                                <label class="form-check-label" for="scannerEnabled">
-                                    Підключити сканер до станції
-                                </label>
+                            <div class="alert alert-info py-2 mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Сканери підключаються через окрему кнопку <strong>«Сканери»</strong> у списку станцій.
+                                Можна додати декілька сканерів на одну станцію (промисловий + ручні).
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Назва пристрою</label>
-                            <input type="text" class="form-control" @bind="editingStation.ScannerDeviceName"
-                                   placeholder="Напр. FS-40 на робочому місці" disabled="@(!editingStation.ScannerEnabled)" />
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label">Модель сканера</label>
-                            <select class="form-select" @bind="editingStation.ScannerModel" disabled="@(!editingStation.ScannerEnabled)">
-                                @foreach (ScannerModel m in Enum.GetValues<ScannerModel>())
-                                {
-                                    <option value="@((int)m)">@m.GetDisplayName()</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Тип підключення</label>
-                            <select class="form-select" @bind="editingStation.ScannerConnectionType" disabled="@(!editingStation.ScannerEnabled)">
-                                @foreach (ScannerConnectionType c in Enum.GetValues<ScannerConnectionType>())
-                                {
-                                    <option value="@((int)c)">@c.GetDisplayName()</option>
-                                }
-                            </select>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label">Серійний номер</label>
-                            <input type="text" class="form-control" @bind="editingStation.ScannerSerialNumber"
-                                   placeholder="S/N" disabled="@(!editingStation.ScannerEnabled)" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Префікс</label>
-                            <input type="text" class="form-control" @bind="editingStation.ScannerPrefix"
-                                   placeholder="(опц.)" disabled="@(!editingStation.ScannerEnabled)" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Суфікс</label>
-                            <input type="text" class="form-control" @bind="editingStation.ScannerSuffix"
-                                   placeholder="\r\n" disabled="@(!editingStation.ScannerEnabled)" />
-                        </div>
-
-                        @{
-                            var connType = (ScannerConnectionType)editingStation.ScannerConnectionType;
-                            var disableScn = !editingStation.ScannerEnabled;
-                        }
-
-                        @if (editingStation.ScannerEnabled && (connType == ScannerConnectionType.UsbHid || connType == ScannerConnectionType.WebHid))
-                        {
-                            <div class="col-md-6">
-                                <label class="form-label">USB VID (hex)</label>
-                                <input type="text" class="form-control" @bind="editingStation.ScannerUsbVid"
-                                       placeholder="0x1EAB" />
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">USB PID (hex)</label>
-                                <input type="text" class="form-control" @bind="editingStation.ScannerUsbPid"
-                                       placeholder="0x1D06" />
-                            </div>
-                        }
-
-                        @if (editingStation.ScannerEnabled && (connType == ScannerConnectionType.UsbSerial || connType == ScannerConnectionType.WebSerial))
-                        {
-                            <div class="col-md-6">
-                                <label class="form-label">COM-порт</label>
-                                <input type="text" class="form-control" @bind="editingStation.ScannerComPort"
-                                       placeholder="COM3 або /dev/ttyUSB0" />
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Baud rate</label>
-                                <input type="number" class="form-control" @bind="editingStation.ScannerBaudRate"
-                                       placeholder="9600" />
-                            </div>
-                        }
-
-                        @if (editingStation.ScannerEnabled && (connType == ScannerConnectionType.BluetoothHid || connType == ScannerConnectionType.BluetoothSpp))
-                        {
-                            <div class="col-12">
-                                <label class="form-label">MAC-адреса</label>
-                                <input type="text" class="form-control" @bind="editingStation.ScannerBluetoothMac"
-                                       placeholder="AA:BB:CC:DD:EE:FF" />
-                            </div>
-                        }
-
-                        @if (editingStation.ScannerEnabled && connType == ScannerConnectionType.WifiTcp)
-                        {
-                            <div class="col-md-8">
-                                <label class="form-label">IP-адреса сканера</label>
-                                <input type="text" class="form-control" @bind="editingStation.ScannerIpAddress"
-                                       placeholder="192.168.1.50" />
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">TCP-порт</label>
-                                <input type="number" class="form-control" @bind="editingStation.ScannerTcpPort"
-                                       placeholder="5000" />
-                            </div>
-                        }
-
-                        @if (editingStation.ScannerEnabled && connType == ScannerConnectionType.NetworkHttp)
-                        {
-                            <div class="col-12">
-                                <label class="form-label">Webhook URL</label>
-                                <input type="text" class="form-control" @bind="editingStation.ScannerWebhookUrl"
-                                       placeholder="https://server/api/scan" />
-                            </div>
-                        }
-
-                        @if (editingStation.ScannerEnabled)
-                        {
-                            <div class="col-12">
-                                <label class="form-label">Додаткові параметри (JSON, опц.)</label>
-                                <textarea class="form-control" rows="2" @bind="editingStation.ScannerExtraJson"
-                                          placeholder='{"timeout":1000}'></textarea>
-                            </div>
-                            @if ((ScannerModel)editingStation.ScannerModel == ScannerModel.NewlandFS40)
-                            {
-                                <div class="col-12">
-                                    <small class="text-muted">
-                                        <i class="bi bi-info-circle me-1"></i>Для Newland FS-40 рекомендовано USB HID або Serial з baud rate 9600. 
-                                        Підтримується presentation-режим зчитування.
-                                    </small>
-                                </div>
-                            }
-                            else if ((ScannerModel)editingStation.ScannerModel == ScannerModel.Generic)
-                            {
-                                <div class="col-12">
-                                    <small class="text-muted">
-                                        <i class="bi bi-info-circle me-1"></i>Звичайний ручний сканер працює як HID-клавіатура — 
-                                        достатньо обрати «Ручний / HID-клавіатура».
-                                    </small>
-                                </div>
-                            }
-                        }
                     </div>
+
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="CloseStationModal">Скасувати</button>
@@ -520,6 +388,241 @@
                     <button type="button" class="btn btn-primary" @onclick="CreateDefaultStations">
                         Створити
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Модальне вікно керування сканерами станції -->
+@if (showScannersModal && scannersStation != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-upc-scan me-2"></i>Сканери станції: <strong>@scannersStation.Name</strong>
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseScannersModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Можна додати декілька сканерів: один промисловий (основний) та додаткові ручні для роботи з браком.
+                    </div>
+
+                    @if (stationScanners.Count == 0)
+                    {
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox display-6 d-block mb-2"></i>
+                            Сканерів немає. Додайте перший сканер для цієї станції.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th></th>
+                                        <th>Назва</th>
+                                        <th>Роль</th>
+                                        <th>Модель</th>
+                                        <th>Підключення</th>
+                                        <th>Статус</th>
+                                        <th>Дії</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var sc in stationScanners)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (sc.IsPrimary)
+                                                {
+                                                    <span class="badge bg-warning text-dark" title="Основний сканер">
+                                                        <i class="bi bi-star-fill"></i>
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td><strong>@sc.Name</strong></td>
+                                            <td>@(((WorkstationScannerRole)sc.Role).GetDisplayName())</td>
+                                            <td>@(((ScannerModel)sc.ScannerModel).GetDisplayName())</td>
+                                            <td>@(((ScannerConnectionType)sc.ConnectionType).GetDisplayName())</td>
+                                            <td>
+                                                @if (sc.IsEnabled)
+                                                {
+                                                    <span class="badge bg-success">Увімкнено</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Вимкнено</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    @if (!sc.IsPrimary)
+                                                    {
+                                                        <button class="btn btn-outline-warning" title="Зробити основним"
+                                                                @onclick="() => MakePrimaryScanner(sc.Id)">
+                                                            <i class="bi bi-star"></i>
+                                                        </button>
+                                                    }
+                                                    <button class="btn btn-outline-primary" title="Редагувати"
+                                                            @onclick="() => ShowScannerEditor(sc)">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-danger" title="Видалити"
+                                                            @onclick="() => DeleteScanner(sc.Id)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
+                    @if (editingScanner != null)
+                    {
+                        <hr />
+                        <h6 class="mb-3">
+                            @(editingScanner.Id == 0 ? "Додати сканер" : $"Редагувати: {editingScanner.Name}")
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Назва пристрою *</label>
+                                <input type="text" class="form-control" @bind="editingScanner.Name"
+                                       placeholder="Напр. FS-40 на робочому місці" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Роль</label>
+                                <select class="form-select" @bind="editingScanner.Role">
+                                    @foreach (WorkstationScannerRole r in Enum.GetValues<WorkstationScannerRole>())
+                                    {
+                                        <option value="@((int)r)">@r.GetDisplayName()</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">&nbsp;</label>
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" id="scIsEnabled"
+                                           @bind="editingScanner.IsEnabled" />
+                                    <label class="form-check-label" for="scIsEnabled">Увімкнено</label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Модель</label>
+                                <select class="form-select" @bind="editingScanner.ScannerModel">
+                                    @foreach (ScannerModel m in Enum.GetValues<ScannerModel>())
+                                    {
+                                        <option value="@((int)m)">@m.GetDisplayName()</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Тип підключення</label>
+                                <select class="form-select" @bind="editingScanner.ConnectionType">
+                                    @foreach (ScannerConnectionType c in Enum.GetValues<ScannerConnectionType>())
+                                    {
+                                        <option value="@((int)c)">@c.GetDisplayName()</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Серійний номер</label>
+                                <input type="text" class="form-control" @bind="editingScanner.SerialNumber" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Префікс</label>
+                                <input type="text" class="form-control" @bind="editingScanner.Prefix" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Суфікс</label>
+                                <input type="text" class="form-control" @bind="editingScanner.Suffix" placeholder="\r\n" />
+                            </div>
+
+                            @{
+                                var ec = (ScannerConnectionType)editingScanner.ConnectionType;
+                            }
+                            @if (ec == ScannerConnectionType.UsbHid || ec == ScannerConnectionType.WebHid)
+                            {
+                                <div class="col-md-6">
+                                    <label class="form-label">USB VID (hex)</label>
+                                    <input type="text" class="form-control" @bind="editingScanner.UsbVid" placeholder="0x1EAB" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">USB PID (hex)</label>
+                                    <input type="text" class="form-control" @bind="editingScanner.UsbPid" placeholder="0x1D06" />
+                                </div>
+                            }
+                            @if (ec == ScannerConnectionType.UsbSerial || ec == ScannerConnectionType.WebSerial)
+                            {
+                                <div class="col-md-6">
+                                    <label class="form-label">COM-порт</label>
+                                    <input type="text" class="form-control" @bind="editingScanner.ComPort" placeholder="COM3" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Baud rate</label>
+                                    <input type="number" class="form-control" @bind="editingScanner.BaudRate" placeholder="9600" />
+                                </div>
+                            }
+                            @if (ec == ScannerConnectionType.BluetoothHid || ec == ScannerConnectionType.BluetoothSpp)
+                            {
+                                <div class="col-12">
+                                    <label class="form-label">MAC-адреса</label>
+                                    <input type="text" class="form-control" @bind="editingScanner.BluetoothMac" placeholder="AA:BB:CC:DD:EE:FF" />
+                                </div>
+                            }
+                            @if (ec == ScannerConnectionType.WifiTcp)
+                            {
+                                <div class="col-md-8">
+                                    <label class="form-label">IP-адреса</label>
+                                    <input type="text" class="form-control" @bind="editingScanner.IpAddress" placeholder="192.168.1.50" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">TCP-порт</label>
+                                    <input type="number" class="form-control" @bind="editingScanner.TcpPort" />
+                                </div>
+                            }
+                            @if (ec == ScannerConnectionType.NetworkHttp)
+                            {
+                                <div class="col-12">
+                                    <label class="form-label">Webhook URL</label>
+                                    <input type="text" class="form-control" @bind="editingScanner.WebhookUrl" />
+                                </div>
+                            }
+
+                            <div class="col-12">
+                                <label class="form-label">Додаткові параметри (JSON, опц.)</label>
+                                <textarea class="form-control" rows="2" @bind="editingScanner.ExtraJson"
+                                          placeholder='{"timeout":1000}'></textarea>
+                            </div>
+
+                            <div class="col-12 d-flex gap-2 justify-content-end">
+                                <button class="btn btn-secondary" @onclick="CancelScannerEdit">Скасувати</button>
+                                <button class="btn btn-primary" @onclick="SaveScanner" disabled="@isSavingScanner">
+                                    @if (isSavingScanner) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                    <i class="bi bi-save me-1"></i>Зберегти
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    @if (editingScanner == null)
+                    {
+                        <button class="btn btn-success" @onclick="AddNewScanner">
+                            <i class="bi bi-plus-lg me-1"></i>Додати сканер
+                        </button>
+                    }
+                    <button class="btn btn-secondary" @onclick="CloseScannersModal">Закрити</button>
                 </div>
             </div>
         </div>
@@ -777,11 +880,151 @@
         alertMessage = message;
         alertType = type;
         StateHasChanged();
-        
+
         _ = Task.Delay(4000).ContinueWith(_ =>
         {
             alertMessage = string.Empty;
             InvokeAsync(StateHasChanged);
         });
+    }
+
+    // === Керування сканерами станції ===
+    private bool showScannersModal = false;
+    private WorkstationEntity? scannersStation;
+    private List<WorkstationScannerEntity> stationScanners = new();
+    private WorkstationScannerEntity? editingScanner;
+    private bool isSavingScanner = false;
+
+    private async Task ShowScannersModal(WorkstationEntity station)
+    {
+        scannersStation = station;
+        editingScanner = null;
+        showScannersModal = true;
+        await ReloadScanners();
+    }
+
+    private void CloseScannersModal()
+    {
+        showScannersModal = false;
+        scannersStation = null;
+        editingScanner = null;
+        stationScanners = new();
+    }
+
+    private async Task ReloadScanners()
+    {
+        if (scannersStation == null) return;
+        try
+        {
+            stationScanners = await ScannerService.GetByWorkstationAsync(scannersStation.Id);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка завантаження сканерів: {ex.Message}", "error");
+        }
+    }
+
+    private void AddNewScanner()
+    {
+        if (scannersStation == null) return;
+        editingScanner = new WorkstationScannerEntity
+        {
+            WorkstationId = scannersStation.Id,
+            Name = string.Empty,
+            IsEnabled = true,
+            Role = (int)WorkstationScannerRole.Industrial
+        };
+    }
+
+    private void ShowScannerEditor(WorkstationScannerEntity sc)
+    {
+        editingScanner = new WorkstationScannerEntity
+        {
+            Id = sc.Id,
+            WorkstationId = sc.WorkstationId,
+            Name = sc.Name,
+            Role = sc.Role,
+            IsPrimary = sc.IsPrimary,
+            IsEnabled = sc.IsEnabled,
+            ScannerModel = sc.ScannerModel,
+            ConnectionType = sc.ConnectionType,
+            SerialNumber = sc.SerialNumber,
+            UsbVid = sc.UsbVid,
+            UsbPid = sc.UsbPid,
+            ComPort = sc.ComPort,
+            BaudRate = sc.BaudRate,
+            BluetoothMac = sc.BluetoothMac,
+            IpAddress = sc.IpAddress,
+            TcpPort = sc.TcpPort,
+            WebhookUrl = sc.WebhookUrl,
+            Prefix = sc.Prefix,
+            Suffix = sc.Suffix,
+            ExtraJson = sc.ExtraJson
+        };
+    }
+
+    private void CancelScannerEdit() => editingScanner = null;
+
+    private async Task SaveScanner()
+    {
+        if (editingScanner == null) return;
+        if (string.IsNullOrWhiteSpace(editingScanner.Name))
+        {
+            ShowAlert("Вкажіть назву сканера", "error");
+            return;
+        }
+        isSavingScanner = true;
+        try
+        {
+            if (editingScanner.Id == 0)
+            {
+                await ScannerService.CreateAsync(editingScanner);
+                ShowAlert("Сканер додано", "success");
+            }
+            else
+            {
+                await ScannerService.UpdateAsync(editingScanner);
+                ShowAlert("Сканер оновлено", "success");
+            }
+            editingScanner = null;
+            await ReloadScanners();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка: {ex.Message}", "error");
+        }
+        finally
+        {
+            isSavingScanner = false;
+        }
+    }
+
+    private async Task DeleteScanner(int id)
+    {
+        var ok = await JSRuntime.InvokeAsync<bool>("confirm", "Видалити цей сканер?");
+        if (!ok) return;
+        try
+        {
+            await ScannerService.DeleteAsync(id);
+            await ReloadScanners();
+            ShowAlert("Сканер видалено", "success");
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка: {ex.Message}", "error");
+        }
+    }
+
+    private async Task MakePrimaryScanner(int id)
+    {
+        try
+        {
+            await ScannerService.SetPrimaryAsync(id);
+            await ReloadScanners();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Помилка: {ex.Message}", "error");
+        }
     }
 }

@@ -1,0 +1,336 @@
+﻿@page "/roles"
+@attribute [Authorize(Policy = AuthPolicies.AdminOnly)]
+@rendermode InteractiveServer
+@using Tablitsya3.Data.Entities
+@using Tablitsya3.Models
+@using Tablitsya3.Services
+@inject RoleService Roles
+@inject IJSRuntime JS
+
+<PageTitle>Ролі та права</PageTitle>
+
+<div class="container-fluid p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>🛡️ Ролі та права доступу</h2>
+        <button class="btn btn-primary" @onclick="ShowCreateModal">
+            <i class="bi bi-plus-lg"></i> Нова роль
+        </button>
+    </div>
+
+    @if (errorMessage != null)
+    {
+        <div class="alert alert-danger alert-dismissible">
+            @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+        </div>
+    }
+    @if (successMessage != null)
+    {
+        <div class="alert alert-success alert-dismissible">
+            @successMessage
+            <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+        </div>
+    }
+
+    <div class="row">
+        <div class="col-md-3">
+            <div class="list-group">
+                @if (rolesList != null)
+                {
+                    @foreach (var r in rolesList)
+                    {
+                        <button type="button"
+                                class="list-group-item list-group-item-action @(selected?.Id == r.Id ? "active" : "")"
+                                @onclick="() => SelectRole(r)">
+                            <div class="d-flex w-100 justify-content-between align-items-center">
+                                <strong>@r.DisplayName</strong>
+                                <span class="badge" style="background-color: @(r.BadgeColor ?? "#6c757d")">@r.Code</span>
+                            </div>
+                            @if (r.IsSystem)
+                            {
+                                <small class="text-muted">системна</small>
+                            }
+                        </button>
+                    }
+                }
+            </div>
+        </div>
+        <div class="col-md-9">
+            @if (selected == null)
+            {
+                <div class="alert alert-info">Виберіть роль зліва, щоб редагувати її права.</div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-0">@selected.DisplayName <small class="text-muted">(@selected.Code)</small></h5>
+                            @if (!string.IsNullOrEmpty(selected.Description))
+                            {
+                                <small class="text-muted">@selected.Description</small>
+                            }
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowEditModal">
+                                Редагувати
+                            </button>
+                            @if (!selected.IsSystem)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="DeleteRole">
+                                    Видалити
+                                </button>
+                            }
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-sm btn-success" @onclick="SavePermissions">
+                                💾 Зберегти права
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="SelectAll">Вибрати все</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ClearAll">Зняти все</button>
+                        </div>
+
+                        @foreach (var grp in Permissions.AllPages.GroupBy(p => p.Group))
+                        {
+                            <h6 class="mt-3 text-uppercase text-muted">@grp.Key</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 40%">Розділ</th>
+                                            <th class="text-center">Перегляд</th>
+                                            <th class="text-center">Редагування</th>
+                                            <th class="text-center">Видалення</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var pg in grp)
+                                        {
+                                            <tr>
+                                                <td>@pg.DisplayName <small class="text-muted">(@pg.Key)</small></td>
+                                                <td class="text-center">
+                                                    <input type="checkbox" class="form-check-input"
+                                                           checked="@selectedKeys.Contains(pg.ViewKey)"
+                                                           @onchange="e => Toggle(pg.ViewKey, e)" />
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (pg.SupportsEdit)
+                                                    {
+                                                        <input type="checkbox" class="form-check-input"
+                                                               checked="@selectedKeys.Contains(pg.EditKey)"
+                                                               @onchange="e => Toggle(pg.EditKey, e)" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">—</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (pg.SupportsDelete)
+                                                    {
+                                                        <input type="checkbox" class="form-check-input"
+                                                               checked="@selectedKeys.Contains(pg.DeleteKey)"
+                                                               @onchange="e => Toggle(pg.DeleteKey, e)" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">—</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (showEditModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(editing?.Id > 0 ? "Редагувати роль" : "Нова роль")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Код (латиницею)</label>
+                        <input class="form-control" @bind="formCode" disabled="@(editing?.Id > 0)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Назва</label>
+                        <input class="form-control" @bind="formDisplayName" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Опис</label>
+                        <textarea class="form-control" rows="2" @bind="formDescription"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Колір бейджа</label>
+                        <input type="color" class="form-control form-control-color" @bind="formBadgeColor" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseEditModal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveRole">Зберегти</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<RoleEntity>? rolesList;
+    private RoleEntity? selected;
+    private HashSet<string> selectedKeys = new(StringComparer.OrdinalIgnoreCase);
+
+    private string? errorMessage;
+    private string? successMessage;
+
+    private bool showEditModal;
+    private RoleEntity? editing;
+    private string formCode = string.Empty;
+    private string formDisplayName = string.Empty;
+    private string formDescription = string.Empty;
+    private string formBadgeColor = "#6c757d";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        rolesList = await Roles.GetAllRolesAsync();
+        if (selected != null)
+        {
+            selected = rolesList.FirstOrDefault(r => r.Id == selected.Id);
+            if (selected != null)
+                selectedKeys = await Roles.GetRolePermissionsAsync(selected.Id);
+            else
+                selectedKeys.Clear();
+        }
+    }
+
+    private async Task SelectRole(RoleEntity r)
+    {
+        selected = r;
+        selectedKeys = await Roles.GetRolePermissionsAsync(r.Id);
+    }
+
+    private void Toggle(string key, ChangeEventArgs e)
+    {
+        var v = e.Value is bool b && b;
+        if (v) selectedKeys.Add(key);
+        else selectedKeys.Remove(key);
+    }
+
+    private void SelectAll()
+    {
+        foreach (var k in Permissions.AllKeys()) selectedKeys.Add(k);
+    }
+
+    private void ClearAll()
+    {
+        selectedKeys.Clear();
+    }
+
+    private async Task SavePermissions()
+    {
+        if (selected == null) return;
+        try
+        {
+            await Roles.SetRolePermissionsAsync(selected.Id, selectedKeys);
+            successMessage = "Права збережено";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void ShowCreateModal()
+    {
+        editing = new RoleEntity { Id = 0 };
+        formCode = string.Empty;
+        formDisplayName = string.Empty;
+        formDescription = string.Empty;
+        formBadgeColor = "#6c757d";
+        showEditModal = true;
+    }
+
+    private void ShowEditModal()
+    {
+        if (selected == null) return;
+        editing = selected;
+        formCode = selected.Code;
+        formDisplayName = selected.DisplayName;
+        formDescription = selected.Description ?? string.Empty;
+        formBadgeColor = selected.BadgeColor ?? "#6c757d";
+        showEditModal = true;
+    }
+
+    private void CloseEditModal()
+    {
+        showEditModal = false;
+        editing = null;
+    }
+
+    private async Task SaveRole()
+    {
+        try
+        {
+            errorMessage = null;
+            if (editing == null) return;
+
+            if (editing.Id == 0)
+            {
+                var created = await Roles.CreateRoleAsync(formCode, formDisplayName, formDescription, formBadgeColor);
+                successMessage = $"Роль '{created.Code}' створено";
+                await Reload();
+                await SelectRole(created);
+            }
+            else
+            {
+                await Roles.UpdateRoleAsync(editing.Id, formDisplayName, formDescription, formBadgeColor);
+                successMessage = "Роль оновлено";
+                await Reload();
+            }
+            CloseEditModal();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task DeleteRole()
+    {
+        if (selected == null) return;
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Видалити роль '{selected.Code}'?");
+        if (!confirmed) return;
+
+        try
+        {
+            errorMessage = null;
+            await Roles.DeleteRoleAsync(selected.Id);
+            successMessage = "Роль видалено";
+            selected = null;
+            selectedKeys.Clear();
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+}

@@ -144,7 +144,8 @@ CREATE TABLE IF NOT EXISTS imported_projects (
     parts_count INTEGER DEFAULT 0,
     total_square_meters DOUBLE PRECISION DEFAULT 0,
     is_active BOOLEAN DEFAULT TRUE,
-    workshop_number INTEGER DEFAULT 1
+    workshop_number INTEGER DEFAULT 1,
+    ldp_colors VARCHAR(500) DEFAULT ''
 );
 
 -- Деталі
@@ -163,6 +164,10 @@ CREATE TABLE IF NOT EXISTS parts (
     created_date TIMESTAMP WITH TIME ZONE NOT NULL,
     source_file_name VARCHAR(255) DEFAULT '',
     order_name VARCHAR(255) DEFAULT '',
+    product_name VARCHAR(255) DEFAULT '',
+    counterparty VARCHAR(255) DEFAULT '',
+    counterparty_order_number VARCHAR(100) DEFAULT '',
+    ldp_colors VARCHAR(500) DEFAULT '',
     is_cut_completed BOOLEAN DEFAULT FALSE,
     cut_completed_date TIMESTAMP WITH TIME ZONE,
     is_edge_banding_completed BOOLEAN DEFAULT FALSE,
@@ -196,7 +201,10 @@ CREATE TABLE IF NOT EXISTS products (
     material_cost DECIMAL(18,2) DEFAULT 0,
     operation_cost DECIMAL(18,2) DEFAULT 0,
     order_date TIMESTAMP WITH TIME ZONE,
-    created_date TIMESTAMP WITH TIME ZONE NOT NULL
+    created_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    counterparty VARCHAR(255) DEFAULT '',
+    counterparty_order_number VARCHAR(100) DEFAULT '',
+    ldp_colors VARCHAR(500) DEFAULT ''
 );
 
 -- Логи сканувань
@@ -639,6 +647,43 @@ END $$;
 -- Створюємо індекси для нових колонок якщо їх немає
 CREATE INDEX IF NOT EXISTS ""IX_scan_logs_worker_id"" ON scan_logs(worker_id);
 CREATE INDEX IF NOT EXISTS ""IX_scan_logs_workstation_id"" ON scan_logs(workstation_id);
+
+-- Розширення імпорту: контрагент / номер замовлення / назва виробу / кольори ЛДСП
+DO $$
+BEGIN
+    -- parts
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'parts' AND column_name = 'product_name') THEN
+        ALTER TABLE parts ADD COLUMN product_name VARCHAR(255) DEFAULT '';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'parts' AND column_name = 'counterparty') THEN
+        ALTER TABLE parts ADD COLUMN counterparty VARCHAR(255) DEFAULT '';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'parts' AND column_name = 'counterparty_order_number') THEN
+        ALTER TABLE parts ADD COLUMN counterparty_order_number VARCHAR(100) DEFAULT '';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'parts' AND column_name = 'ldp_colors') THEN
+        ALTER TABLE parts ADD COLUMN ldp_colors VARCHAR(500) DEFAULT '';
+    END IF;
+
+    -- products
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'counterparty') THEN
+        ALTER TABLE products ADD COLUMN counterparty VARCHAR(255) DEFAULT '';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'counterparty_order_number') THEN
+        ALTER TABLE products ADD COLUMN counterparty_order_number VARCHAR(100) DEFAULT '';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'ldp_colors') THEN
+        ALTER TABLE products ADD COLUMN ldp_colors VARCHAR(500) DEFAULT '';
+    END IF;
+
+    -- imported_projects
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'imported_projects' AND column_name = 'ldp_colors') THEN
+        ALTER TABLE imported_projects ADD COLUMN ldp_colors VARCHAR(500) DEFAULT '';
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS ""IX_parts_counterparty"" ON parts(counterparty);
+CREATE INDEX IF NOT EXISTS ""IX_parts_counterparty_order_number"" ON parts(counterparty_order_number);
 ";
 
                 await using var command = new NpgsqlCommand(alterTablesScript, connection);

@@ -1,0 +1,354 @@
+﻿@page "/parts-overview"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using Tablitsya3.Data
+@using Tablitsya3.Data.Entities
+@using Tablitsya3.Models
+@attribute [Authorize(Policy = AuthPolicies.OperatorOrAbove)]
+@inject ApplicationDbContext Db
+@rendermode InteractiveServer
+
+<PageTitle>Повна таблиця деталей</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
+        <h3 class="mb-0">Повна таблиця деталей</h3>
+        <span class="text-muted small">Всього: @_totalCount · Відображено: @_filtered.Count</span>
+        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="ReloadAsync" disabled="@_loading">
+            <i class="bi bi-arrow-clockwise"></i> Оновити
+        </button>
+    </div>
+
+    <div class="row g-2 mb-3">
+        <div class="col-md-3">
+            <input class="form-control form-control-sm" placeholder="Пошук (назва, код, виріб, файл)..."
+                   value="@_search" @oninput="@(e => { _search = e.Value?.ToString() ?? string.Empty; ApplyFilters(); })" />
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" value="@_counterpartyFilter"
+                    @onchange="@(e => { _counterpartyFilter = e.Value?.ToString() ?? string.Empty; ApplyFilters(); })">
+                <option value="">Контрагент: всі</option>
+                @foreach (var c in _counterparties)
+                {
+                    <option value="@c">@c</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" value="@_orderNumberFilter"
+                    @onchange="@(e => { _orderNumberFilter = e.Value?.ToString() ?? string.Empty; ApplyFilters(); })">
+                <option value="">Номер замовлення: всі</option>
+                @foreach (var o in _orderNumbers)
+                {
+                    <option value="@o">@o</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" value="@_colorFilter"
+                    @onchange="@(e => { _colorFilter = e.Value?.ToString() ?? string.Empty; ApplyFilters(); })">
+                <option value="">Колір ЛДСП: всі</option>
+                @foreach (var c in _colors)
+                {
+                    <option value="@c">@c</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" value="@_completionFilter"
+                    @onchange="@(e => { _completionFilter = e.Value?.ToString() ?? string.Empty; ApplyFilters(); })">
+                <option value="">Готовність: всі</option>
+                <option value="done">Тільки готові</option>
+                <option value="open">Тільки незавершені</option>
+            </select>
+        </div>
+        <div class="col-md-1">
+            <select class="form-select form-select-sm" value="@_pageSize"
+                    @onchange="@(e => { int.TryParse(e.Value?.ToString(), out var v); _pageSize = v > 0 ? v : 100; })">
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+                <option value="500">500</option>
+            </select>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-muted">Завантаження...</div>
+    }
+    else
+    {
+        <div class="table-responsive" style="max-height: 75vh;">
+            <table class="table table-sm table-striped table-hover align-middle">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th @onclick="@(() => SortBy(nameof(Row.Counterparty)))" style="cursor:pointer">Контрагент @SortIcon(nameof(Row.Counterparty))</th>
+                        <th @onclick="@(() => SortBy(nameof(Row.CounterpartyOrderNumber)))" style="cursor:pointer">№ замовлення @SortIcon(nameof(Row.CounterpartyOrderNumber))</th>
+                        <th @onclick="@(() => SortBy(nameof(Row.ProductName)))" style="cursor:pointer">Виріб @SortIcon(nameof(Row.ProductName))</th>
+                        <th @onclick="@(() => SortBy(nameof(Row.Name)))" style="cursor:pointer">Деталь @SortIcon(nameof(Row.Name))</th>
+                        <th>Розмір</th>
+                        <th>Матеріал</th>
+                        <th>Кольори ЛДСП</th>
+                        <th @onclick="@(() => SortBy(nameof(Row.SourceFileName)))" style="cursor:pointer">Файл @SortIcon(nameof(Row.SourceFileName))</th>
+                        <th @onclick="@(() => SortBy(nameof(Row.IsFullyCompleted)))" style="cursor:pointer">Готова @SortIcon(nameof(Row.IsFullyCompleted))</th>
+                        <th>Етапи</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var r in _filtered.Take(_pageSize))
+                {
+                    <tr>
+                        <td>@r.Counterparty</td>
+                        <td>@r.CounterpartyOrderNumber</td>
+                        <td>@r.ProductName</td>
+                        <td>
+                            <div>@r.Name</div>
+                            <small class="text-muted">@r.Code</small>
+                        </td>
+                        <td>@($"{r.Length:F0}×{r.Width:F0}×{r.Thickness:F0}")</td>
+                        <td>@r.Material</td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(r.LdpColors))
+                            {
+                                @foreach (var c in r.LdpColors.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                                {
+                                    <span class="badge bg-secondary me-1">@c</span>
+                                }
+                            }
+                        </td>
+                        <td><small>@r.SourceFileName</small></td>
+                        <td>
+                            @if (r.IsFullyCompleted)
+                            {
+                                <span class="badge bg-success">✓ Готова</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning text-dark">@r.CompletedStages/@r.TotalStages</span>
+                            }
+                        </td>
+                        <td>
+                            <small>
+                                @StageBadge("П", r.RequiresCutting, r.IsCutCompleted)
+                                @StageBadge("К", r.RequiresEdgeBanding, r.EdgeDone)
+                                @StageBadge("С", r.RequiresDrilling, r.IsDrillingCompleted)
+                                @StageBadge("Сорт", r.RequiresSorting, r.IsSortingCompleted)
+                                @StageBadge("Уп", r.RequiresPacking, r.IsPackingCompleted)
+                            </small>
+                        </td>
+                    </tr>
+                }
+                @if (!_filtered.Any())
+                {
+                    <tr><td colspan="10" class="text-center text-muted py-4">Немає деталей за обраними фільтрами</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (_filtered.Count > _pageSize)
+        {
+            <div class="text-muted small">Відображено перші @_pageSize із @_filtered.Count. Уточніть фільтри або збільште розмір сторінки.</div>
+        }
+    }
+</div>
+
+@code {
+    private List<Row> _all = new();
+    private List<Row> _filtered = new();
+    private List<string> _counterparties = new();
+    private List<string> _orderNumbers = new();
+    private List<string> _colors = new();
+    private bool _loading = true;
+    private int _totalCount;
+
+    private string _search = "";
+    private string _counterpartyFilter = "";
+    private string _orderNumberFilter = "";
+    private string _colorFilter = "";
+    private string _completionFilter = "";
+    private int _pageSize = 100;
+
+    private string _sortField = nameof(Row.Counterparty);
+    private bool _sortDesc;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var rows = await Db.Parts.AsNoTracking()
+                .Select(p => new Row
+                {
+                    Counterparty = p.Counterparty,
+                    CounterpartyOrderNumber = p.CounterpartyOrderNumber,
+                    ProductName = p.ProductName,
+                    OrderName = p.OrderName,
+                    Name = p.Name,
+                    Code = p.Code,
+                    Length = p.Length,
+                    Width = p.Width,
+                    Thickness = p.Thickness,
+                    Material = p.Material,
+                    LdpColors = p.LdpColors,
+                    SourceFileName = p.SourceFileName,
+                    RequiresCutting = p.RequiresCutting,
+                    RequiresEdgeBanding = p.RequiresEdgeBanding,
+                    RequiresDrilling = p.RequiresDrilling,
+                    RequiresSorting = p.RequiresSorting,
+                    RequiresPacking = p.RequiresPacking,
+                    IsCutCompleted = p.IsCutCompleted,
+                    IsEdgeBandingCompleted = p.IsEdgeBandingCompleted,
+                    EdgeBandingSidesRequired = p.EdgeBandingSidesRequired,
+                    EdgeBandingSidesCompleted = p.EdgeBandingSidesCompleted,
+                    IsDrillingCompleted = p.IsDrillingCompleted,
+                    IsSortingCompleted = p.IsSortingCompleted,
+                    IsPackingCompleted = p.IsPackingCompleted
+                })
+                .ToListAsync();
+
+            _all = rows;
+            _totalCount = rows.Count;
+
+            _counterparties = rows.Select(r => r.Counterparty)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct().OrderBy(s => s).ToList();
+            _orderNumbers = rows.Select(r => r.CounterpartyOrderNumber)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct().OrderBy(s => s).ToList();
+            _colors = rows.SelectMany(r => (r.LdpColors ?? "")
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Distinct().OrderBy(s => s).ToList();
+
+            ApplyFilters();
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        IEnumerable<Row> q = _all;
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            var s = _search.Trim();
+            q = q.Where(r =>
+                (r.Name ?? "").Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                (r.Code ?? "").Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                (r.ProductName ?? "").Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                (r.OrderName ?? "").Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                (r.SourceFileName ?? "").Contains(s, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_counterpartyFilter))
+            q = q.Where(r => r.Counterparty == _counterpartyFilter);
+
+        if (!string.IsNullOrWhiteSpace(_orderNumberFilter))
+            q = q.Where(r => r.CounterpartyOrderNumber == _orderNumberFilter);
+
+        if (!string.IsNullOrWhiteSpace(_colorFilter))
+            q = q.Where(r => (r.LdpColors ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Contains(_colorFilter, StringComparer.OrdinalIgnoreCase));
+
+        if (_completionFilter == "done") q = q.Where(r => r.IsFullyCompleted);
+        else if (_completionFilter == "open") q = q.Where(r => !r.IsFullyCompleted);
+
+        q = _sortField switch
+        {
+            nameof(Row.CounterpartyOrderNumber) => _sortDesc ? q.OrderByDescending(r => r.CounterpartyOrderNumber) : q.OrderBy(r => r.CounterpartyOrderNumber),
+            nameof(Row.ProductName) => _sortDesc ? q.OrderByDescending(r => r.ProductName) : q.OrderBy(r => r.ProductName),
+            nameof(Row.Name) => _sortDesc ? q.OrderByDescending(r => r.Name) : q.OrderBy(r => r.Name),
+            nameof(Row.SourceFileName) => _sortDesc ? q.OrderByDescending(r => r.SourceFileName) : q.OrderBy(r => r.SourceFileName),
+            nameof(Row.IsFullyCompleted) => _sortDesc ? q.OrderByDescending(r => r.IsFullyCompleted) : q.OrderBy(r => r.IsFullyCompleted),
+            _ => _sortDesc ? q.OrderByDescending(r => r.Counterparty) : q.OrderBy(r => r.Counterparty)
+        };
+
+        _filtered = q.ToList();
+    }
+
+    protected override bool ShouldRender() => true;
+
+    private void SortBy(string field)
+    {
+        if (_sortField == field) _sortDesc = !_sortDesc;
+        else { _sortField = field; _sortDesc = false; }
+        ApplyFilters();
+    }
+
+    private MarkupString SortIcon(string field)
+    {
+        if (_sortField != field) return (MarkupString)"";
+        return (MarkupString)(_sortDesc ? " ▼" : " ▲");
+    }
+
+    private RenderFragment StageBadge(string label, bool required, bool done) => builder =>
+    {
+        if (!required) return;
+        var cls = done ? "bg-success" : "bg-secondary";
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"badge {cls} me-1");
+        builder.AddContent(2, label);
+        builder.CloseElement();
+    };
+
+    private class Row
+    {
+        public string Counterparty { get; set; } = "";
+        public string CounterpartyOrderNumber { get; set; } = "";
+        public string ProductName { get; set; } = "";
+        public string OrderName { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Code { get; set; } = "";
+        public double Length { get; set; }
+        public double Width { get; set; }
+        public double Thickness { get; set; }
+        public string Material { get; set; } = "";
+        public string LdpColors { get; set; } = "";
+        public string SourceFileName { get; set; } = "";
+
+        public bool RequiresCutting { get; set; }
+        public bool RequiresEdgeBanding { get; set; }
+        public bool RequiresDrilling { get; set; }
+        public bool RequiresSorting { get; set; }
+        public bool RequiresPacking { get; set; }
+
+        public bool IsCutCompleted { get; set; }
+        public bool IsEdgeBandingCompleted { get; set; }
+        public int EdgeBandingSidesRequired { get; set; }
+        public int EdgeBandingSidesCompleted { get; set; }
+        public bool IsDrillingCompleted { get; set; }
+        public bool IsSortingCompleted { get; set; }
+        public bool IsPackingCompleted { get; set; }
+
+        public bool EdgeDone => EdgeBandingSidesRequired > 0
+            ? EdgeBandingSidesCompleted >= EdgeBandingSidesRequired
+            : IsEdgeBandingCompleted;
+
+        public int TotalStages =>
+            (RequiresCutting ? 1 : 0) + (RequiresEdgeBanding ? 1 : 0) +
+            (RequiresDrilling ? 1 : 0) + (RequiresSorting ? 1 : 0) +
+            (RequiresPacking ? 1 : 0);
+
+        public int CompletedStages =>
+            (RequiresCutting && IsCutCompleted ? 1 : 0) +
+            (RequiresEdgeBanding && EdgeDone ? 1 : 0) +
+            (RequiresDrilling && IsDrillingCompleted ? 1 : 0) +
+            (RequiresSorting && IsSortingCompleted ? 1 : 0) +
+            (RequiresPacking && IsPackingCompleted ? 1 : 0);
+
+        public bool IsFullyCompleted =>
+            (!RequiresCutting || IsCutCompleted) &&
+            (!RequiresEdgeBanding || EdgeDone) &&
+            (!RequiresDrilling || IsDrillingCompleted) &&
+            (!RequiresSorting || IsSortingCompleted) &&
+            (!RequiresPacking || IsPackingCompleted);
+    }
+}

@@ -195,6 +195,8 @@ builder.Services.AddSingleton<DataSeedService>();
 
 // === Authentication & Authorization ===
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<RoleService>();
+builder.Services.AddScoped<WorkstationScannerService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider,
@@ -221,6 +223,11 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(AuthPolicies.OperatorOrAbove, p => p.RequireRole(nameof(UserRole.Admin), nameof(UserRole.Manager), nameof(UserRole.Operator)));
     options.AddPolicy(AuthPolicies.AnyAuthenticated, p => p.RequireAuthenticatedUser());
 });
+
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationPolicyProvider,
+    Tablitsya3.Services.PermissionPolicyProvider>();
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+    Tablitsya3.Services.PermissionAuthorizationHandler>();
 
 var app = builder.Build();
 
@@ -444,9 +451,7 @@ static async Task EnsureAuthSchemaAndSeedAsync(IServiceProvider services, ILogge
     var dbContext = services.GetRequiredService<ApplicationDbContext>();
 
     const string createTableSql = @"
-        DROP TABLE IF EXISTS app_users CASCADE;
-
-        CREATE TABLE app_users (
+        CREATE TABLE IF NOT EXISTS app_users (
             id SERIAL PRIMARY KEY,
             username VARCHAR(64) NOT NULL,
             password_hash TEXT NOT NULL DEFAULT '',
@@ -457,11 +462,91 @@ static async Task EnsureAuthSchemaAndSeedAsync(IServiceProvider services, ILogge
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             last_login_at TIMESTAMPTZ NULL
         );
-        CREATE UNIQUE INDEX ix_app_users_username ON app_users (username);
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_users_username ON app_users (username);
+
+        ALTER TABLE app_users ADD COLUMN IF NOT EXISTS role_id INTEGER NULL;
+        ALTER TABLE app_users ADD COLUMN IF NOT EXISTS worker_id INTEGER NULL;
+        CREATE INDEX IF NOT EXISTS ix_app_users_role_id ON app_users (role_id);
+
+        CREATE TABLE IF NOT EXISTS app_roles (
+            id SERIAL PRIMARY KEY,
+            code VARCHAR(64) NOT NULL,
+            display_name VARCHAR(128) NOT NULL,
+            description VARCHAR(500) NULL,
+            badge_color VARCHAR(16) NULL,
+            is_system BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_roles_code ON app_roles (code);
+
+        CREATE TABLE IF NOT EXISTS app_role_permissions (
+            id SERIAL PRIMARY KEY,
+            role_id INTEGER NOT NULL,
+            permission_key VARCHAR(128) NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_role_permissions_role_key ON app_role_permissions (role_id, permission_key);
+
+        CREATE TABLE IF NOT EXISTS app_user_permission_overrides (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            permission_key VARCHAR(128) NOT NULL,
+            is_granted BOOLEAN NOT NULL DEFAULT TRUE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_user_perm_overrides_user_key ON app_user_permission_overrides (user_id, permission_key);
+
+        ALTER TABLE workers ADD COLUMN IF NOT EXISTS app_user_id INTEGER NULL;
     ";
 
     await dbContext.Database.ExecuteSqlRawAsync(createTableSql);
-    logger.LogInformation("✅ app_users table ensured (with all columns)");
+    logger.LogInformation("✅ Auth schema ensured (users/roles/permissions/overrides)");
+
+    // Засіяти системні ролі та матриці прав
+    var roleService = services.GetRequiredService<RoleService>();
+    foreach (var (code, defaults) in Tablitsya3.Models.Permissions.DefaultRolePermissions)
+    {
+        var role = await roleService.GetRoleByCodeAsync(code);
+        if (role == null)
+        {
+            var displayName = code switch
+            {
+                "Admin" => "Адміністратор",
+                "Manager" => "Менеджер",
+                "Operator" => "Оператор",
+                "Viewer" => "Спостерігач",
+                _ => code,
+            };
+            var color = code switch
+            {
+                "Admin" => "#dc3545",
+                "Manager" => "#0d6efd",
+                "Operator" => "#198754",
+                "Viewer" => "#6c757d",
+                _ => "#6c757d",
+            };
+            role = await roleService.CreateRoleAsync(code, displayName, "Системна роль", color);
+            // Позначаємо як системну
+            role.IsSystem = true;
+            await dbContext.SaveChangesAsync();
+            await roleService.SetRolePermissionsAsync(role.Id, defaults);
+            logger.LogInformation("✅ Seeded system role {Code}", code);
+        }
+    }
+
+    // Прив'язати legacy users до RoleId
+    var unlinked = await dbContext.AppUsers.Where(u => u.RoleId == null).ToListAsync();
+    if (unlinked.Count > 0)
+    {
+        var rolesByCode = await dbContext.Roles.ToDictionaryAsync(r => r.Code, r => r.Id, StringComparer.OrdinalIgnoreCase);
+        foreach (var u in unlinked)
+        {
+            var legacy = ((UserRole)u.Role).ToString();
+            if (rolesByCode.TryGetValue(legacy, out var rid))
+                u.RoleId = rid;
+        }
+        await dbContext.SaveChangesAsync();
+        logger.LogInformation("✅ Linked {Count} legacy users to dynamic roles", unlinked.Count);
+    }
 
     var auth = services.GetRequiredService<AuthService>();
     if (!await auth.AnyUserExistsAsync())
@@ -475,7 +560,6 @@ static async Task EnsureAuthSchemaAndSeedAsync(IServiceProvider services, ILogge
     }
     else
     {
-        // Якщо адмін існує але без password_salt (зламаний старий запис) - перестворити
         var admin = await auth.GetByUsernameAsync("admin");
         if (admin != null && string.IsNullOrEmpty(admin.PasswordSalt))
         {
@@ -566,4 +650,67 @@ static async Task EnsureWorkstationScannerColumnsAsync(IServiceProvider services
     ";
     await dbContext.Database.ExecuteSqlRawAsync(sql);
     logger.LogInformation("✅ Workstation scanner columns ensured");
+
+    // Створюємо нову таблицю для декількох сканерів на станцію
+    const string scannersTable = @"
+        CREATE TABLE IF NOT EXISTS app_workstation_scanners (
+            id SERIAL PRIMARY KEY,
+            workstation_id INTEGER NOT NULL,
+            name VARCHAR(150) NOT NULL DEFAULT '',
+            role INTEGER NOT NULL DEFAULT 0,
+            is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+            is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            scanner_model INTEGER NOT NULL DEFAULT 0,
+            connection_type INTEGER NOT NULL DEFAULT 0,
+            serial_number VARCHAR(100),
+            usb_vid VARCHAR(10),
+            usb_pid VARCHAR(10),
+            com_port VARCHAR(20),
+            baud_rate INTEGER,
+            bluetooth_mac VARCHAR(50),
+            ip_address VARCHAR(50),
+            tcp_port INTEGER,
+            webhook_url VARCHAR(500),
+            prefix VARCHAR(20),
+            suffix VARCHAR(20),
+            extra_json TEXT,
+            created_date TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+            updated_date TIMESTAMP WITH TIME ZONE
+        );
+        CREATE INDEX IF NOT EXISTS ix_app_workstation_scanners_ws ON app_workstation_scanners(workstation_id);
+    ";
+    await dbContext.Database.ExecuteSqlRawAsync(scannersTable);
+
+    // Одноразова міграція legacy сканера зі станції в нову таблицю,
+    // якщо у станції увімкнено сканер, але в новій таблиці ще немає записів.
+    const string migrateLegacy = @"
+        INSERT INTO app_workstation_scanners (
+            workstation_id, name, role, is_primary, is_enabled,
+            scanner_model, connection_type, serial_number,
+            usb_vid, usb_pid, com_port, baud_rate, bluetooth_mac,
+            ip_address, tcp_port, webhook_url, prefix, suffix, extra_json,
+            created_date)
+        SELECT
+            w.id,
+            COALESCE(NULLIF(w.scanner_device_name,''), 'Сканер ' || w.name),
+            0, TRUE, COALESCE(w.scanner_enabled, FALSE),
+            COALESCE(w.scanner_model, 0), COALESCE(w.scanner_connection_type, 0),
+            w.scanner_serial_number, w.scanner_usb_vid, w.scanner_usb_pid,
+            w.scanner_com_port, w.scanner_baud_rate, w.scanner_bluetooth_mac,
+            w.scanner_ip_address, w.scanner_tcp_port, w.scanner_webhook_url,
+            w.scanner_prefix, w.scanner_suffix, w.scanner_extra_json,
+            NOW()
+        FROM workstations w
+        WHERE w.scanner_enabled = TRUE
+          AND NOT EXISTS (SELECT 1 FROM app_workstation_scanners s WHERE s.workstation_id = w.id);
+    ";
+    try
+    {
+        await dbContext.Database.ExecuteSqlRawAsync(migrateLegacy);
+        logger.LogInformation("✅ Legacy scanner data migrated to app_workstation_scanners");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning("⚠️ Legacy scanner migration skipped: {Message}", ex.Message);
+    }
 }

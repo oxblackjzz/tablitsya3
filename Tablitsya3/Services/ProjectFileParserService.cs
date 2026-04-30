@@ -62,13 +62,17 @@ namespace Tablitsya3.Services
                 var drillingPartIds = GetDrillingPartIds(root);
                 _logger.LogInfo($"Знайдено {drillingPartIds.Count} деталей зі свердлінням", "ProjectParser");
 
+                // Збираємо кольори ЛДСП з sheet-матеріалів проекту
+                var projectLdpColors = CollectLdpColors(root);
+                project.LdpColors = string.Join(", ", projectLdpColors);
+
                 // Парсинг товарів (goods)
                 var partCounters = new Dictionary<int, int>();
                 var goods = root.Elements("good").Where(g => g.Attribute("typeId")?.Value == "product").ToList();
 
                 foreach (var good in goods)
                 {
-                    var product = ParseProduct(good, project.ProjectUuid, fileName, partCounters, drillingPartIds);
+                    var product = ParseProduct(good, project.ProjectUuid, fileName, partCounters, drillingPartIds, projectLdpColors);
                     if (product != null)
                     {
                         project.Products.Add(product);
@@ -122,21 +126,30 @@ namespace Tablitsya3.Services
         /// <summary>
         /// Парсинг товару (good)
         /// </summary>
-        private ImportedProduct? ParseProduct(XElement goodElement, string projectUuid, string fileName, Dictionary<int, int> partCounters, HashSet<int> drillingPartIds)
+        private ImportedProduct? ParseProduct(XElement goodElement, string projectUuid, string fileName, Dictionary<int, int> partCounters, HashSet<int> drillingPartIds, List<string> projectLdpColors)
         {
             try
             {
+                var rawName = goodElement.Attribute("name")?.Value ?? "";
+                var rawCode = goodElement.Attribute("code")?.Value ?? "";
+                var (counterparty, counterpartyOrder) = SplitCounterpartyAndOrder(rawName);
+                var ldpCsv = string.Join(", ", projectLdpColors);
+
                 var product = new ImportedProduct
                 {
                     ProductId = ParseInt(goodElement.Attribute("id")?.Value),
-                    Name = goodElement.Attribute("name")?.Value ?? "",
-                    Code = goodElement.Attribute("code")?.Value ?? "",
+                    Name = rawName,
+                    Code = rawCode,
                     Description = goodElement.Attribute("description")?.Value ?? "",
                     Count = Math.Max(1, ParseInt(goodElement.Attribute("count")?.Value)),
                     Cost = ParseDecimal(goodElement.Attribute("cost")?.Value),
                     MaterialCost = ParseDecimal(goodElement.Attribute("costMaterial")?.Value),
                     OperationCost = ParseDecimal(goodElement.Attribute("costOperation")?.Value),
-                    OrderDate = ParseProjectDate(goodElement.Attribute("orderDate")?.Value)
+                    OrderDate = ParseProjectDate(goodElement.Attribute("orderDate")?.Value),
+                    ProductName = rawCode,
+                    Counterparty = counterparty,
+                    CounterpartyOrderNumber = counterpartyOrder,
+                    LdpColors = ldpCsv
                 };
 
                 // Парсинг деталей
@@ -148,6 +161,13 @@ namespace Tablitsya3.Services
                     foreach (var partElement in partElements)
                     {
                         var parts = ParsePartElement(partElement, projectUuid, fileName, product.Name, partCounters, drillingPartIds);
+                        foreach (var p in parts)
+                        {
+                            p.ProductName = product.ProductName;
+                            p.Counterparty = product.Counterparty;
+                            p.CounterpartyOrderNumber = product.CounterpartyOrderNumber;
+                            p.LdpColors = product.LdpColors;
+                        }
                         product.Parts.AddRange(parts);
                     }
                 }
@@ -316,6 +336,81 @@ namespace Tablitsya3.Services
                 return "Скло";
             
             return "ЛДСП";
+        }
+
+        /// <summary>
+        /// Збір кольорів ЛДСП з sheet-матеріалів проекту
+        /// </summary>
+        private List<string> CollectLdpColors(XElement root)
+        {
+            var colors = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var sheet in root.Elements("good").Where(g => g.Attribute("typeId")?.Value == "sheet"))
+            {
+                var name = sheet.Attribute("name")?.Value ?? "";
+                if (string.IsNullOrWhiteSpace(name)) continue;
+
+                // Виключаємо не-ЛДСП матеріали
+                var lower = name.ToLowerInvariant();
+                if (lower.Contains("хдф") || lower.Contains("двп") ||
+                    lower.Contains("дзеркало") || lower.Contains("скло") ||
+                    lower.Contains("профил") || lower.Contains("профіл"))
+                {
+                    continue;
+                }
+
+                // Враховуємо лише ЛДСП-плити (товщина зазвичай >= 8мм)
+                var t = ParseDouble(sheet.Attribute("t")?.Value);
+                if (t > 0 && t < 8) continue;
+
+                if (seen.Add(name))
+                {
+                    colors.Add(name);
+                }
+            }
+
+            return colors;
+        }
+
+        /// <summary>
+        /// Розщеплення good.name на "Контрагент" та "Номер замовлення".
+        /// Логіка: останній токен (через пробіл), що містить цифри, — номер замовлення;
+        /// все, що перед ним — контрагент. Якщо цифр немає — все вважаємо контрагентом.
+        /// </summary>
+        private (string Counterparty, string OrderNumber) SplitCounterpartyAndOrder(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return ("", "");
+
+            var trimmed = raw.Trim();
+            var tokens = trimmed.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            if (tokens.Length == 0) return ("", "");
+            if (tokens.Length == 1)
+            {
+                return ContainsDigit(tokens[0]) ? ("", tokens[0]) : (tokens[0], "");
+            }
+
+            // Шукаємо найправіший токен з цифрами
+            int orderIdx = -1;
+            for (int i = tokens.Length - 1; i >= 0; i--)
+            {
+                if (ContainsDigit(tokens[i])) { orderIdx = i; break; }
+            }
+
+            if (orderIdx < 0)
+            {
+                return (trimmed, "");
+            }
+
+            var orderNumber = string.Join(' ', tokens.Skip(orderIdx));
+            var counterparty = orderIdx == 0 ? "" : string.Join(' ', tokens.Take(orderIdx));
+            return (counterparty.Trim(), orderNumber.Trim());
+        }
+
+        private static bool ContainsDigit(string s)
+        {
+            for (int i = 0; i < s.Length; i++) if (char.IsDigit(s[i])) return true;
+            return false;
         }
 
         /// <summary>

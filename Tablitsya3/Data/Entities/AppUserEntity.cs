@@ -19,7 +19,14 @@ namespace Tablitsya3.Data.Entities
         [MaxLength(128)]
         public string DisplayName { get; set; } = string.Empty;
 
+        /// <summary>Старий enum-Role (Admin/Manager/...) — зберігається для зворотної сумісності.</summary>
         public int Role { get; set; }
+
+        /// <summary>FK на динамічну роль (RoleEntity). Може бути null у legacy-записах.</summary>
+        public int? RoleId { get; set; }
+
+        /// <summary>Опційне посилання на профіль працівника (WorkerEntity) для майбутньої прив'язки.</summary>
+        public int? WorkerId { get; set; }
 
         public bool IsActive { get; set; } = true;
 

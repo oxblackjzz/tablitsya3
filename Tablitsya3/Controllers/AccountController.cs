@@ -11,11 +11,13 @@ namespace Tablitsya3.Controllers
     public class AccountController : Controller
     {
         private readonly AuthService _auth;
+        private readonly RoleService _roles;
         private readonly ILogger<AccountController> _logger;
 
-        public AccountController(AuthService auth, ILogger<AccountController> logger)
+        public AccountController(AuthService auth, RoleService roles, ILogger<AccountController> logger)
         {
             _auth = auth;
+            _roles = roles;
             _logger = logger;
         }
 
@@ -23,6 +25,7 @@ namespace Tablitsya3.Controllers
         public async Task<IActionResult> Login(
             [FromForm] string username,
             [FromForm] string password,
+            [FromForm] bool rememberMe = false,
             [FromForm] string? returnUrl = null)
         {
             if (string.IsNullOrWhiteSpace(username) || string.IsNullOrEmpty(password))
@@ -46,6 +49,18 @@ namespace Tablitsya3.Controllers
                 new(ClaimTypes.Role, role.ToString()),
             };
 
+            // Динамічні permission-claims
+            try
+            {
+                var perms = await _roles.GetEffectivePermissionsAsync(user.Id);
+                foreach (var p in perms)
+                    claims.Add(new Claim(Models.Permissions.ClaimType, p));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Не вдалось обчислити permissions для {User}", user.Username);
+            }
+
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             var principal = new ClaimsPrincipal(identity);
 
@@ -55,8 +70,25 @@ namespace Tablitsya3.Controllers
                 new AuthenticationProperties
                 {
                     IsPersistent = true,
-                    ExpiresUtc = DateTimeOffset.UtcNow.AddDays(14),
+                    ExpiresUtc = DateTimeOffset.UtcNow.AddDays(rememberMe ? 30 : 14),
                 });
+
+            // Запам'ятати логін у окремому cookie для автозаповнення поля "Логін"
+            if (rememberMe)
+            {
+                Response.Cookies.Append("remembered_user", user.Username, new CookieOptions
+                {
+                    Expires = DateTimeOffset.UtcNow.AddDays(180),
+                    HttpOnly = true,
+                    IsEssential = true,
+                    SameSite = SameSiteMode.Lax,
+                    Secure = Request.IsHttps,
+                });
+            }
+            else
+            {
+                Response.Cookies.Delete("remembered_user");
+            }
 
             _logger.LogInformation("Вхід успішний: {Username} ({Role})", user.Username, role);
 

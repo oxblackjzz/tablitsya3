@@ -48,6 +48,18 @@ namespace Tablitsya3.Models.Scanning
         /// <summary>Назва замовлення (good name)</summary>
         public string OrderName { get; set; } = string.Empty;
 
+        /// <summary>Назва виробу (good code, напр. "Тумба Ідея 2Я 400/400/350")</summary>
+        public string ProductName { get; set; } = string.Empty;
+
+        /// <summary>Контрагент (виділений з good name)</summary>
+        public string Counterparty { get; set; } = string.Empty;
+
+        /// <summary>Номер замовлення контрагента (виділений з good name)</summary>
+        public string CounterpartyOrderNumber { get; set; } = string.Empty;
+
+        /// <summary>Кольори ЛДСП у виробі, через кому</summary>
+        public string LdpColors { get; set; } = string.Empty;
+
         // === Статуси етапів ===
         
         public bool IsCutCompleted { get; set; }
