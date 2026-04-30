@@ -2,7 +2,10 @@
 using Tablitsya3.Services;
 using Tablitsya3.Data;
 using Tablitsya3.Middleware;
+using Tablitsya3.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -190,6 +193,33 @@ builder.Services.AddSingleton<WorkingDaysService>();
 builder.Services.AddSingleton<LoggingService>();
 builder.Services.AddSingleton<DataSeedService>();
 
+// === Authentication & Authorization ===
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddCascadingAuthenticationState();
+
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "Tablitsya3.Auth";
+        options.LoginPath = "/login";
+        options.AccessDeniedPath = "/access-denied";
+        options.ExpireTimeSpan = TimeSpan.FromDays(14);
+        options.SlidingExpiration = true;
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AuthPolicies.AdminOnly, p => p.RequireRole(nameof(UserRole.Admin)));
+    options.AddPolicy(AuthPolicies.ManagerOrAbove, p => p.RequireRole(nameof(UserRole.Admin), nameof(UserRole.Manager)));
+    options.AddPolicy(AuthPolicies.OperatorOrAbove, p => p.RequireRole(nameof(UserRole.Admin), nameof(UserRole.Manager), nameof(UserRole.Operator)));
+    options.AddPolicy(AuthPolicies.AnyAuthenticated, p => p.RequireAuthenticatedUser());
+});
+
 var app = builder.Build();
 
 // ✅ ВИКОРИСТАННЯ EXCEPTION HANDLER
@@ -323,6 +353,17 @@ logger.LogInformation("✅ Database migration completed successfully!");
      Console.WriteLine("============================================");
     Console.WriteLine("✅ DATABASE INITIALIZATION COMPLETE");
             Console.WriteLine("============================================");
+
+            // ✅ AUTH: створення таблиці app_users + seed адміна
+            try
+            {
+                await EnsureAuthSchemaAndSeedAsync(scope.ServiceProvider, logger);
+            }
+            catch (Exception authEx)
+            {
+                logger.LogError(authEx, "❌ Auth schema/seed initialization failed");
+                Console.WriteLine($"❌ Auth init failed: {authEx.Message}");
+            }
         }
    catch (Exception ex)
         {
@@ -369,6 +410,9 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 app.MapStaticAssets();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 // ✅ Маппінг API Controllers
 app.MapControllers();
 
@@ -380,6 +424,41 @@ app.MapRazorComponents<App>()
 
 Console.WriteLine("🚀 Application started successfully!");
 app.Run();
+
+// ✅ Створення таблиці app_users та seed адміна
+static async Task EnsureAuthSchemaAndSeedAsync(IServiceProvider services, ILogger logger)
+{
+    var dbContext = services.GetRequiredService<ApplicationDbContext>();
+
+    const string createTableSql = @"
+        CREATE TABLE IF NOT EXISTS app_users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(64) NOT NULL,
+            password_hash TEXT NOT NULL,
+            password_salt TEXT NOT NULL,
+            display_name VARCHAR(128) NOT NULL DEFAULT '',
+            role INTEGER NOT NULL DEFAULT 0,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_login_at TIMESTAMPTZ NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_users_username ON app_users (username);
+    ";
+
+    await dbContext.Database.ExecuteSqlRawAsync(createTableSql);
+    logger.LogInformation("✅ app_users table ensured");
+
+    var auth = services.GetRequiredService<AuthService>();
+    if (!await auth.AnyUserExistsAsync())
+    {
+        await auth.CreateAsync("admin", "admin123", "Адміністратор", UserRole.Admin, isActive: true);
+        Console.WriteLine("============================================");
+        Console.WriteLine("👤 Default admin created: admin / admin123");
+        Console.WriteLine("⚠️  Change this password after first login!");
+        Console.WriteLine("============================================");
+        logger.LogWarning("👤 Default admin user created with password 'admin123' - change it!");
+    }
+}
 
 // ✅ Метод для додавання колонок якщо міграція не спрацювала
 static async Task EnsureColumnsExist(ApplicationDbContext dbContext, ILogger logger)

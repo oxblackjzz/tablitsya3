@@ -1,4 +1,5 @@
 ﻿@page "/"
+@attribute [Authorize(Policy = AuthPolicies.AnyAuthenticated)]
 @using Tablitsya3.Models
 @using Tablitsya3.Services
 @inject UnifiedStorageService StorageService

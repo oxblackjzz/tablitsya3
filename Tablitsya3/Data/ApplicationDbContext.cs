@@ -34,6 +34,9 @@ namespace Tablitsya3.Data
         public DbSet<WorkerKpiEntity> WorkerKpis { get; set; }
         public DbSet<DefectEntity> Defects { get; set; }
 
+        // === Authentication / App users ===
+        public DbSet<AppUserEntity> AppUsers { get; set; }
+
         // ✅ АВТОМАТИЧНА КОНВЕРТАЦІЯ В UTC тільки при збереженні
         public override int SaveChanges()
         {
@@ -398,6 +401,23 @@ namespace Tablitsya3.Data
                 entity.HasIndex(e => e.WorkerId);
                 entity.HasIndex(e => e.Status);
                 entity.HasIndex(e => e.CreatedDate);
+            });
+
+            // AppUserEntity - користувачі для входу в систему
+            modelBuilder.Entity<AppUserEntity>(entity =>
+            {
+                entity.ToTable("app_users");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.Username).HasColumnName("username").HasMaxLength(64).IsRequired();
+                entity.Property(e => e.PasswordHash).HasColumnName("password_hash").IsRequired();
+                entity.Property(e => e.PasswordSalt).HasColumnName("password_salt").IsRequired();
+                entity.Property(e => e.DisplayName).HasColumnName("display_name").HasMaxLength(128);
+                entity.Property(e => e.Role).HasColumnName("role");
+                entity.Property(e => e.IsActive).HasColumnName("is_active");
+                entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+                entity.Property(e => e.LastLoginAt).HasColumnName("last_login_at");
+                entity.HasIndex(e => e.Username).IsUnique();
             });
         }
     }

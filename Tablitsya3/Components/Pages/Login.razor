@@ -1,0 +1,103 @@
+﻿@page "/login"
+@layout Tablitsya3.Components.Layout.EmptyLayout
+@attribute [AllowAnonymous]
+@inject NavigationManager Navigation
+
+<PageTitle>Вхід — Tablitsya3</PageTitle>
+
+<div class="login-card">
+    <div class="login-header">
+        <div class="logo">📊</div>
+        <h1>Tablitsya3</h1>
+        <p class="subtitle">Система керування виробництвом</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert-error">⚠️ @ErrorMessage</div>
+    }
+
+    <form method="post" action="/account/login" class="login-form">
+        <AntiforgeryToken />
+        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+
+        <div class="form-group">
+            <label for="username">Логін</label>
+            <input type="text" id="username" name="username" required autofocus autocomplete="username" placeholder="admin" />
+        </div>
+
+        <div class="form-group">
+            <label for="password">Пароль</label>
+            <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="••••••••" />
+        </div>
+
+        <button type="submit" class="btn-login">Увійти</button>
+    </form>
+
+    <div class="login-footer">
+        <small>© @DateTime.Now.Year Tablitsya3</small>
+    </div>
+</div>
+
+<style>
+    .login-card {
+        background: white;
+        border-radius: 16px;
+        padding: 40px;
+        max-width: 420px;
+        width: 100%;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .login-header { text-align: center; margin-bottom: 30px; }
+    .login-header .logo { font-size: 48px; margin-bottom: 10px; }
+    .login-header h1 { margin: 0; color: #333; font-size: 28px; }
+    .login-header .subtitle { color: #888; margin: 8px 0 0; font-size: 14px; }
+    .alert-error {
+        background: #fee;
+        color: #c33;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border-left: 4px solid #c33;
+        font-size: 14px;
+    }
+    .login-form .form-group { margin-bottom: 18px; }
+    .login-form label { display: block; margin-bottom: 6px; font-weight: 600; color: #444; font-size: 14px; }
+    .login-form input {
+        width: 100%;
+        padding: 12px 14px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 15px;
+        transition: border-color 0.2s;
+        box-sizing: border-box;
+    }
+    .login-form input:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    .btn-login {
+        width: 100%;
+        padding: 13px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-login:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    .login-footer { text-align: center; margin-top: 24px; color: #999; }
+</style>
+
+@code {
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private string ErrorMessage => Error ?? string.Empty;
+}

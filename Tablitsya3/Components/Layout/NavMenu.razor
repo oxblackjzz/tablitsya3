@@ -13,6 +13,7 @@
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="nav flex-column">
+        <AuthorizeView>
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
                 <i class="bi bi-speedometer2"></i> 
@@ -40,14 +41,18 @@
                 <span>Замовлення</span>
             </NavLink>
         </div>
+        </AuthorizeView>
 
+        <AuthorizeView Policy="@AuthPolicies.ManagerOrAbove">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="bulk-order-entry">
                 <i class="bi bi-plus-square-fill"></i> 
                 <span>Нові замовлення</span>
             </NavLink>
         </div>
+        </AuthorizeView>
 
+        <AuthorizeView Policy="@AuthPolicies.OperatorOrAbove">
         <!-- Секція сканування -->
         <div class="nav-item px-3 pt-2 pb-1">
             <small class="text-muted text-uppercase">Сканування</small>
@@ -66,7 +71,9 @@
                 <span>Імпорт проектів</span>
             </NavLink>
         </div>
+        </AuthorizeView>
 
+        <AuthorizeView Policy="@AuthPolicies.ManagerOrAbove">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="workers">
                 <i class="bi bi-people-fill"></i> 
@@ -87,14 +94,18 @@
                 <span>Станції</span>
             </NavLink>
         </div>
+        </AuthorizeView>
 
+        <AuthorizeView Policy="@AuthPolicies.OperatorOrAbove">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="defects">
                 <i class="bi bi-exclamation-triangle"></i> 
                 <span>Брак</span>
             </NavLink>
-            </div>
+        </div>
+        </AuthorizeView>
 
+            <AuthorizeView Policy="@AuthPolicies.ManagerOrAbove">
             <!-- Секція налаштувань -->
             <div class="nav-item px-3 pt-2 pb-1">
                 <small class="text-muted text-uppercase">Система</small>
@@ -106,7 +117,9 @@
                     <span>AI Аналітика</span>
                 </NavLink>
             </div>
+            </AuthorizeView>
 
+            <AuthorizeView Policy="@AuthPolicies.AdminOnly">
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="workshop-settings">
                 <i class="bi bi-sliders"></i> 
@@ -127,6 +140,14 @@
                 <span>Журнал</span>
             </NavLink>
         </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="users">
+                <i class="bi bi-person-badge"></i> 
+                <span>Користувачі</span>
+            </NavLink>
+        </div>
+        </AuthorizeView>
     </nav>
 </div>
 

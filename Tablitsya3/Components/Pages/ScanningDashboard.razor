@@ -1,5 +1,6 @@
 ﻿@page "/scanning"
 @page "/scanning/{WorkstationId:int}"
+@attribute [Authorize(Policy = AuthPolicies.OperatorOrAbove)]
 @using Tablitsya3.Models.Scanning
 @using Tablitsya3.Data.Entities
 @using Tablitsya3.Services

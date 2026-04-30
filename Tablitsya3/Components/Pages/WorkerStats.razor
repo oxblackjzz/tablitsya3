@@ -1,5 +1,6 @@
 ﻿@page "/workers/statistics"
 @page "/workers/statistics/{WorkerId:int}"
+@attribute [Authorize(Policy = AuthPolicies.ManagerOrAbove)]
 @using Tablitsya3.Data.Entities
 @using Tablitsya3.Models.Scanning
 @using Tablitsya3.Services

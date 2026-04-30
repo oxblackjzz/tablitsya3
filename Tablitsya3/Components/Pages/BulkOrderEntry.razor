@@ -1,4 +1,5 @@
 ﻿@page "/bulk-order-entry"
+@attribute [Authorize(Policy = AuthPolicies.ManagerOrAbove)]
 @using Tablitsya3.Models
 @using Tablitsya3.Models.Validation
 @using Tablitsya3.Services
