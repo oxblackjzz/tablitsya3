@@ -151,6 +151,22 @@ namespace Tablitsya3.Services
             existing.SessionTimeoutMinutes = workstation.SessionTimeoutMinutes;
             existing.DeviceIdentifier = workstation.DeviceIdentifier;
             existing.Capacity = workstation.Capacity;
+            existing.ScannerModel = workstation.ScannerModel;
+            existing.ScannerConnectionType = workstation.ScannerConnectionType;
+            existing.ScannerEnabled = workstation.ScannerEnabled;
+            existing.ScannerDeviceName = workstation.ScannerDeviceName;
+            existing.ScannerSerialNumber = workstation.ScannerSerialNumber;
+            existing.ScannerUsbVid = workstation.ScannerUsbVid;
+            existing.ScannerUsbPid = workstation.ScannerUsbPid;
+            existing.ScannerComPort = workstation.ScannerComPort;
+            existing.ScannerBaudRate = workstation.ScannerBaudRate;
+            existing.ScannerBluetoothMac = workstation.ScannerBluetoothMac;
+            existing.ScannerIpAddress = workstation.ScannerIpAddress;
+            existing.ScannerTcpPort = workstation.ScannerTcpPort;
+            existing.ScannerWebhookUrl = workstation.ScannerWebhookUrl;
+            existing.ScannerPrefix = workstation.ScannerPrefix;
+            existing.ScannerSuffix = workstation.ScannerSuffix;
+            existing.ScannerExtraJson = workstation.ScannerExtraJson;
             existing.UpdatedDate = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();

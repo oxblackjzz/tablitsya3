@@ -366,6 +366,17 @@ logger.LogInformation("✅ Database migration completed successfully!");
                 logger.LogError(authEx, "❌ Auth schema/seed initialization failed");
                 Console.WriteLine($"❌ Auth init failed: {authEx.Message}");
             }
+
+            // ✅ SCANNER: додавання колонок сканера до workstations
+            try
+            {
+                await EnsureWorkstationScannerColumnsAsync(scope.ServiceProvider, logger);
+            }
+            catch (Exception scnEx)
+            {
+                logger.LogError(scnEx, "❌ Workstation scanner columns init failed");
+                Console.WriteLine($"❌ Scanner columns init failed: {scnEx.Message}");
+            }
         }
    catch (Exception ex)
         {
@@ -529,4 +540,30 @@ static async Task EnsureColumnsExist(ApplicationDbContext dbContext, ILogger log
         Console.WriteLine($"⚠️ Error ensuring columns exist: {ex.Message}");
         logger.LogWarning($"⚠️ Error ensuring columns exist: {ex.Message}");
     }
+}
+
+// ✅ Додавання колонок сканера до workstations
+static async Task EnsureWorkstationScannerColumnsAsync(IServiceProvider services, ILogger logger)
+{
+    var dbContext = services.GetRequiredService<ApplicationDbContext>();
+    const string sql = @"
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_model INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_connection_type INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_device_name VARCHAR(150);
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_serial_number VARCHAR(100);
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_usb_vid VARCHAR(10);
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_usb_pid VARCHAR(10);
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_com_port VARCHAR(20);
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_baud_rate INTEGER;
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_bluetooth_mac VARCHAR(50);
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_ip_address VARCHAR(50);
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_tcp_port INTEGER;
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_webhook_url VARCHAR(500);
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_prefix VARCHAR(20);
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_suffix VARCHAR(20);
+        ALTER TABLE workstations ADD COLUMN IF NOT EXISTS scanner_extra_json TEXT;
+    ";
+    await dbContext.Database.ExecuteSqlRawAsync(sql);
+    logger.LogInformation("✅ Workstation scanner columns ensured");
 }

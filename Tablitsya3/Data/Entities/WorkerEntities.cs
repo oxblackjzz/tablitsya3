@@ -152,6 +152,66 @@ namespace Tablitsya3.Data.Entities
         [MaxLength(100)]
         public string? DeviceIdentifier { get; set; }
 
+        // === Сканер, прив'язаний до станції ===
+
+        /// <summary>Модель сканера (значення <see cref="Models.Scanning.ScannerModel"/>)</summary>
+        public int ScannerModel { get; set; } = 0;
+
+        /// <summary>Тип фізичного підключення (значення <see cref="Models.Scanning.ScannerConnectionType"/>)</summary>
+        public int ScannerConnectionType { get; set; } = 0;
+
+        /// <summary>Чи увімкнено зв'язку зі сканером</summary>
+        public bool ScannerEnabled { get; set; } = false;
+
+        /// <summary>Назва пристрою / сканера (для зручності)</summary>
+        [MaxLength(150)]
+        public string? ScannerDeviceName { get; set; }
+
+        /// <summary>Серійний номер сканера</summary>
+        [MaxLength(100)]
+        public string? ScannerSerialNumber { get; set; }
+
+        /// <summary>USB VID (для USB HID)</summary>
+        [MaxLength(10)]
+        public string? ScannerUsbVid { get; set; }
+
+        /// <summary>USB PID (для USB HID)</summary>
+        [MaxLength(10)]
+        public string? ScannerUsbPid { get; set; }
+
+        /// <summary>COM-порт (для Serial)</summary>
+        [MaxLength(20)]
+        public string? ScannerComPort { get; set; }
+
+        /// <summary>Baud rate для Serial</summary>
+        public int? ScannerBaudRate { get; set; }
+
+        /// <summary>MAC-адреса (для Bluetooth)</summary>
+        [MaxLength(50)]
+        public string? ScannerBluetoothMac { get; set; }
+
+        /// <summary>IP-адреса сканера (TCP / HTTP)</summary>
+        [MaxLength(50)]
+        public string? ScannerIpAddress { get; set; }
+
+        /// <summary>TCP/UDP порт (для мережевого підключення)</summary>
+        public int? ScannerTcpPort { get; set; }
+
+        /// <summary>Webhook URL (для HTTP)</summary>
+        [MaxLength(500)]
+        public string? ScannerWebhookUrl { get; set; }
+
+        /// <summary>Префікс штрих-коду (опціонально)</summary>
+        [MaxLength(20)]
+        public string? ScannerPrefix { get; set; }
+
+        /// <summary>Суфікс штрих-коду (зазвичай \r або \n)</summary>
+        [MaxLength(20)]
+        public string? ScannerSuffix { get; set; }
+
+        /// <summary>Додаткові налаштування у форматі JSON</summary>
+        public string? ScannerExtraJson { get; set; }
+
         /// <summary>Дата створення запису</summary>
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
 
