@@ -678,14 +678,29 @@
     private async Task OnWorkstationSelected()
     {
         currentWorkstation = workstations.FirstOrDefault(w => w.Id == selectedWorkstationId);
-        
+
         if (currentWorkstation != null)
         {
             // Автоматично встановлюємо етап станції
             useStationStage = true;
             selectedStage = currentWorkstation.Stage;
+
+            // Відновлюємо активну сесію працівника на станції (якщо є),
+            // щоб після оновлення сторінки логін не "злітав".
+            try
+            {
+                workerContext = await WorkerAuthService.GetScanContextForWorkstationAsync(selectedWorkstationId);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning($"Не вдалось відновити сесію працівника на станції {selectedWorkstationId}: {ex.Message}", "ScanningDashboard");
+            }
         }
-        
+        else
+        {
+            workerContext = null;
+        }
+
         StateHasChanged();
     }
 
