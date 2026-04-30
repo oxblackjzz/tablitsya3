@@ -642,14 +642,7 @@
             return true;
         }
 
-        // Якщо у працівника є PIN — звичайний flow через форму, не приймаємо як silent badge
-        if (!string.IsNullOrEmpty(worker.PinCodeHash))
-        {
-            ShowScanMessage($"{worker.DisplayName}: введіть PIN-код", "warning", "key");
-            await InvokeAsync(StateHasChanged);
-            return true;
-        }
-
+        // Вхід виключно за QR-бейджем — PIN-код не потрібен
         var result = await WorkerAuthService.LoginByBadgeAsync(code, selectedWorkstationId);
         if (result.Success && result.SessionToken != null)
         {

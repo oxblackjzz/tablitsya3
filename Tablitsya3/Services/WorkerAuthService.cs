@@ -91,15 +91,10 @@ namespace Tablitsya3.Services
 
                 result.Worker = worker;
 
-                // Перевіряємо PIN якщо потрібно
-                if (workstation.RequiresWorkerAuth && !string.IsNullOrEmpty(worker.PinCodeHash))
+                // PIN-код більше не вимагається. Якщо PIN явно передано — перевіряємо його
+                // як додатковий рівень захисту, але відсутність PIN не блокує вхід.
+                if (!string.IsNullOrEmpty(pin) && !string.IsNullOrEmpty(worker.PinCodeHash))
                 {
-                    if (string.IsNullOrEmpty(pin))
-                    {
-                        result.Message = "Введіть PIN-код";
-                        return result;
-                    }
-
                     var pinValid = await _workerService.VerifyPinAsync(worker.Id, pin);
                     if (!pinValid)
                     {

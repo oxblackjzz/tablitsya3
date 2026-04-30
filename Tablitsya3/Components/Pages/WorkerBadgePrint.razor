@@ -92,9 +92,6 @@ else
                                 <img src="@GetQRCodeUrl()" alt="QR Code" class="qr-code" style="width: @(qrSize)px; height: @(qrSize)px;" />
                             </div>
 
-                            <!-- Код працівника -->
-                            <div class="worker-code">@worker.WorkerCode</div>
-
                             <!-- ПІБ -->
                             @if (showName)
                             {
@@ -122,11 +119,7 @@ else
                 <ol class="mb-0">
                     <li>Надрукуйте бейдж на принтері</li>
                     <li>Заламінуйте або вставте в бейдж-холдер</li>
-                    <li>Для авторизації - скануйте QR-код або введіть код <code>@worker.WorkerCode</code></li>
-                    @if (!string.IsNullOrEmpty(worker.PinCodeHash))
-                    {
-                        <li>Після сканування коду введіть PIN-код</li>
-                    }
+                    <li>Для авторизації — піднесіть QR-код до сканера на станції</li>
                 </ol>
             </div>
         </div>
