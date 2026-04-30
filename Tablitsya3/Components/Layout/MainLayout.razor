@@ -23,10 +23,7 @@
                                 @role.GetDisplayName()
                             </span>
                         </span>
-                        <form method="post" action="/account/logout" style="display:inline;">
-                            <AntiforgeryToken />
-                            <button type="submit" class="btn btn-sm btn-outline-danger">Вийти</button>
-                        </form>
+                        <a href="/account/logout" class="btn btn-sm btn-outline-danger">Вийти</a>
                     </div>
                 </Authorized>
             </AuthorizeView>
